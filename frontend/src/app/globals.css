@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Med-Essence Brand Colors */
+    --med-navy-50: #f4f6f8;
+    --med-navy-100: #e6eaef;
+    --med-navy-200: #cdd7e0;
+    --med-navy-300: #a8bac9;
+    --med-navy-400: #7b96ad;
+    --med-navy-500: #5a7794;
+    --med-navy-600: #4a617a;
+    --med-navy-700: #3f5063;
+    --med-navy-800: #374453;
+    --med-navy-900: #2c3540;
+    --med-navy-950: #1e252d;
+    
+    /* Med-Essence Orange Colors */
+    --med-orange-50: #fff7ed;
+    --med-orange-100: #ffead5;
+    --med-orange-200: #fed7aa;
+    --med-orange-300: #fdba74;
+    --med-orange-400: #fb923c;
+    --med-orange-500: #f97316;
+    --med-orange-600: #ea580c;
+    --med-orange-700: #c2410c;
+    --med-orange-800: #9a3412;
+    --med-orange-900: #7c2d12;
+    --med-orange-950: #431407;
+    
+    /* Semantic Color Mappings */
+    --primary-color: var(--med-navy-600);
+    --secondary-color: var(--med-orange-500);
+    --accent-color: var(--med-orange-400);
+    --background-primary: var(--med-navy-50);
+    --background-secondary: var(--med-orange-50);
+    --text-primary: var(--med-navy-900);
+    --text-secondary: var(--med-navy-700);
+  }
+
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    background: linear-gradient(135deg, var(--med-navy-50) 0%, var(--med-orange-50) 100%);
+    color: var(--text-primary);
+    @apply antialiased min-h-screen;
+  }
+}
+
+@layer components {
+  .medical-card {
+    @apply bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-6;
+    border: 1px solid rgb(from var(--med-navy-200) r g b / 0.3);
+    transition: all 0.2s ease-in-out;
+  }
+  
+  .medical-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -3px rgb(from var(--med-navy-600) r g b / 0.1), 
+                0 4px 6px -2px rgb(from var(--med-navy-600) r g b / 0.05);
+  }
+  
+  .medical-button {
+    @apply px-4 py-2 rounded-xl font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 shadow-sm;
+  }
+  
+  .medical-button-primary {
+    @apply medical-button text-white hover:shadow-md;
+    background: linear-gradient(135deg, var(--med-navy-600), var(--med-navy-700));
+  }
+  
+  .medical-button-primary:hover {
+    background: linear-gradient(135deg, var(--med-navy-700), var(--med-navy-800));
+  }
+  
+  .medical-button-primary:focus {
+    @apply ring-2 ring-offset-2;
+    ring-color: var(--med-navy-500);
+  }
+  
+  .medical-button-secondary {
+    @apply medical-button;
+    background: linear-gradient(135deg, var(--med-navy-100), var(--med-navy-200));
+    color: var(--med-navy-700);
+  }
+  
+  .medical-button-secondary:hover {
+    background: linear-gradient(135deg, var(--med-navy-200), var(--med-navy-300));
+  }
+  
+  .medical-button-secondary:focus {
+    @apply ring-2 ring-offset-2;
+    ring-color: var(--med-navy-500);
+  }
+  
+  .medical-button-success {
+    @apply medical-button text-white hover:shadow-md;
+    background: linear-gradient(135deg, var(--med-orange-500), var(--med-orange-600));
+  }
+  
+  .medical-button-success:hover {
+    background: linear-gradient(135deg, var(--med-orange-600), var(--med-orange-700));
+  }
+  
+  .medical-button-success:focus {
+    @apply ring-2 ring-offset-2;
+    ring-color: var(--med-orange-400);
+  }
+  
+  .medical-button-danger {
+    @apply medical-button bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 focus:ring-red-500;
+  }
+  
+  .medical-input {
+    @apply w-full px-4 py-3 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 bg-white/80 backdrop-blur-sm;
+    border: 1px solid var(--med-navy-200);
+  }
+  
+  .medical-input:focus {
+    border-color: var(--med-navy-500);
+    ring-color: var(--med-navy-500);
+  }
+  
+  .medical-input::placeholder {
+    color: var(--med-navy-400);
+  }
+  
+  .medical-select {
+    @apply medical-input appearance-none bg-white;
+  }
+  
+  .recording-indicator {
+    @apply w-3 h-3 rounded-full animate-pulse;
+    background-color: var(--med-orange-600);
+  }
+  
+  .transcription-text {
+    @apply font-mono text-sm leading-relaxed;
+    color: var(--text-secondary);
+  }
+  
+  .medical-report {
+    @apply space-y-4 text-sm leading-relaxed;
+  }
+  
+  .medical-report h3 {
+    @apply font-semibold pb-1;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--med-navy-200);
+  }
+  
+  .medical-report p {
+    color: var(--text-secondary);
+  }
+  
+  /* Additional utility classes for Med-Essence branding */
+  .med-navy-gradient {
+    background: linear-gradient(135deg, var(--med-navy-600), var(--med-navy-800));
+  }
+  
+  .med-orange-gradient {
+    background: linear-gradient(135deg, var(--med-orange-500), var(--med-orange-600));
+  }
+  
+  .med-accent-gradient {
+    background: linear-gradient(135deg, var(--med-navy-600), var(--med-orange-500));
+  }
+  
+  .med-text-navy {
+    color: var(--text-primary);
+  }
+  
+  .med-text-orange {
+    color: var(--secondary-color);
+  }
+  
+  .med-border-navy {
+    border-color: var(--med-navy-200);
+  }
+  
+  .med-bg-light {
+    background-color: var(--background-primary);
+  }
+}

@@ -1,0 +1,108 @@
+# Multi-stage Dockerfile for MedEssenceAI Frontend Production Build
+
+# =============================================================================
+# Stage 1: Dependencies
+# =============================================================================
+FROM node:18-alpine AS deps
+WORKDIR /app
+
+# Copy package files
+COPY package.json ./
+
+# Install ALL dependencies for building
+RUN npm install --no-audit --progress=false
+
+# =============================================================================
+# Stage 2: Builder
+# =============================================================================
+FROM node:18-alpine AS builder
+WORKDIR /app
+
+# Copy dependencies from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy source code
+COPY . .
+
+# Set build environment
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Build the application
+RUN npm run build
+
+# Remove development dependencies and clean cache
+RUN npm prune --production \
+    && npm cache clean --force
+
+# =============================================================================
+# Stage 3: Production Runner
+# =============================================================================
+FROM node:18-alpine AS production
+
+# Set production environment
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Create application user for security
+RUN addgroup --system --gid 1001 medessenceai \
+    && adduser --system --uid 1001 medessenceai
+
+WORKDIR /app
+
+# Copy built application
+COPY --from=builder --chown=medessenceai:medessenceai /app/public ./public
+COPY --from=builder --chown=medessenceai:medessenceai /app/.next/standalone ./
+COPY --from=builder --chown=medessenceai:medessenceai /app/.next/static ./.next/static
+
+# Create necessary directories
+RUN mkdir -p /app/logs \
+    && chown -R medessenceai:medessenceai /app
+
+# Switch to non-root user
+USER medessenceai
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD node healthcheck.js || exit 1
+
+# Create simple health check script
+USER root
+RUN echo 'const http = require("http"); \
+const options = { hostname: "localhost", port: 3000, path: "/api/health", timeout: 2000 }; \
+const req = http.request(options, (res) => { \
+  if (res.statusCode === 200) { console.log("Health check passed"); process.exit(0); } \
+  else { console.log("Health check failed"); process.exit(1); } \
+}); \
+req.on("error", () => { console.log("Health check error"); process.exit(1); }); \
+req.setTimeout(2000, () => { console.log("Health check timeout"); process.exit(1); }); \
+req.end();' > /app/healthcheck.js \
+    && chown medessenceai:medessenceai /app/healthcheck.js
+
+USER medessenceai
+
+# Start the application
+CMD ["node", "server.js"]
+
+# =============================================================================
+# Development Stage (Optional)
+# =============================================================================
+FROM node:18-alpine AS development
+
+WORKDIR /app
+
+# Install dependencies
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Expose development port
+EXPOSE 3005
+
+# Start development server
+CMD ["npm", "run", "dev"]

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Capture Test</title>
+</head>
+<body>
+    <h1>Audio Capture Test</h1>
+    <button id="start">Start Recording</button>
+    <button id="stop" disabled>Stop Recording</button>
+    <button id="play" disabled>Play Recording</button>
+    <div id="status"></div>
+    <audio id="audioPlayer" controls style="display: none;"></audio>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioBlob;
+
+        const startBtn = document.getElementById('start');
+        const stopBtn = document.getElementById('stop');
+        const playBtn = document.getElementById('play');
+        const status = document.getElementById('status');
+        const audioPlayer = document.getElementById('audioPlayer');
+
+        startBtn.addEventListener('click', async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 48000
+                    }
+                });
+
+                // Check if we're getting audio
+                const audioContext = new AudioContext();
+                const analyser = audioContext.createAnalyser();
+                const microphone = audioContext.createMediaStreamSource(stream);
+                const scriptProcessor = audioContext.createScriptProcessor(2048, 1, 1);
+                
+                analyser.smoothingTimeConstant = 0.8;
+                analyser.fftSize = 1024;
+                
+                microphone.connect(analyser);
+                analyser.connect(scriptProcessor);
+                scriptProcessor.connect(audioContext.destination);
+                
+                scriptProcessor.onaudioprocess = function() {
+                    const array = new Uint8Array(analyser.frequencyBinCount);
+                    analyser.getByteFrequencyData(array);
+                    const average = array.reduce((a, b) => a + b) / array.length;
+                    status.textContent = `Audio Level: ${Math.round(average)}`;
+                };
+
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                        console.log('Data available:', event.data.size);
+                    }
+                };
+
+                mediaRecorder.onstop = () => {
+                    audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    console.log('Recording stopped, blob size:', audioBlob.size);
+                    playBtn.disabled = false;
+                    
+                    // Also save as file for analysis
+                    const url = URL.createObjectURL(audioBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'test-recording.webm';
+                    a.click();
+                };
+
+                mediaRecorder.start(100);
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                status.textContent = 'Recording...';
+            } catch (err) {
+                console.error('Error:', err);
+                status.textContent = 'Error: ' + err.message;
+            }
+        });
+
+        stopBtn.addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                status.textContent = 'Recording stopped';
+            }
+        });
+
+        playBtn.addEventListener('click', () => {
+            if (audioBlob) {
+                const url = URL.createObjectURL(audioBlob);
+                audioPlayer.src = url;
+                audioPlayer.style.display = 'block';
+                audioPlayer.play();
+            }
+        });
+    </script>
+</body>
+</html>

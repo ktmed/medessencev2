@@ -1,0 +1,171 @@
+# Prometheus Configuration for Radiology AI System
+# Medical-grade monitoring and alerting
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'radiology-ai-monitor'
+    environment: 'production'
+    datacenter: 'medical-center'
+
+# Load and evaluate rules
+rule_files:
+  - "alert.rules.yml"
+  - "recording.rules.yml"
+
+# Alert manager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # System metrics from node exporter
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+
+  # Container metrics from cAdvisor
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+
+  # PostgreSQL metrics
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    params:
+      collect[]:
+        - 'pg_stat_database'
+        - 'pg_stat_user_tables'
+        - 'pg_stat_bgwriter'
+        - 'pg_locks'
+        - 'pg_stat_replication'
+
+  # Redis metrics
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Backend API Gateway metrics
+  - job_name: 'backend-api'
+    static_configs:
+      - targets: ['backend:9464']
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__name__]
+        regex: 'http_.*'
+        target_label: service
+        replacement: 'backend-api'
+
+  # Transcription service metrics
+  - job_name: 'transcription-service'
+    static_configs:
+      - targets: ['transcription-service:9465']
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__name__]
+        regex: 'transcription_.*'
+        target_label: service
+        replacement: 'transcription'
+
+  # Report generation service metrics
+  - job_name: 'report-generation'
+    static_configs:
+      - targets: ['report-generation:9466']
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__name__]
+        regex: 'report_.*'
+        target_label: service
+        replacement: 'report-generation'
+
+  # Summary generation service metrics
+  - job_name: 'summary-generation'
+    static_configs:
+      - targets: ['summary-generation:9467']
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__name__]
+        regex: 'summary_.*'
+        target_label: service
+        replacement: 'summary-generation'
+
+  # Nginx reverse proxy metrics
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:9113']
+    scrape_interval: 15s
+    metrics_path: /metrics
+
+  # Medical-specific custom metrics
+  - job_name: 'medical-metrics'
+    honor_labels: true
+    static_configs:
+      - targets: 
+        - 'backend:9464'
+        - 'transcription-service:9465'
+        - 'report-generation:9466'
+        - 'summary-generation:9467'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    metrics_path: /medical-metrics
+    params:
+      format: ['prometheus']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 'medical-exporter:9468'
+
+# Storage configuration for medical compliance
+storage:
+  tsdb:
+    retention.time: 30d
+    retention.size: 20GB
+    path: /prometheus
+    wal-compression: true
+    no-lockfile: false
+    min-block-duration: 2h
+    max-block-duration: 36h
+
+# Remote write for long-term storage (optional)
+# remote_write:
+#   - url: "https://medical-metrics-storage.example.com/api/v1/write"
+#     basic_auth:
+#       username: "radiology-system"
+#       password: "${REMOTE_WRITE_PASSWORD}"
+#     write_relabel_configs:
+#       - source_labels: [__name__]
+#         regex: 'medical_.*'
+#         action: keep

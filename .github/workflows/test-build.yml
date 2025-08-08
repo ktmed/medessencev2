@@ -1,0 +1,436 @@
+name: Test & Build Validation
+
+# =============================================================================
+# Trigger Configuration - Runs on all PRs and pushes
+# =============================================================================
+on:
+  push:
+    branches: [ main, develop, feature/*, bugfix/*, hotfix/* ]
+  pull_request:
+    branches: [ main, develop ]
+    types: [ opened, synchronize, reopened, ready_for_review ]
+  schedule:
+    # Run daily at 6 AM UTC to catch dependency issues
+    - cron: '0 6 * * *'
+
+# =============================================================================
+# Environment Variables
+# =============================================================================
+env:
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.11'
+  POSTGRES_VERSION: '15'
+  REDIS_VERSION: '7'
+
+# =============================================================================
+# Jobs Configuration
+# =============================================================================
+jobs:
+  # ---------------------------------------------------------------------------
+  # Detect Changes - Optimize CI runs by detecting what changed
+  # ---------------------------------------------------------------------------
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.changes.outputs.backend }}
+      frontend: ${{ steps.changes.outputs.frontend }}
+      services: ${{ steps.changes.outputs.services }}
+      k8s: ${{ steps.changes.outputs.k8s }}
+      docker: ${{ steps.changes.outputs.docker }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'package.json'
+            frontend:
+              - 'frontend/**'
+            services:
+              - 'services/**'
+              - 'requirements.txt'
+            k8s:
+              - 'k8s/**'
+              - 'docker-compose*.yml'
+            docker:
+              - 'Dockerfile*'
+              - 'docker/**'
+
+  # ---------------------------------------------------------------------------
+  # Backend Testing & Build
+  # ---------------------------------------------------------------------------
+  test-backend:
+    name: Test Backend (Node.js API Gateway)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || github.event_name == 'schedule'
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_USER: test_user
+          POSTGRES_DB: medessence_test
+          POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'backend/package-lock.json'
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          npm ci --prefer-offline --no-audit
+          npx prisma generate
+
+      - name: Run linting
+        working-directory: backend
+        run: npm run lint
+
+      - name: Setup test database
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/medessence_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test_jwt_secret_key_very_long_and_secure
+          BCRYPT_SALT_ROUNDS: 10
+        run: |
+          npx prisma db push --skip-generate
+          npm run db:seed
+
+      - name: Run unit tests
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/medessence_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test_jwt_secret_key_very_long_and_secure
+          NODE_ENV: test
+          LOG_LEVEL: error
+        run: npm run test:ci
+
+      - name: Upload backend coverage
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./backend/coverage/lcov.info
+          flags: backend
+
+  # ---------------------------------------------------------------------------
+  # Frontend Testing & Build
+  # ---------------------------------------------------------------------------
+  test-frontend:
+    name: Test Frontend (Next.js)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' || github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Run linting
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Run type checking
+        working-directory: frontend
+        run: npm run type-check
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: 1
+          NEXT_PUBLIC_WEBSOCKET_URL: ws://localhost:8080
+          NEXT_PUBLIC_API_URL: http://localhost:3000
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: frontend-build
+          path: frontend/.next/
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Python Services Testing
+  # ---------------------------------------------------------------------------
+  test-services:
+    name: Test Python Services
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.services == 'true' || github.event_name == 'schedule'
+    
+    strategy:
+      matrix:
+        service: [transcription, report-generation, summary-generation]
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_USER: test_user
+          POSTGRES_DB: medessence_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: 'services/${{ matrix.service }}/requirements.txt'
+
+      - name: Install service dependencies
+        working-directory: services/${{ matrix.service }}
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+
+      - name: Run linting (flake8)
+        working-directory: services/${{ matrix.service }}
+        run: |
+          flake8 app/ tests/ \
+            --max-line-length=88 \
+            --extend-ignore=E203,W503 \
+            --exclude=__pycache__
+
+      - name: Run type checking (mypy)
+        working-directory: services/${{ matrix.service }}
+        continue-on-error: true  # mypy can be strict, don't fail CI
+        run: |
+          mypy app/ --ignore-missing-imports
+
+      - name: Run unit tests
+        working-directory: services/${{ matrix.service }}
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/medessence_test
+          REDIS_URL: redis://localhost:6379
+          PYTHONPATH: ${{ github.workspace }}/services/${{ matrix.service }}
+          ENVIRONMENT: test
+        run: |
+          python -m pytest tests/ -v \
+            --cov=app \
+            --cov-report=xml \
+            --cov-report=term-missing
+
+      - name: Upload service coverage
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./services/${{ matrix.service }}/coverage.xml
+          flags: ${{ matrix.service }}
+
+  # ---------------------------------------------------------------------------
+  # Integration Testing
+  # ---------------------------------------------------------------------------
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend, test-services]
+    if: always() && (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped') && (needs.test-frontend.result == 'success' || needs.test-frontend.result == 'skipped') && (needs.test-services.result == 'success' || needs.test-services.result == 'skipped')
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_USER: test_user
+          POSTGRES_DB: medessence_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install integration test dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r tests/integration/requirements.txt || pip install pytest requests asyncio aiohttp
+
+      - name: Run integration tests
+        working-directory: tests/integration
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/medessence_test
+          REDIS_URL: redis://localhost:6379
+          BASE_URL: http://localhost:8000
+          ENVIRONMENT: test
+        run: |
+          python run_all_tests.py
+
+  # ---------------------------------------------------------------------------
+  # Build Validation - Test Docker builds without pushing
+  # ---------------------------------------------------------------------------
+  build-validation:
+    name: Validate Docker Builds
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.docker == 'true' || github.event_name == 'schedule'
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: frontend
+            context: ./frontend
+            dockerfile: Dockerfile.production
+          - name: backend
+            context: ./backend
+            dockerfile: Dockerfile
+          - name: transcription
+            context: ./services/transcription
+            dockerfile: Dockerfile
+          - name: report-generation
+            context: ./services/report-generation
+            dockerfile: Dockerfile
+          - name: summary-generation
+            context: ./services/summary-generation
+            dockerfile: Dockerfile
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (validation only)
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.context }}/${{ matrix.service.dockerfile }}
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: medessence/${{ matrix.service.name }}:test
+
+      - name: Test image security
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            -v $PWD:/tmp/.cache/ aquasec/trivy \
+            image --exit-code 0 --no-progress --format table \
+            medessence/${{ matrix.service.name }}:test
+
+  # ---------------------------------------------------------------------------
+  # Medical Compliance & Security Validation
+  # ---------------------------------------------------------------------------
+  compliance-validation:
+    name: Medical Compliance Validation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: HIPAA Compliance Check
+        run: |
+          # Check for potential PHI data exposure
+          echo "Checking for potential PHI data exposure..."
+          ! grep -r --include="*.js" --include="*.ts" --include="*.py" \
+            -E "(ssn|social.security|patient.id|medical.record|birth.date)" \
+            --exclude-dir=node_modules --exclude-dir=venv . || (echo "Potential PHI exposure found!" && exit 1)
+
+      - name: Audit logging validation
+        run: |
+          echo "Validating audit logging implementation..."
+          grep -r --include="*.js" --include="*.ts" --include="*.py" \
+            -l "audit" backend/ services/ || (echo "Audit logging missing!" && exit 1)
+
+      - name: Encryption validation
+        run: |
+          echo "Validating encryption usage..."
+          grep -r --include="*.js" --include="*.ts" --include="*.py" \
+            -E "(bcrypt|scrypt|encrypt|cipher)" backend/ services/ || (echo "Encryption implementation missing!" && exit 1)
+
+# =============================================================================
+# Workflow Optimization
+# =============================================================================
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true

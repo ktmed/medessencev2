@@ -1,0 +1,452 @@
+# =============================================================================
+# PostgreSQL Database Deployment for MedEssenceAI
+# HIPAA-compliant database configuration with encryption at rest
+# =============================================================================
+
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: postgres
+    service: database
+    environment: ${ENVIRONMENT}
+    compliance: hipaa
+spec:
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+  type: ClusterIP
+
+---
+# PostgreSQL ConfigMap for custom configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: postgres
+    environment: ${ENVIRONMENT}
+data:
+  postgresql.conf: |
+    # Basic Settings
+    max_connections = ${POSTGRES_MAX_CONNECTIONS:-100}
+    shared_buffers = ${POSTGRES_SHARED_BUFFERS:-256MB}
+    effective_cache_size = ${POSTGRES_EFFECTIVE_CACHE_SIZE:-1GB}
+    work_mem = ${POSTGRES_WORK_MEM:-4MB}
+    maintenance_work_mem = ${POSTGRES_MAINTENANCE_WORK_MEM:-64MB}
+    
+    # WAL Settings
+    wal_level = replica
+    max_wal_senders = 3
+    wal_keep_segments = 64
+    
+    # Checkpoints
+    checkpoint_completion_target = 0.9
+    checkpoint_timeout = 10min
+    
+    # Security Settings (HIPAA Compliance)
+    ssl = on
+    ssl_cert_file = '/etc/ssl/certs/server.crt'
+    ssl_key_file = '/etc/ssl/private/server.key'
+    ssl_ca_file = '/etc/ssl/certs/ca.crt'
+    ssl_ciphers = 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384'
+    ssl_prefer_server_ciphers = on
+    
+    # Logging (Audit Requirements)
+    log_destination = 'stderr'
+    logging_collector = on
+    log_directory = '/var/log/postgresql'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_rotation_age = 1d
+    log_rotation_size = 100MB
+    log_statement = 'all'
+    log_connections = on
+    log_disconnections = on
+    log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+    
+    # Performance Monitoring
+    shared_preload_libraries = 'pg_stat_statements'
+    pg_stat_statements.max = 10000
+    pg_stat_statements.track = all
+    
+    # Data Checksums (Data Integrity)
+    data_checksums = on
+    
+  pg_hba.conf: |
+    # TYPE  DATABASE        USER            ADDRESS                 METHOD
+    
+    # Local connections
+    local   all             postgres                                trust
+    local   all             all                                     scram-sha-256
+    
+    # IPv4 local connections (encrypted)
+    host    all             all             127.0.0.1/32            scram-sha-256
+    
+    # IPv6 local connections (encrypted)
+    host    all             all             ::1/128                 scram-sha-256
+    
+    # Allow replication connections
+    host    replication     postgres        127.0.0.1/32            scram-sha-256
+    
+    # Kubernetes cluster connections (require SSL)
+    hostssl all             all             0.0.0.0/0               scram-sha-256
+
+---
+# PostgreSQL Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: postgres
+    environment: ${ENVIRONMENT}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ${STORAGE_CLASS:-gp3-encrypted}
+  resources:
+    requests:
+      storage: ${POSTGRES_STORAGE_SIZE:-50Gi}
+  # Use encrypted storage for HIPAA compliance
+  selector:
+    matchLabels:
+      encryption: enabled
+
+---
+# PostgreSQL StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: postgres
+    service: database
+    environment: ${ENVIRONMENT}
+    compliance: hipaa
+spec:
+  serviceName: postgres-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        service: database
+        environment: ${ENVIRONMENT}
+        compliance: hipaa
+    spec:
+      serviceAccountName: medessence-service-account
+      securityContext:
+        fsGroup: 999
+        runAsUser: 999
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+              name: postgres
+              protocol: TCP
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_INITDB_ARGS
+              value: "--auth-host=scram-sha-256 --data-checksums"
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-config
+              mountPath: /etc/postgresql/postgresql.conf
+              subPath: postgresql.conf
+              readOnly: true
+            - name: postgres-config
+              mountPath: /etc/postgresql/pg_hba.conf
+              subPath: pg_hba.conf
+              readOnly: true
+            - name: postgres-ssl
+              mountPath: /etc/ssl/certs
+              readOnly: true
+            - name: postgres-ssl
+              mountPath: /etc/ssl/private
+              readOnly: true
+          command:
+            - postgres
+            - -c
+            - config_file=/etc/postgresql/postgresql.conf
+            - -c
+            - hba_file=/etc/postgresql/pg_hba.conf
+          resources:
+            requests:
+              memory: ${POSTGRES_MEMORY_REQUEST:-512Mi}
+              cpu: ${POSTGRES_CPU_REQUEST:-200m}
+            limits:
+              memory: ${POSTGRES_MEMORY_LIMIT:-2Gi}
+              cpu: ${POSTGRES_CPU_LIMIT:-1000m}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsUser: 999
+            runAsGroup: 999
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" -h 127.0.0.1 -p 5432
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" -h 127.0.0.1 -p 5432
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" -h 127.0.0.1 -p 5432
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 30
+            successThreshold: 1
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+        - name: postgres-config
+          configMap:
+            name: postgres-config
+        - name: postgres-ssl
+          secret:
+            secretName: postgres-ssl-certs
+            defaultMode: 0600
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: postgres
+                topologyKey: kubernetes.io/hostname
+      tolerations:
+        - key: "database"
+          operator: "Equal"
+          value: "postgres"
+          effect: "NoSchedule"
+
+---
+# PostgreSQL Backup CronJob (HIPAA Compliance)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: postgres-backup
+    service: database
+    environment: ${ENVIRONMENT}
+    compliance: hipaa
+spec:
+  schedule: "${BACKUP_SCHEDULE:-0 2 * * *}"  # Daily at 2 AM
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: postgres-backup
+            service: database
+            environment: ${ENVIRONMENT}
+        spec:
+          serviceAccountName: medessence-service-account
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            fsGroup: 999
+          containers:
+            - name: postgres-backup
+              image: postgres:15-alpine
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  echo "Starting PostgreSQL backup..."
+                  
+                  # Create backup filename with timestamp
+                  BACKUP_FILE="medessence-${ENVIRONMENT}-$(date +%Y%m%d-%H%M%S).sql.gz"
+                  
+                  # Create encrypted backup
+                  pg_dump -h postgres-service -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+                    --verbose --clean --if-exists --no-owner --no-privileges \
+                    | gzip > "/tmp/$BACKUP_FILE"
+                  
+                  # Upload to S3 with encryption
+                  aws s3 cp "/tmp/$BACKUP_FILE" "s3://$S3_BACKUP_BUCKET/postgres/$BACKUP_FILE" \
+                    --server-side-encryption AES256 \
+                    --storage-class STANDARD_IA
+                  
+                  # Verify backup integrity
+                  aws s3api head-object --bucket "$S3_BACKUP_BUCKET" --key "postgres/$BACKUP_FILE"
+                  
+                  echo "Backup completed successfully: $BACKUP_FILE"
+                  
+                  # Cleanup old backups (keep last 30 days)
+                  CUTOFF_DATE=$(date -d "30 days ago" +%Y%m%d)
+                  aws s3 ls "s3://$S3_BACKUP_BUCKET/postgres/" | while read -r line; do
+                    FILE_DATE=$(echo "$line" | awk '{print $4}' | cut -d'-' -f2 | cut -d'-' -f1)
+                    if [ "$FILE_DATE" -lt "$CUTOFF_DATE" ]; then
+                      FILE_NAME=$(echo "$line" | awk '{print $4}')
+                      aws s3 rm "s3://$S3_BACKUP_BUCKET/postgres/$FILE_NAME"
+                      echo "Deleted old backup: $FILE_NAME"
+                    fi
+                  done
+              env:
+                - name: POSTGRES_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: medessence-secrets
+                      key: POSTGRES_USER
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: medessence-secrets
+                      key: POSTGRES_PASSWORD
+                - name: POSTGRES_DB
+                  valueFrom:
+                    configMapKeyRef:
+                      name: medessence-config
+                      key: POSTGRES_DB
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: medessence-secrets
+                      key: AWS_ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: medessence-secrets
+                      key: AWS_SECRET_ACCESS_KEY
+                - name: S3_BACKUP_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: medessence-secrets
+                      key: S3_BACKUP_BUCKET
+              resources:
+                requests:
+                  memory: 256Mi
+                  cpu: 100m
+                limits:
+                  memory: 512Mi
+                  cpu: 500m
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                runAsUser: 999
+                runAsGroup: 999
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: temp-storage
+                  mountPath: /tmp
+          volumes:
+            - name: temp-storage
+              emptyDir:
+                sizeLimit: 5Gi
+
+---
+# Network Policy for PostgreSQL
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-netpol
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: postgres
+    environment: ${ENVIRONMENT}
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow connections from application pods only
+    - from:
+        - podSelector:
+            matchLabels:
+              app: medessence-backend
+        - podSelector:
+            matchLabels:
+              app: medessence-transcription
+        - podSelector:
+            matchLabels:
+              app: medessence-report-generation
+        - podSelector:
+            matchLabels:
+              app: medessence-summary-generation
+      ports:
+        - protocol: TCP
+          port: 5432
+  egress:
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow outbound for backup to S3
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443

@@ -1,0 +1,369 @@
+name: Docker Build & Push
+
+# =============================================================================
+# Trigger Configuration
+# =============================================================================
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to build (leave empty for all)'
+        required: false
+        type: choice
+        options:
+        - all
+        - frontend
+        - backend
+        - transcription
+        - report-generation
+        - summary-generation
+        - websocket-proxy
+        - nginx
+      push_to_registry:
+        description: 'Push to registry'
+        required: true
+        default: true
+        type: boolean
+
+# =============================================================================
+# Environment Variables
+# =============================================================================
+env:
+  # Multi-registry support for redundancy
+  GHCR_REGISTRY: ghcr.io
+  DOCKER_HUB_REGISTRY: docker.io
+  AWS_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+  IMAGE_NAME: ${{ github.repository }}
+
+# =============================================================================
+# Jobs Configuration
+# =============================================================================
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build Matrix Configuration
+  # ---------------------------------------------------------------------------
+  build-matrix:
+    name: Generate Build Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set build matrix
+        id: set-matrix
+        run: |
+          if [ "${{ github.event.inputs.service }}" == "all" ] || [ -z "${{ github.event.inputs.service }}" ]; then
+            MATRIX='[
+              {"name": "frontend", "context": "./frontend", "dockerfile": "Dockerfile.production", "target": "production"},
+              {"name": "backend", "context": "./backend", "dockerfile": "Dockerfile", "target": "production"},
+              {"name": "transcription", "context": "./services/transcription", "dockerfile": "Dockerfile", "target": "production"},
+              {"name": "report-generation", "context": "./services/report-generation", "dockerfile": "Dockerfile", "target": "production"},
+              {"name": "summary-generation", "context": "./services/summary-generation", "dockerfile": "Dockerfile", "target": "production"},
+              {"name": "websocket-proxy", "context": ".", "dockerfile": "Dockerfile.websocket-proxy", "target": "production"},
+              {"name": "nginx", "context": "./docker/nginx", "dockerfile": "Dockerfile", "target": "production"}
+            ]'
+          else
+            case "${{ github.event.inputs.service }}" in
+              "frontend")
+                MATRIX='[{"name": "frontend", "context": "./frontend", "dockerfile": "Dockerfile.production", "target": "production"}]'
+                ;;
+              "backend")
+                MATRIX='[{"name": "backend", "context": "./backend", "dockerfile": "Dockerfile", "target": "production"}]'
+                ;;
+              "transcription")
+                MATRIX='[{"name": "transcription", "context": "./services/transcription", "dockerfile": "Dockerfile", "target": "production"}]'
+                ;;
+              "report-generation")
+                MATRIX='[{"name": "report-generation", "context": "./services/report-generation", "dockerfile": "Dockerfile", "target": "production"}]'
+                ;;
+              "summary-generation")
+                MATRIX='[{"name": "summary-generation", "context": "./services/summary-generation", "dockerfile": "Dockerfile", "target": "production"}]'
+                ;;
+              "websocket-proxy")
+                MATRIX='[{"name": "websocket-proxy", "context": ".", "dockerfile": "Dockerfile.websocket-proxy", "target": "production"}]'
+                ;;
+              "nginx")
+                MATRIX='[{"name": "nginx", "context": "./docker/nginx", "dockerfile": "Dockerfile", "target": "production"}]'
+                ;;
+            esac
+          fi
+          echo "matrix=$(echo $MATRIX | jq -c .)" >> $GITHUB_OUTPUT
+
+  # ---------------------------------------------------------------------------
+  # Docker Build & Push Jobs
+  # ---------------------------------------------------------------------------
+  build-and-push:
+    name: Build & Push ${{ matrix.service.name }}
+    runs-on: ubuntu-latest
+    needs: build-matrix
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
+    
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      # ---------------------------------------------------------------------------
+      # Registry Authentication
+      # ---------------------------------------------------------------------------
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: secrets.DOCKER_HUB_USERNAME
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_HUB_REGISTRY }}
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Configure AWS credentials
+        if: secrets.AWS_ACCESS_KEY_ID
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        if: secrets.AWS_ACCESS_KEY_ID
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ---------------------------------------------------------------------------
+      # Metadata & Tags Generation
+      # ---------------------------------------------------------------------------
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service.name }}
+            ${{ secrets.DOCKER_HUB_USERNAME && format('{0}/{1}-{2}', env.DOCKER_HUB_REGISTRY, secrets.DOCKER_HUB_USERNAME, matrix.service.name) || '' }}
+            ${{ secrets.AWS_ACCOUNT_ID && format('{0}/medessence-{1}', env.AWS_REGISTRY, matrix.service.name) || '' }}
+          tags: |
+            # Branch-based tags
+            type=ref,event=branch
+            type=ref,event=pr
+            # Semantic versioning for releases
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # SHA-based tags
+            type=sha,prefix={{branch}}-,suffix=-{{date 'YYYYMMDD-HHmmss'}}
+            type=sha,prefix={{branch}}-
+            # Special tags
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=stable,enable=${{ github.event_name == 'release' }}
+
+      # ---------------------------------------------------------------------------
+      # Security Scanning Pre-build
+      # ---------------------------------------------------------------------------
+      - name: Run Dockerfile security scan
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ${{ matrix.service.context }}/${{ matrix.service.dockerfile }}
+          failure-threshold: error
+
+      # ---------------------------------------------------------------------------
+      # Multi-stage Build with Caching
+      # ---------------------------------------------------------------------------
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.context }}/${{ matrix.service.dockerfile }}
+          target: ${{ matrix.service.target }}
+          push: ${{ github.event.inputs.push_to_registry != 'false' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: |
+            type=gha,scope=${{ matrix.service.name }}
+            type=registry,ref=${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service.name }}:cache
+          cache-to: |
+            type=gha,mode=max,scope=${{ matrix.service.name }}
+            type=registry,ref=${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service.name }}:cache,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+            NODE_ENV=production
+            BUILD_DATE=${{ steps.meta.outputs.labels['org.opencontainers.image.created'] }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ steps.meta.outputs.labels['org.opencontainers.image.version'] }}
+
+      # ---------------------------------------------------------------------------
+      # Post-build Security Scanning
+      # ---------------------------------------------------------------------------
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service.name }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.service.name }}.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results-${{ matrix.service.name }}.sarif'
+
+      # ---------------------------------------------------------------------------
+      # Image Testing & Validation
+      # ---------------------------------------------------------------------------
+      - name: Test image functionality
+        if: matrix.service.name != 'nginx'
+        run: |
+          # Test if image can start and respond to health checks
+          docker run -d --name test-${{ matrix.service.name }} \
+            ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service.name }}:${{ github.sha }}
+          
+          sleep 10
+          
+          # Check if container is running
+          if ! docker ps | grep test-${{ matrix.service.name }}; then
+            echo "Container failed to start"
+            docker logs test-${{ matrix.service.name }}
+            exit 1
+          fi
+          
+          # Cleanup
+          docker stop test-${{ matrix.service.name }}
+          docker rm test-${{ matrix.service.name }}
+
+      # ---------------------------------------------------------------------------
+      # Build Attestation & SBOM
+      # ---------------------------------------------------------------------------
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service.name }}:${{ github.sha }}
+          format: 'spdx-json'
+          output-file: 'sbom-${{ matrix.service.name }}.spdx.json'
+
+      - name: Upload SBOM as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: sbom-${{ matrix.service.name }}
+          path: sbom-${{ matrix.service.name }}.spdx.json
+
+      # ---------------------------------------------------------------------------
+      # Image Size & Performance Metrics
+      # ---------------------------------------------------------------------------
+      - name: Analyze image size
+        run: |
+          docker images ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service.name }}:${{ github.sha }} \
+            --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+          
+          # Get image history for layer analysis
+          docker history ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service.name }}:${{ github.sha }} \
+            --format "table {{.CreatedBy}}\t{{.Size}}"
+
+      - name: Image digest output
+        run: |
+          echo "Image digest: ${{ steps.build.outputs.digest }}"
+          echo "Image metadata: ${{ steps.build.outputs.metadata }}"
+
+  # ---------------------------------------------------------------------------
+  # Multi-arch Manifest Creation
+  # ---------------------------------------------------------------------------
+  create-manifests:
+    name: Create Multi-arch Manifests
+    runs-on: ubuntu-latest
+    needs: [build-matrix, build-and-push]
+    if: success()
+    
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push manifest
+        run: |
+          # Create multi-arch manifest for latest tag
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            docker buildx imagetools create -t \
+              ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service.name }}:latest \
+              ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service.name }}:${{ github.sha }}
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Cleanup & Notification
+  # ---------------------------------------------------------------------------
+  cleanup:
+    name: Cleanup & Notify
+    runs-on: ubuntu-latest
+    needs: [build-and-push, create-manifests]
+    if: always()
+
+    steps:
+      - name: Clean up old images
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Keep only last 10 images per service
+          # This would typically be done via registry cleanup policies
+          echo "Cleanup would be handled by registry lifecycle policies"
+
+      - name: Notify deployment team
+        if: success() && github.ref == 'refs/heads/main'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: |
+            {
+              "attachments": [{
+                "color": "good",
+                "title": "Docker Images Built Successfully",
+                "text": "New images are ready for deployment",
+                "fields": [{
+                  "title": "Commit",
+                  "value": "${{ github.sha }}",
+                  "short": true
+                }, {
+                  "title": "Images",
+                  "value": "${{ needs.build-matrix.outputs.matrix }}",
+                  "short": false
+                }]
+              }]
+            }
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+# =============================================================================
+# Workflow Optimization
+# =============================================================================
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.service }}
+  cancel-in-progress: true

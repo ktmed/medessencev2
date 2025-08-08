@@ -1,0 +1,29 @@
+<svg width="300" height="150" viewBox="0 0 300 150" xmlns="http://www.w3.org/2000/svg">
+  <!-- Navy Blue Background -->
+  <rect width="300" height="150" fill="#1e293b"/>
+  
+  <!-- Brain Icon centered horizontally -->
+  <g transform="translate(135, 15)">
+    <!-- Left Brain (White) -->
+    <path d="M5 30 C5 18, 17 10, 30 10 C32 10, 34 11, 34 12 L34 48 C34 49, 32 50, 30 50 C17 50, 5 42, 5 30 Z" fill="white"/>
+    <!-- Left brain details -->
+    <circle cx="15" cy="22" r="3" fill="#1e293b"/>
+    <circle cx="25" cy="20" r="2.5" fill="#1e293b"/>
+    <circle cx="20" cy="35" r="2.8" fill="#1e293b"/>
+    <circle cx="12" cy="38" r="2" fill="#1e293b"/>
+    
+    <!-- Right Brain (Orange) -->
+    <path d="M25 30 C25 18, 13 10, 0 10 C-2 10, -4 11, -4 12 L-4 48 C-4 49, -2 50, 0 50 C13 50, 25 42, 25 30 Z" fill="#d97706"/>
+    <!-- Right brain details -->
+    <circle cx="15" cy="22" r="3" fill="white"/>
+    <circle cx="5" cy="20" r="2.5" fill="white"/>
+    <circle cx="10" cy="35" r="2.8" fill="white"/>
+    <circle cx="18" cy="38" r="2" fill="white"/>
+    
+    <!-- Brain stem -->
+    <rect x="12" y="48" width="6" height="8" fill="#64748b" rx="3"/>
+  </g>
+  
+  <!-- med.essence text -->
+  <text x="150" y="95" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="28" font-weight="300">med.essence</text>
+</svg>

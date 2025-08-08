@@ -1,0 +1,33 @@
+{
+  "name": "radiology-ai-mock-service",
+  "version": "1.0.0",
+  "description": "Mock transcription service for testing the radiology AI frontend",
+  "main": "mock-transcription-service.js",
+  "scripts": {
+    "start": "node mock-transcription-service.js",
+    "dev": "nodemon mock-transcription-service.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^4.21.2",
+    "node-whisper": "^2024.11.13",
+    "openai": "^5.11.0",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "uuid": "^11.1.0",
+    "whisper-node": "^1.1.1",
+    "ws": "^8.18.3",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "directories": {
+    "doc": "docs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

@@ -1,0 +1,116 @@
+version: '3.8'
+
+services:
+  # Frontend service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_WEBSOCKET_URL=ws://localhost:8080
+      - REACT_APP_API_URL=http://localhost:8080
+    depends_on:
+      - websocket-proxy
+    networks:
+      - radiology-network
+
+  # WebSocket proxy service
+  websocket-proxy:
+    build:
+      context: ./services/core
+      dockerfile: ../../Dockerfile.websocket-proxy
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - USE_VOSK=${USE_VOSK:-true}
+      - VOSK_SERVICE_URL=ws://vosk-service:8002
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - AI_PROVIDER_PRIORITY=gemini,claude,openai
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    depends_on:
+      - vosk-service
+      - redis
+    networks:
+      - radiology-network
+
+  # Vosk transcription service
+  vosk-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.vosk
+    ports:
+      - "8002:8002"
+      - "8003:8003"
+    volumes:
+      - ./vosk-models:/app/vosk-models:ro
+      - ./logs:/app/logs
+    environment:
+      - VOSK_MODEL_PATH=/app/vosk-models/vosk-model-de-0.21
+    networks:
+      - radiology-network
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - radiology-network
+
+  # PostgreSQL for report storage (optional)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=radiology_reports
+      - POSTGRES_USER=radiology_user
+      - POSTGRES_PASSWORD=secure_password_change_me
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    networks:
+      - radiology-network
+
+  # Nginx reverse proxy (optional, for production)
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - websocket-proxy
+    networks:
+      - radiology-network
+    profiles:
+      - production
+
+# Volumes
+volumes:
+  redis-data:
+  postgres-data:
+
+# Networks
+networks:
+  radiology-network:
+    driver: bridge

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Loading State</title>
+</head>
+<body>
+    <h1>Loading State Debug</h1>
+    <div id="output"></div>
+    
+    <script>
+        // This script will check if the main app has a loading overlay stuck
+        setTimeout(() => {
+            // Try to access the main frontend
+            const iframe = document.createElement('iframe');
+            iframe.src = '/';
+            iframe.style.width = '100%';
+            iframe.style.height = '600px';
+            document.body.appendChild(iframe);
+            
+            // Look for loading overlays
+            setTimeout(() => {
+                try {
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    const loadingOverlays = iframeDoc.querySelectorAll('[class*="fixed"][class*="inset-0"]');
+                    
+                    document.getElementById('output').innerHTML = `
+                        <h2>Main Frontend Analysis:</h2>
+                        <p>Found ${loadingOverlays.length} potential loading overlays</p>
+                        <p>Page title: ${iframeDoc.title}</p>
+                        <p>Body classes: ${iframeDoc.body.className}</p>
+                        ${loadingOverlays.length > 0 ? '<p style="color: red;">⚠️ Loading overlay detected!</p>' : '<p style="color: green;">✅ No loading overlay blocking UI</p>'}
+                    `;
+                } catch (e) {
+                    document.getElementById('output').innerHTML = `
+                        <p>Cross-origin restriction - cannot inspect iframe content</p>
+                        <p>But we can see the iframe loaded successfully</p>
+                    `;
+                }
+            }, 2000);
+        }, 1000);
+    </script>
+</body>
+</html>

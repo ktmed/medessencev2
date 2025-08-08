@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connection Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .connecting { background-color: #fff3cd; color: #856404; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Main Frontend Connection Test</h1>
+    
+    <div id="status" class="status connecting">🔄 Testing connection...</div>
+    
+    <div>
+        <button onclick="testConnection()">Test Connection</button>
+        <button onclick="testReport()">Test Report Generation</button>
+        <button onclick="openMainFrontend()">Open Main Frontend</button>
+    </div>
+    
+    <div id="log" style="height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin-top: 20px; background: white;"></div>
+    
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        const statusDiv = document.getElementById('status');
+        const logDiv = document.getElementById('log');
+        let socket = null;
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}`;
+            console.log(logEntry);
+            logDiv.innerHTML += '<div>' + logEntry + '</div>';
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function updateStatus(message, className) {
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + className;
+        }
+        
+        function testConnection() {
+            log('🔌 Testing connection from main frontend domain...');
+            updateStatus('🔄 Connecting...', 'connecting');
+            
+            if (socket) {
+                socket.disconnect();
+            }
+            
+            socket = io('http://localhost:8080', {
+                transports: ['websocket', 'polling'],
+                timeout: 10000,
+                forceNew: true,
+                reconnection: true
+            });
+            
+            socket.on('connect', () => {
+                updateStatus('✅ Connection Successful!', 'connected');
+                log('✅ Connected successfully with ID: ' + socket.id);
+            });
+            
+            socket.on('connect_error', (err) => {
+                updateStatus('❌ Connection Failed', 'disconnected');
+                log('❌ Connection error: ' + err.message);
+            });
+            
+            socket.on('disconnect', (reason) => {
+                updateStatus('⚠️ Disconnected', 'disconnected');
+                log('⚠️ Disconnected: ' + reason);
+            });
+            
+            socket.on('report', (data) => {
+                log('📊 Report received: ' + data.id);
+                log('✨ Enhanced Findings: ' + (data.enhancedFindings ? 'YES' : 'NO'));
+            });
+        }
+        
+        function testReport() {
+            if (!socket || !socket.connected) {
+                log('❌ Not connected - test connection first');
+                return;
+            }
+            
+            log('📝 Sending test report generation...');
+            socket.emit('generate_report', {
+                transcriptionId: 'frontend-test',
+                transcriptionText: 'MRT LWS nativ: Bandscheibenvorfall LWK 4/5. Spinalkanalstenose mäßiggradig.',
+                language: 'de',
+                timestamp: Date.now()
+            });
+        }
+        
+        function openMainFrontend() {
+            window.open('/', '_blank');
+        }
+        
+        // Auto-test connection on load
+        testConnection();
+    </script>
+</body>
+</html>

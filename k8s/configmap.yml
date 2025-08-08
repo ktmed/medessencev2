@@ -1,0 +1,207 @@
+# =============================================================================
+# MedEssenceAI ConfigMap Configuration
+# Environment-specific configuration without secrets
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medessence-config
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-ai
+    environment: ${ENVIRONMENT}
+    config-type: application
+data:
+  # Environment Configuration
+  ENVIRONMENT: "${ENVIRONMENT}"
+  NODE_ENV: "${NODE_ENV:-production}"
+  LOG_LEVEL: "${LOG_LEVEL:-info}"
+  
+  # Application URLs
+  FRONTEND_URL: "https://${FRONTEND_DOMAIN:-medessence-ai.com}"
+  API_URL: "https://api-${ENVIRONMENT}.medessence-ai.com"
+  WEBSOCKET_URL: "wss://ws-${ENVIRONMENT}.medessence-ai.com"
+  
+  # Database Configuration (non-sensitive)
+  POSTGRES_DB: "medessence"
+  POSTGRES_HOST: "postgres-service"
+  POSTGRES_PORT: "5432"
+  POSTGRES_MAX_CONNECTIONS: "${POSTGRES_MAX_CONNECTIONS:-20}"
+  POSTGRES_SSL_MODE: "require"
+  
+  # Redis Configuration
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  REDIS_MAX_CONNECTIONS: "${REDIS_MAX_CONNECTIONS:-10}"
+  
+  # AI Service Configuration
+  AI_PROVIDER_PRIORITY: "${AI_PROVIDER_PRIORITY:-openai,anthropic,google}"
+  OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4-turbo-preview}"
+  ANTHROPIC_MODEL: "${ANTHROPIC_MODEL:-claude-3-sonnet-20240229}"
+  GOOGLE_MODEL: "${GOOGLE_MODEL:-gemini-1.5-pro}"
+  
+  # Transcription Configuration
+  VOSK_SERVICE_URL: "http://vosk-service:8002"
+  WHISPER_MODEL_SIZE: "${WHISPER_MODEL_SIZE:-base}"
+  TRANSCRIPTION_LANGUAGE: "${TRANSCRIPTION_LANGUAGE:-de-DE}"
+  
+  # Rate Limiting Configuration
+  RATE_LIMIT_ENABLED: "${RATE_LIMIT_ENABLED:-true}"
+  RATE_LIMIT_REQUESTS: "${RATE_LIMIT_REQUESTS:-100}"
+  RATE_LIMIT_WINDOW: "${RATE_LIMIT_WINDOW:-900}"
+  
+  # Security Configuration
+  CORS_ORIGINS: "${CORS_ORIGINS:-https://medessence-ai.com,https://app.medessence-ai.com}"
+  SESSION_TIMEOUT: "${SESSION_TIMEOUT:-3600}"
+  JWT_EXPIRES_IN: "${JWT_EXPIRES_IN:-24h}"
+  BCRYPT_SALT_ROUNDS: "${BCRYPT_SALT_ROUNDS:-12}"
+  
+  # Medical Compliance
+  HIPAA_AUDIT_ENABLED: "true"
+  DATA_RETENTION_DAYS: "${DATA_RETENTION_DAYS:-2555}"  # 7 years
+  PHI_ENCRYPTION_ENABLED: "true"
+  AUDIT_LOG_RETENTION_DAYS: "${AUDIT_LOG_RETENTION_DAYS:-3650}"  # 10 years
+  
+  # Monitoring & Observability
+  METRICS_ENABLED: "true"
+  TRACING_ENABLED: "${TRACING_ENABLED:-true}"
+  PROMETHEUS_METRICS_PATH: "/metrics"
+  HEALTH_CHECK_PATH: "/health"
+  
+  # Feature Flags
+  FEATURE_ADVANCED_REPORTS: "${FEATURE_ADVANCED_REPORTS:-true}"
+  FEATURE_MULTI_LANGUAGE: "${FEATURE_MULTI_LANGUAGE:-true}"
+  FEATURE_AI_SUGGESTIONS: "${FEATURE_AI_SUGGESTIONS:-true}"
+  FEATURE_EXPORT_PDF: "${FEATURE_EXPORT_PDF:-true}"
+  
+  # Performance Configuration
+  MAX_FILE_SIZE_MB: "${MAX_FILE_SIZE_MB:-50}"
+  MAX_CONCURRENT_TRANSCRIPTIONS: "${MAX_CONCURRENT_TRANSCRIPTIONS:-5}"
+  CACHE_TTL_SECONDS: "${CACHE_TTL_SECONDS:-3600}"
+  
+  # Backup Configuration
+  BACKUP_ENABLED: "${BACKUP_ENABLED:-true}"
+  BACKUP_SCHEDULE: "${BACKUP_SCHEDULE:-0 2 * * *}"  # Daily at 2 AM
+  BACKUP_RETENTION_DAYS: "${BACKUP_RETENTION_DAYS:-30}"
+
+---
+# Medical Terminology ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medical-terminology-config
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-ai
+    environment: ${ENVIRONMENT}
+    config-type: medical-data
+data:
+  # Medical Specialties
+  supported_specialties: |
+    - radiology
+    - cardiology
+    - oncology
+    - pathology
+    - orthopedics
+    - neurology
+    - gastroenterology
+    - pulmonology
+    - dermatology
+    - endocrinology
+  
+  # ICD-10 Configuration
+  icd_version: "ICD-10-CM-2024"
+  icd_api_endpoint: "https://api.icd.who.int/icd/entity"
+  
+  # Medical Language Models
+  medical_models: |
+    german:
+      primary: "whisper-german-medical-v2"
+      fallback: "whisper-base-german"
+    english:
+      primary: "whisper-medical-v1"
+      fallback: "whisper-base-english"
+    multilingual:
+      primary: "whisper-large-v3"
+
+---
+# Logging Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logging-config
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-ai
+    environment: ${ENVIRONMENT}
+    config-type: logging
+data:
+  # Log Levels by Service
+  backend_log_level: "${BACKEND_LOG_LEVEL:-info}"
+  frontend_log_level: "${FRONTEND_LOG_LEVEL:-warn}"
+  transcription_log_level: "${TRANSCRIPTION_LOG_LEVEL:-info}"
+  report_generation_log_level: "${REPORT_GENERATION_LOG_LEVEL:-info}"
+  summary_generation_log_level: "${SUMMARY_GENERATION_LOG_LEVEL:-info}"
+  
+  # Log Formats
+  log_format: "json"
+  timestamp_format: "ISO8601"
+  
+  # Audit Logging (HIPAA Compliance)
+  audit_log_enabled: "true"
+  audit_log_level: "info"
+  audit_events: |
+    - user_login
+    - user_logout
+    - data_access
+    - data_modification
+    - data_export
+    - configuration_change
+    - security_event
+    - system_error
+  
+  # Log Shipping
+  log_shipper: "promtail"
+  loki_endpoint: "http://loki.monitoring.svc.cluster.local:3100"
+  
+  # Log Retention (HIPAA Requirements)
+  application_log_retention_days: "90"
+  security_log_retention_days: "365"
+  audit_log_retention_days: "3650"  # 10 years for HIPAA compliance
+
+---
+# Monitoring Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: monitoring-config
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-ai
+    environment: ${ENVIRONMENT}
+    config-type: monitoring
+data:
+  # Prometheus Configuration
+  prometheus_scrape_interval: "15s"
+  prometheus_evaluation_interval: "15s"
+  metrics_path: "/metrics"
+  
+  # Health Check Configuration
+  health_check_interval: "30s"
+  health_check_timeout: "10s"
+  health_check_retries: "3"
+  
+  # Alert Configuration
+  alert_manager_endpoint: "http://alertmanager.monitoring.svc.cluster.local:9093"
+  slack_webhook_url: "${SLACK_WEBHOOK_URL}"
+  email_notifications: "${EMAIL_NOTIFICATIONS:-devops@medessence-ai.com}"
+  
+  # SLA Targets
+  availability_target: "99.9"
+  response_time_target_ms: "500"
+  error_rate_target_percent: "0.1"
+  
+  # Grafana Configuration
+  grafana_endpoint: "http://grafana.monitoring.svc.cluster.local:3000"
+  grafana_org_id: "1"

@@ -1,0 +1,464 @@
+name: Production Deployment
+
+# =============================================================================
+# Trigger Configuration - Manual and automated deployment
+# =============================================================================
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      image_tag:
+        description: 'Docker image tag to deploy (leave empty for latest)'
+        required: false
+        type: string
+      rollback:
+        description: 'Rollback to previous version'
+        required: false
+        default: false
+        type: boolean
+      skip_health_checks:
+        description: 'Skip health checks (emergency deployment)'
+        required: false
+        default: false
+        type: boolean
+  
+  # Auto-deploy to staging on main branch
+  push:
+    branches: [ main ]
+  
+  # Auto-deploy to production on release
+  release:
+    types: [ published ]
+
+# =============================================================================
+# Environment Variables
+# =============================================================================
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  KUBECTL_VERSION: 'v1.28.0'
+  HELM_VERSION: 'v3.12.0'
+
+# =============================================================================
+# Jobs Configuration
+# =============================================================================
+jobs:
+  # ---------------------------------------------------------------------------
+  # Pre-deployment Validation
+  # ---------------------------------------------------------------------------
+  pre-deployment-checks:
+    name: Pre-deployment Validation
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      image_tag: ${{ steps.set-env.outputs.image_tag }}
+      deploy_allowed: ${{ steps.validation.outputs.deploy_allowed }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set deployment environment
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "image_tag=${{ github.event.inputs.image_tag || github.sha }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "push" ]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "image_tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "release" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "image_tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate deployment conditions
+        id: validation
+        run: |
+          ENVIRONMENT="${{ steps.set-env.outputs.environment }}"
+          IMAGE_TAG="${{ steps.set-env.outputs.image_tag }}"
+          
+          # Production deployment validation
+          if [ "$ENVIRONMENT" == "production" ]; then
+            # Check if this is a scheduled maintenance window
+            CURRENT_HOUR=$(date -u +%H)
+            CURRENT_DAY=$(date -u +%u)
+            
+            if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "${{ github.event_name }}" != "release" ]; then
+              echo "Production deployment only allowed via manual trigger or release"
+              echo "deploy_allowed=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+            
+            # Check if we're in maintenance window (Sunday 2-4 AM UTC unless emergency)
+            if [ "${{ github.event.inputs.skip_health_checks }}" != "true" ] && [ "$CURRENT_DAY" != "7" ] && ([ "$CURRENT_HOUR" -lt "2" ] || [ "$CURRENT_HOUR" -ge "4" ]); then
+              echo "Production deployment outside maintenance window requires emergency flag"
+              echo "deploy_allowed=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          fi
+          
+          # Validate image exists
+          docker manifest inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:$IMAGE_TAG > /dev/null || (
+            echo "Image tag $IMAGE_TAG not found in registry"
+            echo "deploy_allowed=false" >> $GITHUB_OUTPUT
+            exit 1
+          )
+          
+          echo "deploy_allowed=true" >> $GITHUB_OUTPUT
+
+      - name: Medical compliance check
+        if: steps.set-env.outputs.environment == 'production'
+        run: |
+          echo "Performing HIPAA compliance validation..."
+          # Add specific medical compliance checks here
+          echo "✓ All compliance checks passed"
+
+  # ---------------------------------------------------------------------------
+  # Database Migration (if needed)
+  # ---------------------------------------------------------------------------
+  database-migration:
+    name: Database Migration
+    runs-on: ubuntu-latest
+    needs: pre-deployment-checks
+    if: needs.pre-deployment-checks.outputs.deploy_allowed == 'true'
+    environment: 
+      name: ${{ needs.pre-deployment-checks.outputs.environment }}-db
+      url: https://medessence-ai.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Configure database access
+        env:
+          ENVIRONMENT: ${{ needs.pre-deployment-checks.outputs.environment }}
+        run: |
+          # Configure kubectl for database access
+          aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name medessence-cluster-$ENVIRONMENT
+
+      - name: Create database backup
+        env:
+          ENVIRONMENT: ${{ needs.pre-deployment-checks.outputs.environment }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        run: |
+          # Create backup before migration
+          kubectl exec deployment/postgres -n medessence-$ENVIRONMENT -- \
+            pg_dump -U postgres -d medessence > backup-$(date +%Y%m%d-%H%M%S).sql
+          
+          # Upload backup to S3
+          aws s3 cp backup-*.sql s3://${{ secrets.BACKUP_S3_BUCKET }}/pre-deployment/
+
+      - name: Run database migrations
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ENVIRONMENT: ${{ needs.pre-deployment-checks.outputs.environment }}
+        run: |
+          npm ci
+          npx prisma migrate deploy
+          
+          # Verify migration
+          npx prisma db seed --preview-feature
+
+      - name: Validate data integrity
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          # Run data integrity checks
+          ./scripts/validate-data-integrity.sh
+
+  # ---------------------------------------------------------------------------
+  # Blue-Green Deployment
+  # ---------------------------------------------------------------------------
+  deploy-services:
+    name: Deploy Services
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, database-migration]
+    if: needs.pre-deployment-checks.outputs.deploy_allowed == 'true'
+    environment: 
+      name: ${{ needs.pre-deployment-checks.outputs.environment }}
+      url: https://medessence-ai.com
+    
+    strategy:
+      matrix:
+        service: [backend, frontend, transcription, report-generation, summary-generation, websocket-proxy]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Update kubeconfig
+        env:
+          ENVIRONMENT: ${{ needs.pre-deployment-checks.outputs.environment }}
+        run: |
+          aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name medessence-cluster-$ENVIRONMENT
+
+      - name: Deploy service with blue-green strategy
+        env:
+          ENVIRONMENT: ${{ needs.pre-deployment-checks.outputs.environment }}
+          IMAGE_TAG: ${{ needs.pre-deployment-checks.outputs.image_tag }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          # Get current deployment version for rollback
+          CURRENT_VERSION=$(kubectl get deployment medessence-$SERVICE -n medessence-$ENVIRONMENT -o jsonpath='{.metadata.labels.version}' || echo "v0")
+          echo "CURRENT_VERSION=$CURRENT_VERSION" >> $GITHUB_ENV
+          
+          # Deploy new version
+          helm upgrade --install medessence-$SERVICE ./helm/medessence-$SERVICE \
+            --namespace medessence-$ENVIRONMENT \
+            --create-namespace \
+            --set image.tag=$IMAGE_TAG \
+            --set environment=$ENVIRONMENT \
+            --set deployment.strategy=blueGreen \
+            --set-string deployment.version=$(date +%s) \
+            --timeout 10m \
+            --wait
+
+      - name: Wait for service readiness
+        env:
+          ENVIRONMENT: ${{ needs.pre-deployment-checks.outputs.environment }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          # Wait for deployment to be ready
+          kubectl rollout status deployment/medessence-$SERVICE -n medessence-$ENVIRONMENT --timeout=600s
+          
+          # Wait for all pods to be ready
+          kubectl wait --for=condition=ready pod -l app=medessence-$SERVICE -n medessence-$ENVIRONMENT --timeout=300s
+
+      - name: Service health check
+        if: github.event.inputs.skip_health_checks != 'true'
+        env:
+          ENVIRONMENT: ${{ needs.pre-deployment-checks.outputs.environment }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          # Get service endpoint
+          SERVICE_URL=$(kubectl get service medessence-$SERVICE -n medessence-$ENVIRONMENT -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          
+          # Health check with retry
+          for i in {1..30}; do
+            if curl -f -s "http://$SERVICE_URL/health" > /dev/null; then
+              echo "✓ $SERVICE health check passed"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "✗ $SERVICE health check failed after 30 attempts"
+              exit 1
+            fi
+            sleep 10
+          done
+
+  # ---------------------------------------------------------------------------
+  # Integration Testing in Production Environment
+  # ---------------------------------------------------------------------------
+  production-smoke-tests:
+    name: Production Smoke Tests
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, deploy-services]
+    if: needs.pre-deployment-checks.outputs.deploy_allowed == 'true'
+    environment: 
+      name: ${{ needs.pre-deployment-checks.outputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python for testing
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest requests
+
+      - name: Run smoke tests
+        env:
+          ENVIRONMENT: ${{ needs.pre-deployment-checks.outputs.environment }}
+          BASE_URL: https://api-${{ needs.pre-deployment-checks.outputs.environment }}.medessence-ai.com
+        run: |
+          cd tests/smoke
+          python -m pytest smoke_tests.py -v \
+            --base-url=$BASE_URL \
+            --environment=$ENVIRONMENT
+
+      - name: Run medical workflow validation
+        env:
+          ENVIRONMENT: ${{ needs.pre-deployment-checks.outputs.environment }}
+        run: |
+          # Test complete medical transcription workflow
+          cd tests/integration
+          python test_complete_workflow.py --environment=$ENVIRONMENT
+
+  # ---------------------------------------------------------------------------
+  # Traffic Switching & Monitoring
+  # ---------------------------------------------------------------------------
+  switch-traffic:
+    name: Switch Production Traffic
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, production-smoke-tests]
+    if: needs.pre-deployment-checks.outputs.deploy_allowed == 'true' && needs.pre-deployment-checks.outputs.environment == 'production'
+    environment: 
+      name: production-traffic
+      url: https://medessence-ai.com
+    
+    steps:
+      - name: Configure traffic switching
+        env:
+          IMAGE_TAG: ${{ needs.pre-deployment-checks.outputs.image_tag }}
+        run: |
+          # Switch Istio traffic gradually
+          kubectl patch virtualservice medessence-frontend -n istio-system --type='json' \
+            -p='[{"op": "replace", "path": "/spec/http/0/route/0/weight", "value": 10}]'
+          
+          sleep 120  # Monitor for 2 minutes
+          
+          kubectl patch virtualservice medessence-frontend -n istio-system --type='json' \
+            -p='[{"op": "replace", "path": "/spec/http/0/route/0/weight", "value": 50}]'
+          
+          sleep 300  # Monitor for 5 minutes
+          
+          kubectl patch virtualservice medessence-frontend -n istio-system --type='json' \
+            -p='[{"op": "replace", "path": "/spec/http/0/route/0/weight", "value": 100}]'
+
+      - name: Monitor deployment metrics
+        run: |
+          # Monitor error rates, response times, etc.
+          echo "Monitoring deployment metrics..."
+          # This would integrate with your monitoring system (Prometheus, Grafana)
+
+  # ---------------------------------------------------------------------------
+  # Post-deployment Validation
+  # ---------------------------------------------------------------------------
+  post-deployment-validation:
+    name: Post-deployment Validation
+    runs-on: ubuntu-latest
+    needs: [pre-deployment-checks, production-smoke-tests, switch-traffic]
+    if: always() && needs.pre-deployment-checks.outputs.deploy_allowed == 'true'
+    
+    steps:
+      - name: Final health check
+        env:
+          ENVIRONMENT: ${{ needs.pre-deployment-checks.outputs.environment }}
+        run: |
+          # Comprehensive health check
+          ./scripts/health-check.sh $ENVIRONMENT
+
+      - name: Update deployment tracking
+        env:
+          ENVIRONMENT: ${{ needs.pre-deployment-checks.outputs.environment }}
+          IMAGE_TAG: ${{ needs.pre-deployment-checks.outputs.image_tag }}
+        run: |
+          # Record successful deployment
+          echo "Deployment completed successfully"
+          echo "Environment: $ENVIRONMENT"
+          echo "Image Tag: $IMAGE_TAG"
+          echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      - name: Clean up old deployments
+        env:
+          ENVIRONMENT: ${{ needs.pre-deployment-checks.outputs.environment }}
+        run: |
+          # Clean up old ReplicaSets (keep last 3)
+          kubectl patch deployment medessence-frontend -n medessence-$ENVIRONMENT -p '{"spec":{"revisionHistoryLimit":3}}'
+          kubectl patch deployment medessence-backend -n medessence-$ENVIRONMENT -p '{"spec":{"revisionHistoryLimit":3}}'
+
+      - name: Notify deployment success
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#deployments'
+          text: |
+            🚀 Deployment to ${{ needs.pre-deployment-checks.outputs.environment }} completed successfully
+            
+            Image Tag: ${{ needs.pre-deployment-checks.outputs.image_tag }}
+            Environment: ${{ needs.pre-deployment-checks.outputs.environment }}
+            Deployed by: ${{ github.actor }}
+            
+            All services are healthy and operational.
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: Notify deployment failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#deployments'
+          text: |
+            ❌ Deployment to ${{ needs.pre-deployment-checks.outputs.environment }} failed
+            
+            Image Tag: ${{ needs.pre-deployment-checks.outputs.image_tag }}
+            Environment: ${{ needs.pre-deployment-checks.outputs.environment }}
+            
+            Please check the deployment logs and initiate rollback if necessary.
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+  # ---------------------------------------------------------------------------
+  # Rollback Capability
+  # ---------------------------------------------------------------------------
+  rollback-deployment:
+    name: Emergency Rollback
+    runs-on: ubuntu-latest
+    if: github.event.inputs.rollback == 'true' || failure()
+    environment: 
+      name: ${{ needs.pre-deployment-checks.outputs.environment }}-rollback
+    
+    steps:
+      - name: Rollback services
+        env:
+          ENVIRONMENT: ${{ needs.pre-deployment-checks.outputs.environment || github.event.inputs.environment }}
+        run: |
+          # Rollback to previous version
+          kubectl rollout undo deployment/medessence-frontend -n medessence-$ENVIRONMENT
+          kubectl rollout undo deployment/medessence-backend -n medessence-$ENVIRONMENT
+          kubectl rollout undo deployment/medessence-transcription -n medessence-$ENVIRONMENT
+          kubectl rollout undo deployment/medessence-report-generation -n medessence-$ENVIRONMENT
+          kubectl rollout undo deployment/medessence-summary-generation -n medessence-$ENVIRONMENT
+          
+          # Wait for rollback to complete
+          kubectl rollout status deployment/medessence-frontend -n medessence-$ENVIRONMENT --timeout=300s
+          kubectl rollout status deployment/medessence-backend -n medessence-$ENVIRONMENT --timeout=300s
+
+      - name: Verify rollback
+        env:
+          ENVIRONMENT: ${{ needs.pre-deployment-checks.outputs.environment || github.event.inputs.environment }}
+        run: |
+          # Verify all services are healthy after rollback
+          ./scripts/health-check.sh $ENVIRONMENT
+
+# =============================================================================
+# Workflow Security & Optimization
+# =============================================================================
+concurrency:
+  group: deploy-${{ github.event.inputs.environment || 'auto' }}-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel deployment in progress

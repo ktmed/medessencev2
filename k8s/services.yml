@@ -1,0 +1,600 @@
+# =============================================================================
+# MedEssenceAI Python Microservices Deployment
+# Medical AI services for transcription, report generation, and summarization
+# =============================================================================
+
+# Transcription Service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medessence-transcription
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-transcription
+    service: transcription
+    environment: ${ENVIRONMENT}
+spec:
+  selector:
+    app: medessence-transcription
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+    - name: metrics
+      port: 9091
+      targetPort: 9091
+      protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medessence-transcription
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-transcription
+    service: transcription
+    environment: ${ENVIRONMENT}
+    tier: ai-service
+spec:
+  replicas: ${TRANSCRIPTION_REPLICAS:-2}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: medessence-transcription
+  template:
+    metadata:
+      labels:
+        app: medessence-transcription
+        service: transcription
+        environment: ${ENVIRONMENT}
+        tier: ai-service
+        version: ${IMAGE_TAG}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: medessence-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: transcription
+          image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME}-transcription:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+            - containerPort: 9091
+              name: metrics
+              protocol: TCP
+          env:
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: ENVIRONMENT
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: REDIS_URL
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: OPENAI_API_KEY
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: GOOGLE_API_KEY
+            - name: TRANSCRIPTION_LANGUAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: TRANSCRIPTION_LANGUAGE
+            - name: WHISPER_MODEL_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: WHISPER_MODEL_SIZE
+            - name: MAX_CONCURRENT_TRANSCRIPTIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: MAX_CONCURRENT_TRANSCRIPTIONS
+          resources:
+            requests:
+              memory: ${TRANSCRIPTION_MEMORY_REQUEST:-1Gi}
+              cpu: ${TRANSCRIPTION_CPU_REQUEST:-500m}
+            limits:
+              memory: ${TRANSCRIPTION_MEMORY_LIMIT:-4Gi}
+              cpu: ${TRANSCRIPTION_CPU_LIMIT:-2000m}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+            - name: model-cache
+              mountPath: /app/models
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 20
+
+# Report Generation Service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medessence-report-generation
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-report-generation
+    service: report-generation
+    environment: ${ENVIRONMENT}
+spec:
+  selector:
+    app: medessence-report-generation
+  ports:
+    - name: http
+      port: 8001
+      targetPort: 8001
+      protocol: TCP
+    - name: metrics
+      port: 9092
+      targetPort: 9092
+      protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medessence-report-generation
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-report-generation
+    service: report-generation
+    environment: ${ENVIRONMENT}
+    tier: ai-service
+spec:
+  replicas: ${REPORT_GENERATION_REPLICAS:-2}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: medessence-report-generation
+  template:
+    metadata:
+      labels:
+        app: medessence-report-generation
+        service: report-generation
+        environment: ${ENVIRONMENT}
+        tier: ai-service
+        version: ${IMAGE_TAG}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9092"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: medessence-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: report-generation
+          image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME}-report-generation:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8001
+              name: http
+              protocol: TCP
+            - containerPort: 9092
+              name: metrics
+              protocol: TCP
+          env:
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: ENVIRONMENT
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: DATABASE_URL
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: REDIS_URL
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: OPENAI_API_KEY
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: ANTHROPIC_API_KEY
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: GOOGLE_API_KEY
+            - name: AI_PROVIDER_PRIORITY
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: AI_PROVIDER_PRIORITY
+          resources:
+            requests:
+              memory: ${REPORT_GENERATION_MEMORY_REQUEST:-512Mi}
+              cpu: ${REPORT_GENERATION_CPU_REQUEST:-200m}
+            limits:
+              memory: ${REPORT_GENERATION_MEMORY_LIMIT:-2Gi}
+              cpu: ${REPORT_GENERATION_CPU_LIMIT:-1000m}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8001
+            initialDelaySeconds: 15
+            periodSeconds: 10
+
+# Summary Generation Service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medessence-summary-generation
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-summary-generation
+    service: summary-generation
+    environment: ${ENVIRONMENT}
+spec:
+  selector:
+    app: medessence-summary-generation
+  ports:
+    - name: http
+      port: 8002
+      targetPort: 8002
+      protocol: TCP
+    - name: metrics
+      port: 9093
+      targetPort: 9093
+      protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medessence-summary-generation
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-summary-generation
+    service: summary-generation
+    environment: ${ENVIRONMENT}
+    tier: ai-service
+spec:
+  replicas: ${SUMMARY_GENERATION_REPLICAS:-2}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: medessence-summary-generation
+  template:
+    metadata:
+      labels:
+        app: medessence-summary-generation
+        service: summary-generation
+        environment: ${ENVIRONMENT}
+        tier: ai-service
+        version: ${IMAGE_TAG}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9093"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: medessence-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: summary-generation
+          image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME}-summary-generation:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8002
+              name: http
+              protocol: TCP
+            - containerPort: 9093
+              name: metrics
+              protocol: TCP
+          env:
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: ENVIRONMENT
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: DATABASE_URL
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: REDIS_URL
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: OPENAI_API_KEY
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: ANTHROPIC_API_KEY
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: GOOGLE_API_KEY
+          resources:
+            requests:
+              memory: ${SUMMARY_GENERATION_MEMORY_REQUEST:-512Mi}
+              cpu: ${SUMMARY_GENERATION_CPU_REQUEST:-200m}
+            limits:
+              memory: ${SUMMARY_GENERATION_MEMORY_LIMIT:-2Gi}
+              cpu: ${SUMMARY_GENERATION_CPU_LIMIT:-1000m}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8002
+            initialDelaySeconds: 15
+            periodSeconds: 10
+
+# WebSocket Proxy Service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medessence-websocket-proxy
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-websocket-proxy
+    service: websocket-proxy
+    environment: ${ENVIRONMENT}
+spec:
+  selector:
+    app: medessence-websocket-proxy
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+    - name: websocket
+      port: 8081
+      targetPort: 8081
+      protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medessence-websocket-proxy
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-websocket-proxy
+    service: websocket-proxy
+    environment: ${ENVIRONMENT}
+    tier: proxy
+spec:
+  replicas: ${WEBSOCKET_PROXY_REPLICAS:-2}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: medessence-websocket-proxy
+  template:
+    metadata:
+      labels:
+        app: medessence-websocket-proxy
+        service: websocket-proxy
+        environment: ${ENVIRONMENT}
+        tier: proxy
+        version: ${IMAGE_TAG}
+    spec:
+      serviceAccountName: medessence-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: websocket-proxy
+          image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME}-websocket-proxy:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+            - containerPort: 8081
+              name: websocket
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: ENVIRONMENT
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: REDIS_URL
+            - name: TRANSCRIPTION_SERVICE_URL
+              value: "http://medessence-transcription:8000"
+            - name: RATE_LIMIT_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: RATE_LIMIT_ENABLED
+          resources:
+            requests:
+              memory: ${WEBSOCKET_PROXY_MEMORY_REQUEST:-256Mi}
+              cpu: ${WEBSOCKET_PROXY_CPU_REQUEST:-100m}
+            limits:
+              memory: ${WEBSOCKET_PROXY_MEMORY_LIMIT:-1Gi}
+              cpu: ${WEBSOCKET_PROXY_CPU_LIMIT:-500m}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+
+# Shared volumes for all services
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shared-volumes
+  namespace: medessence-${ENVIRONMENT}
+data:
+  tmp-volume: |
+    emptyDir:
+      sizeLimit: 1Gi
+  model-cache: |
+    emptyDir:
+      sizeLimit: 10Gi
+
+# ServiceMonitors for all services
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: medessence-services-monitor
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-services
+    environment: ${ENVIRONMENT}
+    monitoring: prometheus
+spec:
+  selector:
+    matchLabels:
+      tier: ai-service
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+      scrapeTimeout: 10s

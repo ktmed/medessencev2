@@ -1,0 +1,386 @@
+# =============================================================================
+# MedEssenceAI Ingress Configuration
+# NGINX Ingress with SSL/TLS, rate limiting, and medical compliance
+# =============================================================================
+
+# Certificate for SSL/TLS (using cert-manager)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: medessence-tls-cert
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-ai
+    environment: ${ENVIRONMENT}
+spec:
+  secretName: medessence-tls-secret
+  issuerRef:
+    name: letsencrypt-${ENVIRONMENT}
+    kind: ClusterIssuer
+  dnsNames:
+    - ${FRONTEND_DOMAIN:-medessence-ai.com}
+    - api-${ENVIRONMENT}.medessence-ai.com
+    - ws-${ENVIRONMENT}.medessence-ai.com
+    - ${ENVIRONMENT}.medessence-ai.com
+
+---
+# Main Ingress Resource
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: medessence-ingress
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-ai
+    environment: ${ENVIRONMENT}
+  annotations:
+    # Basic NGINX Configuration
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-${ENVIRONMENT}
+    
+    # Security Headers (HIPAA Compliance)
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' wss: https:; frame-ancestors 'self';" always;
+      add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=()" always;
+    
+    # Rate Limiting (Medical Application Protection)
+    nginx.ingress.kubernetes.io/rate-limit: "${RATE_LIMIT_RPS:-10}"
+    nginx.ingress.kubernetes.io/rate-limit-window: "${RATE_LIMIT_WINDOW:-1m}"
+    nginx.ingress.kubernetes.io/rate-limit-connections: "${RATE_LIMIT_CONNECTIONS:-5}"
+    
+    # File Upload Limits (Medical Files)
+    nginx.ingress.kubernetes.io/proxy-body-size: "${MAX_FILE_SIZE:-50m}"
+    nginx.ingress.kubernetes.io/client-body-buffer-size: "64k"
+    
+    # Timeouts for Medical Processing
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-next-upstream-timeout: "600"
+    
+    # WebSocket Support
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+    
+    # Logging for Audit Trail (HIPAA)
+    nginx.ingress.kubernetes.io/enable-access-log: "true"
+    nginx.ingress.kubernetes.io/access-log-params: |
+      buffer=16k flush=5s
+    
+    # Load Balancing
+    nginx.ingress.kubernetes.io/load-balance: "round_robin"
+    nginx.ingress.kubernetes.io/upstream-keepalive: "32"
+    
+    # Compression
+    nginx.ingress.kubernetes.io/enable-compression: "true"
+    nginx.ingress.kubernetes.io/compression-types: "text/plain,text/css,text/xml,text/javascript,application/javascript,application/json,application/xml"
+
+spec:
+  tls:
+    - hosts:
+        - ${FRONTEND_DOMAIN:-medessence-ai.com}
+        - api-${ENVIRONMENT}.medessence-ai.com
+        - ws-${ENVIRONMENT}.medessence-ai.com
+      secretName: medessence-tls-secret
+  
+  rules:
+    # Frontend Application
+    - host: ${FRONTEND_DOMAIN:-medessence-ai.com}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: medessence-frontend
+                port:
+                  number: 3000
+    
+    # API Backend
+    - host: api-${ENVIRONMENT}.medessence-ai.com
+      http:
+        paths:
+          # Health Check Endpoints (no auth required)
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: medessence-backend
+                port:
+                  number: 3000
+          
+          # API Endpoints
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: medessence-backend
+                port:
+                  number: 3000
+          
+          # Metrics (protected)
+          - path: /metrics
+            pathType: Exact
+            backend:
+              service:
+                name: medessence-backend
+                port:
+                  number: 9090
+    
+    # WebSocket Endpoint
+    - host: ws-${ENVIRONMENT}.medessence-ai.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: medessence-websocket-proxy
+                port:
+                  number: 8080
+
+---
+# Ingress for Development/Staging Environment Alias
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: medessence-ingress-env
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-ai
+    environment: ${ENVIRONMENT}
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-${ENVIRONMENT}
+    # Add basic auth for staging environments
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: basic-auth-secret
+    nginx.ingress.kubernetes.io/auth-realm: "MedEssenceAI ${ENVIRONMENT} Environment"
+
+spec:
+  tls:
+    - hosts:
+        - ${ENVIRONMENT}.medessence-ai.com
+      secretName: medessence-env-tls-secret
+  
+  rules:
+    - host: ${ENVIRONMENT}.medessence-ai.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: medessence-frontend
+                port:
+                  number: 3000
+
+---
+# Network Policy for Ingress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress-network-policy
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-ai
+    environment: ${ENVIRONMENT}
+spec:
+  podSelector:
+    matchLabels:
+      app: nginx-ingress-controller
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from anywhere on HTTP/HTTPS
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+  egress:
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow connections to backend services
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: medessence-${ENVIRONMENT}
+      ports:
+        - protocol: TCP
+          port: 3000
+        - protocol: TCP
+          port: 8000
+        - protocol: TCP
+          port: 8001
+        - protocol: TCP
+          port: 8002
+        - protocol: TCP
+          port: 8080
+
+---
+# Rate Limiting Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-rate-limit-config
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-ai
+    environment: ${ENVIRONMENT}
+data:
+  # Rate limiting zones
+  rate-limit-zones: |
+    # General API rate limiting
+    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+    
+    # File upload rate limiting
+    limit_req_zone $binary_remote_addr zone=upload:10m rate=2r/s;
+    
+    # Authentication rate limiting
+    limit_req_zone $binary_remote_addr zone=auth:10m rate=5r/m;
+    
+    # WebSocket connection limiting
+    limit_req_zone $binary_remote_addr zone=websocket:10m rate=1r/s;
+  
+  # Custom location blocks
+  location-snippets: |
+    # API endpoints rate limiting
+    location ~ ^/api/ {
+      limit_req zone=api burst=20 nodelay;
+      limit_req zone=upload burst=5 nodelay;
+    }
+    
+    # Authentication endpoints
+    location ~ ^/(login|register|auth)/ {
+      limit_req zone=auth burst=3 nodelay;
+    }
+    
+    # File upload endpoints
+    location ~ ^/upload/ {
+      limit_req zone=upload burst=3 nodelay;
+      client_max_body_size 50m;
+    }
+    
+    # WebSocket endpoints
+    location ~ ^/ws/ {
+      limit_req zone=websocket burst=5 nodelay;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+    }
+
+---
+# Basic Auth Secret for Staging (Base64 encoded user:password)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: basic-auth-secret
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-ai
+    environment: ${ENVIRONMENT}
+type: Opaque
+data:
+  # Default: medessence:staging123 (change in production)
+  auth: bWVkZXNzZW5jZTokYXByMSRyVVg5WnFLQyQzSzl0ajZiT3Y3WTBLMi9VWGNINlkv
+
+---
+# Monitoring Ingress (Separate for Security)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: medessence-monitoring-ingress
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-monitoring
+    environment: ${ENVIRONMENT}
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: monitoring-auth-secret
+    nginx.ingress.kubernetes.io/auth-realm: "MedEssenceAI Monitoring"
+    # Whitelist monitoring access (adjust IP ranges as needed)
+    nginx.ingress.kubernetes.io/whitelist-source-range: "${MONITORING_WHITELIST_IPS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}"
+
+spec:
+  tls:
+    - hosts:
+        - monitoring-${ENVIRONMENT}.medessence-ai.com
+      secretName: medessence-monitoring-tls-secret
+  
+  rules:
+    - host: monitoring-${ENVIRONMENT}.medessence-ai.com
+      http:
+        paths:
+          # Prometheus
+          - path: /prometheus
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus-service
+                port:
+                  number: 9090
+          
+          # Grafana
+          - path: /grafana
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana-service
+                port:
+                  number: 3000
+          
+          # AlertManager
+          - path: /alertmanager
+            pathType: Prefix
+            backend:
+              service:
+                name: alertmanager-service
+                port:
+                  number: 9093
+
+---
+# HPA for NGINX Ingress Controller
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nginx-ingress-hpa
+  namespace: ingress-nginx
+  labels:
+    app: nginx-ingress
+    environment: ${ENVIRONMENT}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-ingress-controller
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

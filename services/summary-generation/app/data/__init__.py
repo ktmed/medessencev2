@@ -1,0 +1,1 @@
+"""Medical terminology and translation data."""

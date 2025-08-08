@@ -1,0 +1,44 @@
+# Grafana Dashboard Provisioning Configuration
+
+apiVersion: 1
+
+providers:
+  - name: 'Medical Dashboards'
+    orgId: 1
+    folder: 'Medical System'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/medical
+
+  - name: 'Infrastructure Dashboards'
+    orgId: 1
+    folder: 'Infrastructure'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/infrastructure
+
+  - name: 'Application Dashboards'
+    orgId: 1
+    folder: 'Applications'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/applications
+
+  - name: 'Compliance Dashboards'
+    orgId: 1
+    folder: 'Compliance'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/compliance

@@ -1,0 +1,557 @@
+# =============================================================================
+# MedEssenceAI Backend API Gateway Deployment
+# Node.js API Gateway with authentication, authorization, and medical compliance
+# =============================================================================
+
+# Backend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: medessence-backend
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-backend
+    service: api-gateway
+    environment: ${ENVIRONMENT}
+    tier: backend
+spec:
+  selector:
+    app: medessence-backend
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  type: ClusterIP
+
+---
+# Backend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medessence-backend
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-backend
+    service: api-gateway
+    environment: ${ENVIRONMENT}
+    tier: backend
+    compliance: hipaa
+spec:
+  replicas: ${BACKEND_REPLICAS:-3}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: medessence-backend
+  template:
+    metadata:
+      labels:
+        app: medessence-backend
+        service: api-gateway
+        environment: ${ENVIRONMENT}
+        tier: backend
+        compliance: hipaa
+        version: ${IMAGE_TAG}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+        linkerd.io/inject: enabled
+    spec:
+      serviceAccountName: medessence-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: migration
+          image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME}-backend:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Running database migrations..."
+              npx prisma migrate deploy
+              echo "Seeding database if needed..."
+              npx prisma db seed || echo "Seeding skipped or failed - continuing"
+              echo "Database initialization completed"
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: DATABASE_URL
+            - name: NODE_ENV
+              value: "production"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+      containers:
+        - name: backend
+          image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME}-backend:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+              protocol: TCP
+            - containerPort: 9090
+              name: metrics
+              protocol: TCP
+          env:
+            # Environment Configuration
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: NODE_ENV
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: ENVIRONMENT
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: LOG_LEVEL
+            
+            # Database Configuration
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: DATABASE_URL
+            - name: POSTGRES_MAX_CONNECTIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: POSTGRES_MAX_CONNECTIONS
+            
+            # Redis Configuration
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: REDIS_URL
+            - name: REDIS_MAX_CONNECTIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: REDIS_MAX_CONNECTIONS
+            
+            # Authentication & Security
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: JWT_SECRET
+            - name: JWT_REFRESH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: JWT_REFRESH_SECRET
+            - name: JWT_EXPIRES_IN
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: JWT_EXPIRES_IN
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: SESSION_SECRET
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: medical-encryption-secrets
+                  key: PHI_ENCRYPTION_KEY
+            - name: BCRYPT_SALT_ROUNDS
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: BCRYPT_SALT_ROUNDS
+            
+            # AI Provider Configuration
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: OPENAI_API_KEY
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: ANTHROPIC_API_KEY
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: GOOGLE_API_KEY
+            - name: AI_PROVIDER_PRIORITY
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: AI_PROVIDER_PRIORITY
+            
+            # Service URLs
+            - name: TRANSCRIPTION_SERVICE_URL
+              value: "http://medessence-transcription:8000"
+            - name: REPORT_GENERATION_SERVICE_URL
+              value: "http://medessence-report-generation:8001"
+            - name: SUMMARY_GENERATION_SERVICE_URL
+              value: "http://medessence-summary-generation:8002"
+            - name: WEBSOCKET_PROXY_URL
+              value: "http://medessence-websocket-proxy:8080"
+            
+            # CORS & Security
+            - name: CORS_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: CORS_ORIGINS
+            
+            # Rate Limiting
+            - name: RATE_LIMIT_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: RATE_LIMIT_ENABLED
+            - name: RATE_LIMIT_REQUESTS
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: RATE_LIMIT_REQUESTS
+            - name: RATE_LIMIT_WINDOW
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: RATE_LIMIT_WINDOW
+            
+            # Medical Compliance
+            - name: HIPAA_AUDIT_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: HIPAA_AUDIT_ENABLED
+            - name: PHI_ENCRYPTION_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: PHI_ENCRYPTION_ENABLED
+            - name: DATA_RETENTION_DAYS
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: DATA_RETENTION_DAYS
+            
+            # Monitoring
+            - name: METRICS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: METRICS_ENABLED
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: SENTRY_DSN
+            
+            # Kubernetes Metadata
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              memory: ${BACKEND_MEMORY_REQUEST:-512Mi}
+              cpu: ${BACKEND_CPU_REQUEST:-200m}
+            limits:
+              memory: ${BACKEND_MEMORY_LIMIT:-2Gi}
+              cpu: ${BACKEND_CPU_LIMIT:-1000m}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+            - name: logs-volume
+              mountPath: /app/logs
+            - name: uploads-volume
+              mountPath: /app/uploads
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 3000
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3000
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 30
+            successThreshold: 1
+      volumes:
+        - name: tmp-volume
+          emptyDir:
+            sizeLimit: 1Gi
+        - name: logs-volume
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: uploads-volume
+          emptyDir:
+            sizeLimit: 5Gi
+      imagePullSecrets:
+        - name: registry-secrets
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: medessence-backend
+                topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values: ["amd64"]
+      tolerations:
+        - key: "backend"
+          operator: "Equal"
+          value: "api-gateway"
+          effect: "NoSchedule"
+
+---
+# Horizontal Pod Autoscaler for Backend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: medessence-backend-hpa
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-backend
+    environment: ${ENVIRONMENT}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: medessence-backend
+  minReplicas: ${BACKEND_MIN_REPLICAS:-2}
+  maxReplicas: ${BACKEND_MAX_REPLICAS:-10}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+
+---
+# Pod Disruption Budget for Backend
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: medessence-backend-pdb
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-backend
+    environment: ${ENVIRONMENT}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: medessence-backend
+
+---
+# ServiceMonitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: medessence-backend-monitor
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-backend
+    environment: ${ENVIRONMENT}
+    monitoring: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: medessence-backend
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+      scrapeTimeout: 10s
+
+---
+# Network Policy for Backend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: medessence-backend-netpol
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-backend
+    environment: ${ENVIRONMENT}
+spec:
+  podSelector:
+    matchLabels:
+      app: medessence-backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress from frontend and load balancer
+    - from:
+        - podSelector:
+            matchLabels:
+              app: medessence-frontend
+        - podSelector:
+            matchLabels:
+              app: nginx
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              name: istio-system
+      ports:
+        - protocol: TCP
+          port: 3000
+    # Allow monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+  egress:
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow HTTPS to external APIs
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+    # Allow communication to database
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow communication to Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow communication to internal services
+    - to:
+        - podSelector:
+            matchLabels:
+              app: medessence-transcription
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              app: medessence-report-generation
+      ports:
+        - protocol: TCP
+          port: 8001
+    - to:
+        - podSelector:
+            matchLabels:
+              app: medessence-summary-generation
+      ports:
+        - protocol: TCP
+          port: 8002
+    - to:
+        - podSelector:
+            matchLabels:
+              app: medessence-websocket-proxy
+      ports:
+        - protocol: TCP
+          port: 8080

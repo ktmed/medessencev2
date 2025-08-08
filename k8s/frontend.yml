@@ -1,0 +1,383 @@
+# =============================================================================
+# MedEssenceAI Frontend Deployment
+# Next.js React application with SSR and medical UI components
+# =============================================================================
+
+# Frontend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: medessence-frontend
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-frontend
+    service: web
+    environment: ${ENVIRONMENT}
+    tier: frontend
+spec:
+  selector:
+    app: medessence-frontend
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  type: ClusterIP
+
+---
+# Frontend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medessence-frontend
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-frontend
+    service: web
+    environment: ${ENVIRONMENT}
+    tier: frontend
+spec:
+  replicas: ${FRONTEND_REPLICAS:-3}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: medessence-frontend
+  template:
+    metadata:
+      labels:
+        app: medessence-frontend
+        service: web
+        environment: ${ENVIRONMENT}
+        tier: frontend
+        version: ${IMAGE_TAG}
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      serviceAccountName: medessence-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: frontend
+          image: ${REGISTRY:-ghcr.io}/${IMAGE_NAME}-frontend:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+              protocol: TCP
+          env:
+            # Environment Configuration
+            - name: NODE_ENV
+              value: "production"
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: ENVIRONMENT
+            - name: NEXT_TELEMETRY_DISABLED
+              value: "1"
+            
+            # Application URLs
+            - name: NEXT_PUBLIC_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: API_URL
+            - name: NEXT_PUBLIC_WEBSOCKET_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: WEBSOCKET_URL
+            - name: NEXT_PUBLIC_FRONTEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: FRONTEND_URL
+            
+            # Internal Service URLs (for SSR)
+            - name: INTERNAL_API_URL
+              value: "http://medessence-backend:3000"
+            - name: INTERNAL_WEBSOCKET_URL
+              value: "http://medessence-websocket-proxy:8080"
+            
+            # Feature Flags
+            - name: NEXT_PUBLIC_FEATURE_ADVANCED_REPORTS
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: FEATURE_ADVANCED_REPORTS
+            - name: NEXT_PUBLIC_FEATURE_MULTI_LANGUAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: FEATURE_MULTI_LANGUAGE
+            - name: NEXT_PUBLIC_FEATURE_AI_SUGGESTIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: FEATURE_AI_SUGGESTIONS
+            - name: NEXT_PUBLIC_FEATURE_EXPORT_PDF
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: FEATURE_EXPORT_PDF
+            
+            # Performance Configuration
+            - name: NEXT_PUBLIC_MAX_FILE_SIZE_MB
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: MAX_FILE_SIZE_MB
+            
+            # Medical Configuration
+            - name: NEXT_PUBLIC_DEFAULT_LANGUAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: medessence-config
+                  key: TRANSCRIPTION_LANGUAGE
+            
+            # Monitoring
+            - name: NEXT_PUBLIC_SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: medessence-secrets
+                  key: SENTRY_DSN
+                  optional: true
+            
+            # Security Headers
+            - name: SECURITY_HEADERS_ENABLED
+              value: "true"
+            - name: CSP_ENABLED
+              value: "true"
+            
+            # Kubernetes Metadata
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              memory: ${FRONTEND_MEMORY_REQUEST:-256Mi}
+              cpu: ${FRONTEND_CPU_REQUEST:-100m}
+            limits:
+              memory: ${FRONTEND_MEMORY_LIMIT:-1Gi}
+              cpu: ${FRONTEND_CPU_LIMIT:-500m}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+            - name: nextjs-cache
+              mountPath: /.next/cache
+            - name: logs-volume
+              mountPath: /app/logs
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+              scheme: HTTP
+              httpHeaders:
+                - name: Accept
+                  value: application/json
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /api/health/ready
+              port: 3000
+              scheme: HTTP
+              httpHeaders:
+                - name: Accept
+                  value: application/json
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 30
+            successThreshold: 1
+      volumes:
+        - name: tmp-volume
+          emptyDir:
+            sizeLimit: 1Gi
+        - name: nextjs-cache
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: logs-volume
+          emptyDir:
+            sizeLimit: 1Gi
+      imagePullSecrets:
+        - name: registry-secrets
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: medessence-frontend
+                topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values: ["amd64"]
+      tolerations:
+        - key: "frontend"
+          operator: "Equal"
+          value: "web"
+          effect: "NoSchedule"
+
+---
+# Horizontal Pod Autoscaler for Frontend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: medessence-frontend-hpa
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-frontend
+    environment: ${ENVIRONMENT}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: medessence-frontend
+  minReplicas: ${FRONTEND_MIN_REPLICAS:-2}
+  maxReplicas: ${FRONTEND_MAX_REPLICAS:-10}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+
+---
+# Pod Disruption Budget for Frontend
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: medessence-frontend-pdb
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-frontend
+    environment: ${ENVIRONMENT}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: medessence-frontend
+
+---
+# Network Policy for Frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: medessence-frontend-netpol
+  namespace: medessence-${ENVIRONMENT}
+  labels:
+    app: medessence-frontend
+    environment: ${ENVIRONMENT}
+spec:
+  podSelector:
+    matchLabels:
+      app: medessence-frontend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress from load balancer/ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              name: istio-system
+        - podSelector:
+            matchLabels:
+              app: nginx
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow HTTPS to external services (CDNs, APIs)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+    # Allow communication to backend API
+    - to:
+        - podSelector:
+            matchLabels:
+              app: medessence-backend
+      ports:
+        - protocol: TCP
+          port: 3000
+    # Allow communication to WebSocket proxy
+    - to:
+        - podSelector:
+            matchLabels:
+              app: medessence-websocket-proxy
+      ports:
+        - protocol: TCP
+          port: 8080

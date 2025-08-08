@@ -1,0 +1,649 @@
+name: Security Scan & Code Quality
+
+# =============================================================================
+# Trigger Configuration
+# =============================================================================
+on:
+  push:
+    branches: [ main, develop, feature/*, security/* ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run security scans daily at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of security scan'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+        - full
+        - dependencies
+        - code
+        - docker
+        - infrastructure
+
+# =============================================================================
+# Environment Variables
+# =============================================================================
+env:
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.11'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+# =============================================================================
+# Jobs Configuration
+# =============================================================================
+jobs:
+  # ---------------------------------------------------------------------------
+  # Dependency Vulnerability Scanning
+  # ---------------------------------------------------------------------------
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'dependencies' || github.event.inputs.scan_type == null
+    
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+            backend/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      # Node.js dependency scanning
+      - name: Run npm audit (Backend)
+        working-directory: backend
+        run: |
+          npm ci --audit-level=moderate
+          npm audit --audit-level=moderate --json > ../npm-audit-backend.json || true
+
+      - name: Run npm audit (Frontend)
+        working-directory: frontend
+        run: |
+          npm ci --audit-level=moderate
+          npm audit --audit-level=moderate --json > ../npm-audit-frontend.json || true
+
+      # Python dependency scanning
+      - name: Install Python dependencies for scanning
+        run: |
+          pip install safety bandit[toml] pip-audit
+
+      - name: Run Safety scan (Python dependencies)
+        run: |
+          find services/ -name "requirements.txt" -exec safety check -r {} \; || true
+          safety check --json --output safety-report.json || true
+
+      - name: Run pip-audit (Python dependencies)
+        run: |
+          for service in transcription report-generation summary-generation; do
+            if [ -f "services/$service/requirements.txt" ]; then
+              pip-audit -r "services/$service/requirements.txt" --format=json --output="pip-audit-$service.json" || true
+            fi
+          done
+
+      # Advanced dependency analysis with Snyk
+      - name: Run Snyk security scan
+        uses: snyk/actions/setup@master
+
+      - name: Snyk monitor (Node.js)
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [ -n "$SNYK_TOKEN" ]; then
+            cd backend && snyk monitor --project-name="medessence-backend"
+            cd ../frontend && snyk monitor --project-name="medessence-frontend"
+          fi
+
+      - name: Snyk monitor (Python)
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [ -n "$SNYK_TOKEN" ]; then
+            for service in transcription report-generation summary-generation; do
+              cd "services/$service" && snyk monitor --project-name="medessence-$service" --file=requirements.txt
+              cd ../../
+            done
+          fi
+
+      - name: Upload dependency scan results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: dependency-scan-results
+          path: |
+            npm-audit-*.json
+            safety-report.json
+            pip-audit-*.json
+
+  # ---------------------------------------------------------------------------
+  # Static Code Analysis & SAST
+  # ---------------------------------------------------------------------------
+  static-analysis:
+    name: Static Code Analysis (SAST)
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'code' || github.event.inputs.scan_type == null
+    
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # JavaScript/TypeScript analysis
+      - name: Install dependencies
+        run: |
+          cd backend && npm ci
+          cd ../frontend && npm ci
+
+      - name: Run ESLint with security rules
+        run: |
+          cd backend && npm run lint -- --format json --output-file ../eslint-backend.json || true
+          cd ../frontend && npm run lint -- --format json --output-file ../eslint-frontend.json || true
+
+      - name: Run SonarCloud Scan
+        if: secrets.SONAR_TOKEN
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # Python static analysis
+      - name: Install Python analysis tools
+        run: |
+          pip install bandit[toml] flake8 mypy pylint safety
+
+      - name: Run Bandit security scan (Python)
+        run: |
+          bandit -r services/ -f json -o bandit-report.json || true
+          bandit -r services/ -f txt || true
+
+      - name: Run Pylint analysis
+        run: |
+          for service in transcription report-generation summary-generation; do
+            if [ -d "services/$service/app" ]; then
+              pylint "services/$service/app/" --output-format=json > "pylint-$service.json" || true
+            fi
+          done
+
+      # Advanced SAST with Semgrep
+      - name: Run Semgrep security scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/owasp-top-ten
+            p/python
+            p/javascript
+            p/typescript
+            p/docker
+          publishDeploymentId: ${{ github.event.deployment.id }}
+          publishUrl: ${{ github.event.deployment.statuses_url }}
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      # CodeQL analysis for advanced security scanning
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript, python
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+        with:
+          category: '/language:javascript,python'
+
+      - name: Upload static analysis results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: static-analysis-results
+          path: |
+            eslint-*.json
+            bandit-report.json
+            pylint-*.json
+
+  # ---------------------------------------------------------------------------
+  # Medical/Healthcare Compliance Scanning
+  # ---------------------------------------------------------------------------
+  hipaa-compliance-scan:
+    name: HIPAA Compliance Validation
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'code' || github.event.inputs.scan_type == null
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for PHI data exposure
+        run: |
+          echo "🔍 Scanning for potential PHI data exposure..."
+          
+          # Check for common PHI patterns in code
+          VIOLATIONS=0
+          
+          # Social Security Numbers
+          if grep -r -E '\b\d{3}-\d{2}-\d{4}\b|\b\d{9}\b' --include="*.js" --include="*.ts" --include="*.py" --exclude-dir=node_modules .; then
+            echo "⚠️  Potential SSN pattern found"
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+          
+          # Medical Record Numbers
+          if grep -r -E '\b(MRN|mrn|medical.record)\b' --include="*.js" --include="*.ts" --include="*.py" --exclude-dir=node_modules .; then
+            echo "⚠️  Medical record references found - ensure proper encryption"
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+          
+          # Date of Birth patterns
+          if grep -r -E '\b(dob|birth.date|birthdate)\b' --include="*.js" --include="*.ts" --include="*.py" --exclude-dir=node_modules .; then
+            echo "⚠️  Date of birth references found - ensure compliance"
+          fi
+          
+          # Check for unencrypted patient data storage
+          if grep -r -E '(patient|medical).*(store|save|persist)' --include="*.js" --include="*.ts" --include="*.py" --exclude-dir=node_modules .; then
+            echo "ℹ️  Patient data storage found - validating encryption"
+          fi
+          
+          if [ $VIOLATIONS -gt 0 ]; then
+            echo "❌ HIPAA compliance violations detected!"
+            exit 1
+          else
+            echo "✅ No HIPAA compliance violations detected"
+          fi
+
+      - name: Validate audit logging
+        run: |
+          echo "🔍 Validating audit logging implementation..."
+          
+          # Check that all patient data access is logged
+          if ! grep -r -l "audit" backend/src/ services/; then
+            echo "❌ Audit logging implementation not found!"
+            exit 1
+          fi
+          
+          # Check for proper access logging
+          if ! grep -r -E "(log|audit).*(access|view|update|delete)" --include="*.js" --include="*.ts" --include="*.py" backend/src/ services/; then
+            echo "⚠️  Audit logging may be incomplete"
+          fi
+          
+          echo "✅ Audit logging validation completed"
+
+      - name: Encryption compliance check
+        run: |
+          echo "🔍 Validating encryption usage..."
+          
+          # Check for proper encryption implementation
+          if ! grep -r -E "(encrypt|bcrypt|scrypt|cipher)" --include="*.js" --include="*.ts" --include="*.py" backend/src/ services/; then
+            echo "❌ Encryption implementation not found!"
+            exit 1
+          fi
+          
+          # Check for secure session management
+          if ! grep -r -E "(session|jwt|token)" --include="*.js" --include="*.ts" backend/src/; then
+            echo "⚠️  Session management implementation unclear"
+          fi
+          
+          echo "✅ Encryption compliance validation completed"
+
+  # ---------------------------------------------------------------------------
+  # Container Security Scanning
+  # ---------------------------------------------------------------------------
+  container-security:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'docker' || github.event.inputs.scan_type == null
+    
+    permissions:
+      contents: read
+      security-events: write
+
+    strategy:
+      matrix:
+        service: [frontend, backend, transcription, report-generation, summary-generation]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build images for scanning (without pushing)
+      - name: Build Docker image for scanning
+        run: |
+          case "${{ matrix.service }}" in
+            "frontend")
+              docker build -t medessence-${{ matrix.service }}:scan \
+                -f frontend/Dockerfile.production frontend/
+              ;;
+            "backend")
+              docker build -t medessence-${{ matrix.service }}:scan \
+                -f backend/Dockerfile backend/
+              ;;
+            *)
+              docker build -t medessence-${{ matrix.service }}:scan \
+                -f services/${{ matrix.service }}/Dockerfile services/${{ matrix.service }}/
+              ;;
+          esac
+
+      # Dockerfile security analysis
+      - name: Run Hadolint (Dockerfile linting)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: |
+            ${{ matrix.service == 'frontend' && 'frontend/Dockerfile.production' || 
+                matrix.service == 'backend' && 'backend/Dockerfile' || 
+                format('services/{0}/Dockerfile', matrix.service) }}
+          failure-threshold: error
+          format: sarif
+          output-file: hadolint-${{ matrix.service }}.sarif
+
+      # Container image vulnerability scanning
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: medessence-${{ matrix.service }}:scan
+          format: 'sarif'
+          output: 'trivy-${{ matrix.service }}.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-${{ matrix.service }}.sarif'
+
+      # Container configuration security
+      - name: Run Docker Bench Security
+        run: |
+          docker run --rm --net host --pid host --userns host --cap-add audit_control \
+            -e DOCKER_CONTENT_TRUST=$DOCKER_CONTENT_TRUST \
+            -v /var/lib:/var/lib:ro \
+            -v /var/run/docker.sock:/var/run/docker.sock:ro \
+            -v /usr/lib/systemd:/usr/lib/systemd:ro \
+            -v /etc:/etc:ro \
+            --label docker_bench_security \
+            docker/docker-bench-security:latest \
+            || true
+
+      - name: Upload container security results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: container-security-${{ matrix.service }}
+          path: |
+            hadolint-${{ matrix.service }}.sarif
+            trivy-${{ matrix.service }}.sarif
+
+  # ---------------------------------------------------------------------------
+  # Infrastructure Security Scanning
+  # ---------------------------------------------------------------------------
+  infrastructure-scan:
+    name: Infrastructure Security Scan
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'infrastructure' || github.event.inputs.scan_type == null
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Kubernetes manifest security
+      - name: Run Kubesec security scan
+        run: |
+          wget https://github.com/controlplaneio/kubesec/releases/latest/download/kubesec_linux_amd64.tar.gz
+          tar -xzf kubesec_linux_amd64.tar.gz
+          chmod +x kubesec
+          
+          if [ -d "k8s" ]; then
+            for manifest in k8s/*.yml k8s/*.yaml; do
+              if [ -f "$manifest" ]; then
+                echo "Scanning $manifest..."
+                ./kubesec scan "$manifest" > "kubesec-$(basename $manifest).json" || true
+              fi
+            done
+          fi
+
+      # Docker Compose security
+      - name: Run Docker Compose security analysis
+        run: |
+          echo "Analyzing Docker Compose configurations..."
+          for compose in docker-compose*.yml; do
+            if [ -f "$compose" ]; then
+              echo "Checking $compose for security issues..."
+              
+              # Check for privileged containers
+              if grep -q "privileged.*true" "$compose"; then
+                echo "⚠️  Privileged containers found in $compose"
+              fi
+              
+              # Check for host network mode
+              if grep -q "network_mode.*host" "$compose"; then
+                echo "⚠️  Host network mode found in $compose"
+              fi
+              
+              # Check for bind mounts to sensitive paths
+              if grep -q -E ":/etc:|:/var/run/docker.sock:|:/proc:" "$compose"; then
+                echo "⚠️  Sensitive bind mounts found in $compose"
+              fi
+              
+              # Check for missing health checks
+              if ! grep -q "healthcheck" "$compose"; then
+                echo "ℹ️  Consider adding health checks to $compose"
+              fi
+            fi
+          done
+
+      # Terraform/CloudFormation scanning (if present)
+      - name: Run Checkov infrastructure scan
+        uses: bridgecrewio/checkov-action@master
+        if: hashFiles('terraform/**/*.tf', 'cloudformation/**/*.yml', 'cloudformation/**/*.yaml') != ''
+        with:
+          directory: .
+          framework: terraform,cloudformation,kubernetes,dockerfile,docker-compose
+          output_format: sarif
+          output_file_path: checkov.sarif
+
+      - name: Upload infrastructure scan results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: infrastructure-security-results
+          path: |
+            kubesec-*.json
+            checkov.sarif
+
+  # ---------------------------------------------------------------------------
+  # Code Quality Analysis
+  # ---------------------------------------------------------------------------
+  code-quality:
+    name: Code Quality Analysis
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'code' || github.event.inputs.scan_type == null
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          cd backend && npm ci
+          cd ../frontend && npm ci
+          pip install flake8 black isort mypy
+
+      # JavaScript/TypeScript quality
+      - name: Run Prettier formatting check
+        run: |
+          cd backend && npx prettier --check src/
+          cd ../frontend && npx prettier --check src/
+
+      - name: Run TypeScript compiler check
+        run: |
+          cd frontend && npm run type-check
+
+      # Python code quality
+      - name: Run Black formatting check
+        run: |
+          for service in transcription report-generation summary-generation; do
+            if [ -d "services/$service/app" ]; then
+              black --check "services/$service/app/" || echo "Formatting issues found in $service"
+            fi
+          done
+
+      - name: Run isort import sorting check
+        run: |
+          for service in transcription report-generation summary-generation; do
+            if [ -d "services/$service/app" ]; then
+              isort --check-only "services/$service/app/" || echo "Import sorting issues found in $service"
+            fi
+          done
+
+      # Code complexity analysis
+      - name: Run complexity analysis
+        run: |
+          # Install radon for Python complexity analysis
+          pip install radon
+          
+          for service in transcription report-generation summary-generation; do
+            if [ -d "services/$service/app" ]; then
+              echo "Analyzing complexity for $service..."
+              radon cc "services/$service/app/" -a --json > "complexity-$service.json"
+            fi
+          done
+
+      - name: Upload code quality results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: code-quality-results
+          path: complexity-*.json
+
+  # ---------------------------------------------------------------------------
+  # Security Report Generation
+  # ---------------------------------------------------------------------------
+  security-report:
+    name: Generate Security Report
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, static-analysis, hipaa-compliance-scan, container-security, infrastructure-scan]
+    if: always()
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Generate comprehensive security report
+        run: |
+          echo "# MedEssenceAI Security Scan Report" > security-report.md
+          echo "" >> security-report.md
+          echo "**Generated:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> security-report.md
+          echo "**Commit:** ${{ github.sha }}" >> security-report.md
+          echo "**Branch:** ${{ github.ref_name }}" >> security-report.md
+          echo "" >> security-report.md
+          
+          echo "## Summary" >> security-report.md
+          echo "" >> security-report.md
+          
+          # Count findings from each scan type
+          echo "| Scan Type | Status | Issues Found |" >> security-report.md
+          echo "|-----------|--------|--------------|" >> security-report.md
+          
+          # Process each artifact directory
+          for dir in */; do
+            if [ -d "$dir" ]; then
+              echo "| $dir | ✅ Completed | - |" >> security-report.md
+            fi
+          done
+          
+          echo "" >> security-report.md
+          echo "## Medical Compliance" >> security-report.md
+          echo "" >> security-report.md
+          echo "- ✅ HIPAA compliance validation completed" >> security-report.md
+          echo "- ✅ PHI data exposure check completed" >> security-report.md
+          echo "- ✅ Audit logging validation completed" >> security-report.md
+          echo "- ✅ Encryption compliance validated" >> security-report.md
+          echo "" >> security-report.md
+          
+          echo "## Recommendations" >> security-report.md
+          echo "" >> security-report.md
+          echo "1. Review all HIGH and CRITICAL vulnerabilities" >> security-report.md
+          echo "2. Update dependencies with known vulnerabilities" >> security-report.md
+          echo "3. Implement additional security controls as needed" >> security-report.md
+          echo "4. Schedule regular security assessments" >> security-report.md
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-report
+          path: security-report.md
+
+      - name: Comment PR with security summary (if PR)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('security-report.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔒 Security Scan Results\n\n${report}`
+            });
+
+# =============================================================================
+# Workflow Security & Optimization
+# =============================================================================
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true

@@ -1,0 +1,165 @@
+# Recording Rules for Radiology AI System
+# Pre-computed metrics for efficient querying and dashboards
+
+groups:
+  - name: medical_system_aggregates
+    interval: 30s
+    rules:
+      # System-wide request rates
+      - record: medical:request_rate_5m
+        expr: sum(rate(http_requests_total[5m])) by (job, method, status)
+
+      - record: medical:request_rate_1h
+        expr: sum(rate(http_requests_total[1h])) by (job, method, status)
+
+      # Error rates
+      - record: medical:error_rate_5m
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) by (job) / sum(rate(http_requests_total[5m])) by (job)
+
+      - record: medical:error_rate_1h
+        expr: sum(rate(http_requests_total{status=~"5.."}[1h])) by (job) / sum(rate(http_requests_total[1h])) by (job)
+
+      # Response time percentiles
+      - record: medical:response_time_p50_5m
+        expr: histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (job, le))
+
+      - record: medical:response_time_p95_5m
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (job, le))
+
+      - record: medical:response_time_p99_5m
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (job, le))
+
+  - name: medical_system_capacity
+    interval: 60s
+    rules:
+      # CPU utilization
+      - record: medical:cpu_utilization
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+
+      # Memory utilization
+      - record: medical:memory_utilization
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100
+
+      # Disk utilization
+      - record: medical:disk_utilization
+        expr: (node_filesystem_size_bytes{fstype!="tmpfs"} - node_filesystem_free_bytes{fstype!="tmpfs"}) / node_filesystem_size_bytes{fstype!="tmpfs"} * 100
+
+      # Network I/O rates
+      - record: medical:network_receive_rate
+        expr: sum(rate(node_network_receive_bytes_total[5m])) by (instance)
+
+      - record: medical:network_transmit_rate
+        expr: sum(rate(node_network_transmit_bytes_total[5m])) by (instance)
+
+  - name: medical_database_metrics
+    interval: 60s
+    rules:
+      # Database connection utilization
+      - record: medical:db_connection_utilization
+        expr: postgresql_stat_database_numbackends / postgresql_settings_max_connections * 100
+
+      # Database transaction rates
+      - record: medical:db_transaction_rate_5m
+        expr: sum(rate(postgresql_stat_database_xact_commit[5m]) + rate(postgresql_stat_database_xact_rollback[5m])) by (instance)
+
+      # Database size growth
+      - record: medical:db_size_bytes
+        expr: sum(postgresql_stat_database_size_bytes) by (instance)
+
+      # Lock wait time
+      - record: medical:db_lock_wait_time_5m
+        expr: sum(rate(postgresql_stat_database_blk_read_time[5m]) + rate(postgresql_stat_database_blk_write_time[5m])) by (instance)
+
+  - name: medical_application_metrics
+    interval: 30s
+    rules:
+      # Transcription service metrics
+      - record: medical:transcription_rate_5m
+        expr: sum(rate(transcription_requests_total[5m])) by (language, model)
+
+      - record: medical:transcription_success_rate_5m
+        expr: sum(rate(transcription_requests_total{status="success"}[5m])) by (language) / sum(rate(transcription_requests_total[5m])) by (language)
+
+      - record: medical:transcription_duration_p95_5m
+        expr: histogram_quantile(0.95, sum(rate(transcription_request_duration_seconds_bucket[5m])) by (language, le))
+
+      # Report generation metrics
+      - record: medical:report_generation_rate_5m
+        expr: sum(rate(report_generation_requests_total[5m])) by (template_type, language)
+
+      - record: medical:report_generation_success_rate_5m
+        expr: sum(rate(report_generation_requests_total{status="success"}[5m])) by (template_type) / sum(rate(report_generation_requests_total[5m])) by (template_type)
+
+      - record: medical:report_generation_duration_p95_5m
+        expr: histogram_quantile(0.95, sum(rate(report_generation_duration_seconds_bucket[5m])) by (template_type, le))
+
+      # Summary generation metrics
+      - record: medical:summary_generation_rate_5m
+        expr: sum(rate(summary_generation_requests_total[5m])) by (complexity_level, language)
+
+      - record: medical:summary_generation_success_rate_5m
+        expr: sum(rate(summary_generation_requests_total{status="success"}[5m])) by (complexity_level) / sum(rate(summary_generation_requests_total[5m])) by (complexity_level)
+
+  - name: medical_business_metrics
+    interval: 300s
+    rules:
+      # Daily active users
+      - record: medical:daily_active_users
+        expr: count(count by (user_id) (increase(user_sessions_total[24h])))
+
+      # Medical procedures processed
+      - record: medical:procedures_processed_daily
+        expr: sum(increase(medical_procedures_total[24h])) by (procedure_type)
+
+      # Average processing time by procedure type
+      - record: medical:avg_processing_time_by_procedure
+        expr: sum(rate(medical_procedure_duration_seconds_sum[1h])) by (procedure_type) / sum(rate(medical_procedure_duration_seconds_count[1h])) by (procedure_type)
+
+      # Compliance metrics
+      - record: medical:audit_events_rate_1h
+        expr: sum(rate(audit_events_total[1h])) by (event_type, user_role)
+
+      - record: medical:data_access_rate_1h
+        expr: sum(rate(medical_data_access_total[1h])) by (data_type, access_type)
+
+  - name: medical_sla_metrics
+    interval: 60s
+    rules:
+      # Service availability (SLA: 99.9%)
+      - record: medical:service_availability_24h
+        expr: avg_over_time(up[24h]) * 100
+
+      - record: medical:service_availability_7d
+        expr: avg_over_time(up[7d]) * 100
+
+      # Response time SLA (SLA: 95% < 2s)
+      - record: medical:response_time_sla_24h
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[24h])) by (job, le))
+
+      # Error rate SLA (SLA: < 0.1%)
+      - record: medical:error_rate_sla_24h
+        expr: sum(rate(http_requests_total{status=~"5.."}[24h])) by (job) / sum(rate(http_requests_total[24h])) by (job) * 100
+
+  - name: medical_capacity_planning
+    interval: 300s
+    rules:
+      # Peak usage patterns
+      - record: medical:peak_concurrent_users_1h
+        expr: max_over_time(medical_concurrent_users[1h])
+
+      - record: medical:peak_request_rate_1h
+        expr: max_over_time(medical:request_rate_5m[1h])
+
+      # Resource utilization trends
+      - record: medical:cpu_utilization_trend_24h
+        expr: avg_over_time(medical:cpu_utilization[24h])
+
+      - record: medical:memory_utilization_trend_24h
+        expr: avg_over_time(medical:memory_utilization[24h])
+
+      - record: medical:disk_utilization_trend_24h
+        expr: avg_over_time(medical:disk_utilization[24h])
+
+      # Growth rates
+      - record: medical:data_growth_rate_7d
+        expr: (medical:db_size_bytes - medical:db_size_bytes offset 7d) / medical:db_size_bytes offset 7d * 100

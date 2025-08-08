@@ -1,0 +1,247 @@
+# Alert Rules for Radiology AI System
+# Medical-grade monitoring and critical alerting
+
+groups:
+  - name: medical_system_critical
+    interval: 30s
+    rules:
+      # Service availability alerts
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "{{ $labels.job }} service is down"
+          description: "{{ $labels.job }} has been down for more than 1 minute. Medical operations may be affected."
+          runbook_url: "https://docs.radiology-ai.local/runbooks/service-down"
+
+      - alert: DatabaseConnectionFailure
+        expr: postgresql_up == 0
+        for: 30s
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "PostgreSQL database is unreachable"
+          description: "Cannot connect to PostgreSQL database. Medical data access is compromised."
+          runbook_url: "https://docs.radiology-ai.local/runbooks/database-failure"
+
+      - alert: RedisConnectionFailure
+        expr: redis_up == 0
+        for: 30s
+        labels:
+          severity: critical
+          category: cache
+        annotations:
+          summary: "Redis cache is unreachable"
+          description: "Cannot connect to Redis cache. Session management and caching are affected."
+          runbook_url: "https://docs.radiology-ai.local/runbooks/redis-failure"
+
+  - name: medical_system_performance
+    interval: 60s
+    rules:
+      # High response time alerts
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, http_request_duration_seconds_bucket) > 5
+        for: 2m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High response time detected on {{ $labels.job }}"
+          description: "95th percentile response time is {{ $value }}s for {{ $labels.job }}"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/high-response-time"
+
+      # High error rate alerts
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          category: errors
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.job }}"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/high-error-rate"
+
+      # Memory usage alerts
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/high-memory-usage"
+
+      # Disk space alerts
+      - alert: DiskSpaceLow
+        expr: node_filesystem_free_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"} < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "Disk space low on {{ $labels.instance }}"
+          description: "Disk space is {{ $value | humanizePercentage }} full on {{ $labels.device }}"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/disk-space-low"
+
+      # CPU usage alerts
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/high-cpu-usage"
+
+  - name: medical_system_database
+    interval: 60s
+    rules:
+      # Database connection alerts
+      - alert: DatabaseConnectionsHigh
+        expr: postgresql_stat_database_numbackends / postgresql_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "High number of database connections"
+          description: "Database connections are at {{ $value | humanizePercentage }} of maximum"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/database-connections-high"
+
+      # Database lock alerts
+      - alert: DatabaseDeadlocks
+        expr: increase(postgresql_stat_database_deadlocks[1h]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Database deadlocks detected"
+          description: "{{ $value }} deadlocks detected in the last hour"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/database-deadlocks"
+
+      # WAL file alerts
+      - alert: WALFilesHigh
+        expr: postgresql_wal_files > 100
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "High number of WAL files"
+          description: "{{ $value }} WAL files present, indicating potential replication lag"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/wal-files-high"
+
+  - name: medical_system_application
+    interval: 30s
+    rules:
+      # Medical transcription alerts
+      - alert: TranscriptionServiceSlow
+        expr: histogram_quantile(0.95, transcription_request_duration_seconds_bucket) > 30
+        for: 2m
+        labels:
+          severity: warning
+          category: medical
+        annotations:
+          summary: "Medical transcription service is slow"
+          description: "95th percentile transcription time is {{ $value }}s"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/transcription-slow"
+
+      # Report generation alerts
+      - alert: ReportGenerationFailures
+        expr: increase(report_generation_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: medical
+        annotations:
+          summary: "Medical report generation failures"
+          description: "{{ $value }} report generation failures in the last 5 minutes"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/report-generation-failures"
+
+      # OpenAI API alerts
+      - alert: OpenAIAPIErrors
+        expr: increase(openai_api_errors_total[5m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+          category: external
+        annotations:
+          summary: "Multiple OpenAI API errors"
+          description: "{{ $value }} OpenAI API errors in the last 5 minutes"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/openai-api-errors"
+
+      # Queue length alerts
+      - alert: ProcessingQueueHigh
+        expr: processing_queue_length > 100
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High processing queue length"
+          description: "Processing queue has {{ $value }} items"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/queue-high"
+
+  - name: medical_system_security
+    interval: 30s
+    rules:
+      # Authentication failures
+      - alert: HighAuthenticationFailures
+        expr: increase(authentication_failures_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: "{{ $value }} authentication failures in the last 5 minutes"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/auth-failures"
+
+      # SSL certificate expiry
+      - alert: SSLCertificateExpiry
+        expr: ssl_certificate_expiry_days < 30
+        for: 0m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate expires in {{ $value }} days"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/ssl-certificate-expiry"
+
+  - name: medical_system_compliance
+    interval: 300s
+    rules:
+      # Audit log alerts
+      - alert: AuditLogFailure
+        expr: increase(audit_log_write_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: compliance
+        annotations:
+          summary: "Audit log write failures"
+          description: "{{ $value }} audit log write failures detected"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/audit-log-failure"
+
+      # Data retention alerts
+      - alert: DataRetentionViolation
+        expr: data_retention_violations_total > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: compliance
+        annotations:
+          summary: "Data retention violation detected"
+          description: "Medical data retention policy violation detected"
+          runbook_url: "https://docs.radiology-ai.local/runbooks/data-retention-violation"

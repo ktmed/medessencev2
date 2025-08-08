@@ -1,0 +1,173 @@
+# Loki Configuration for Radiology AI System
+# Medical-grade log aggregation and compliance
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: info
+  log_format: json
+
+# Common configuration shared across multiple modules
+common:
+  path_prefix: /tmp/loki
+  storage:
+    filesystem:
+      chunks_directory: /tmp/loki/chunks
+      rules_directory: /tmp/loki/rules
+  replication_factor: 1
+  ring:
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: inmemory
+
+# Query configuration for log retrieval
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
+# Schema configuration for log storage
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+
+# Storage configuration
+storage_config:
+  boltdb_shipper:
+    active_index_directory: /tmp/loki/boltdb-shipper-active
+    cache_location: /tmp/loki/boltdb-shipper-cache
+    cache_ttl: 24h
+    shared_store: filesystem
+  filesystem:
+    directory: /tmp/loki/chunks
+
+# Compactor for managing log storage
+compactor:
+  working_directory: /tmp/loki
+  shared_store: filesystem
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 150
+
+# Limits configuration for medical compliance
+limits_config:
+  # Rate limiting
+  ingestion_rate_mb: 4
+  ingestion_burst_size_mb: 6
+  max_streams_per_user: 10000
+  max_line_size: 256000
+  
+  # Query limits
+  max_query_parallelism: 32
+  max_query_time: 721h  # 30 days for medical data retention
+  max_query_length: 12000h  # 500 days
+  max_entries_limit_per_query: 5000
+  max_streams_matchers_per_query: 1000
+  
+  # Retention for medical compliance (German medical data retention: 30 years)
+  retention_period: 262800h  # 30 years
+  
+  # Log line processing
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h  # 1 week
+  creation_grace_period: 10m
+  enforce_metric_name: false
+  
+  # Cardinality limits
+  max_global_streams_per_user: 5000
+  max_chunks_per_query: 2000000
+  max_series_per_query: 500
+  
+  # Sharding and parallel processing
+  split_queries_by_interval: 15m
+
+# Ruler for alerting on log patterns
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /tmp/loki/rules
+  rule_path: /tmp/loki/rules
+  alertmanager_url: http://alertmanager:9093
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true
+  enable_alertmanager_v2: true
+
+# Analytics configuration
+analytics:
+  reporting_enabled: false
+
+# Table Manager for retention
+table_manager:
+  retention_deletes_enabled: true
+  retention_period: 262800h  # 30 years for medical compliance
+
+# Ingester configuration
+ingester:
+  lifecycler:
+    address: 127.0.0.1
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+    final_sleep: 0s
+  chunk_idle_period: 5m
+  chunk_retain_period: 30s
+  max_transfer_retries: 0
+  wal:
+    dir: /tmp/loki/wal
+    flush_on_shutdown: true
+
+# Frontend configuration for query performance
+frontend:
+  max_outstanding_per_tenant: 256
+  compress_responses: true
+  downstream_url: http://127.0.0.1:3100
+
+# Query scheduler
+query_scheduler:
+  max_outstanding_requests_per_tenant: 256
+
+# Distributor configuration
+distributor:
+  ring:
+    kvstore:
+      store: inmemory
+
+# Chunk store configuration
+chunk_store_config:
+  max_look_back_period: 0s
+  chunk_cache_config:
+    embedded_cache:
+      enabled: true
+      max_size_mb: 100
+
+# Query configuration
+querier:
+  query_timeout: 1m
+  tail_max_duration: 1h
+  extra_query_delay: 0s
+
+# Frontend worker
+frontend_worker:
+  match_max_concurrent: true
+  frontend_address: 127.0.0.1:9095
+
+# Memberlist configuration
+memberlist:
+  abort_if_cluster_join_fails: false
+  bind_port: 7946
+  join_members: []

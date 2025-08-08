@@ -1,0 +1,412 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for medical professionals
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  username          String?  @unique
+  firstName         String
+  lastName          String
+  title             String?  // Dr., Prof., etc.
+  specialization    String?  // Radiology, Cardiology, etc.
+  licenseNumber     String?  @unique // Medical license number
+  
+  // Authentication
+  passwordHash      String
+  isActive          Boolean  @default(true)
+  isVerified        Boolean  @default(false)
+  emailVerifiedAt   DateTime?
+  lastLogin         DateTime?
+  loginAttempts     Int      @default(0)
+  lockedUntil       DateTime?
+  
+  // Role-based access control
+  role              UserRole @default(RESIDENT)
+  permissions       UserPermission[]
+  department        String?
+  institution       String?
+  
+  // GDPR and compliance
+  gdprConsent       Boolean  @default(false)
+  gdprConsentDate   DateTime?
+  dataRetentionDate DateTime?
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
+  
+  // Relations
+  sessions          Session[]
+  auditLogs         AuditLog[]
+  refreshTokens     RefreshToken[]
+  apiKeys           ApiKey[]
+  
+  @@map("users")
+}
+
+// User roles for German medical system
+enum UserRole {
+  ADMIN              // System administrator
+  CHIEF_RADIOLOGIST  // Chefarzt Radiologie
+  SENIOR_RADIOLOGIST // Oberarzt Radiologie
+  RADIOLOGIST        // Facharzt Radiologie
+  RESIDENT           // Assistenzarzt
+  TECHNICIAN         // MTRA (Medizinisch-technische Radiologieassistenz)
+  VIEWER             // Read-only access
+  GUEST              // Limited temporary access
+  
+  @@map("user_roles")
+}
+
+// Granular permissions for medical operations
+model UserPermission {
+  id          String           @id @default(cuid())
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  permission  PermissionType
+  resource    String?          // Specific resource or null for global
+  conditions  Json?            // JSON conditions for complex permissions
+  grantedBy   String?          // User ID who granted permission
+  grantedAt   DateTime         @default(now())
+  expiresAt   DateTime?
+  
+  @@unique([userId, permission, resource])
+  @@map("user_permissions")
+}
+
+enum PermissionType {
+  // Transcription permissions
+  TRANSCRIPTION_READ
+  TRANSCRIPTION_CREATE
+  TRANSCRIPTION_EDIT
+  TRANSCRIPTION_DELETE
+  TRANSCRIPTION_ADMIN
+  
+  // Report permissions
+  REPORT_READ
+  REPORT_CREATE
+  REPORT_EDIT
+  REPORT_DELETE
+  REPORT_APPROVE
+  REPORT_SIGN
+  REPORT_ADMIN
+  
+  // Summary permissions
+  SUMMARY_READ
+  SUMMARY_CREATE
+  SUMMARY_EDIT
+  SUMMARY_DELETE
+  SUMMARY_ADMIN
+  
+  // User management
+  USER_READ
+  USER_CREATE
+  USER_EDIT
+  USER_DELETE
+  USER_ADMIN
+  
+  // System permissions
+  SYSTEM_ADMIN
+  AUDIT_READ
+  METRICS_READ
+  HEALTH_CHECK
+  
+  @@map("permission_types")
+}
+
+// Session management for authentication
+model Session {
+  id              String   @id @default(cuid())
+  sessionToken    String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  
+  // Session data
+  ipAddress       String?
+  userAgent       String?
+  deviceId        String?
+  location        String?  // Geolocation data
+  
+  // Security
+  isActive        Boolean  @default(true)
+  lastActivity    DateTime @default(now())
+  terminatedBy    String?  // User ID who terminated session
+  terminationReason String?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime
+  terminatedAt    DateTime?
+  
+  @@map("sessions")
+}
+
+// Refresh tokens for JWT authentication
+model RefreshToken {
+  id           String   @id @default(cuid())
+  token        String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  
+  // Token data
+  isRevoked    Boolean  @default(false)
+  revokedBy    String?
+  revokedAt    DateTime?
+  parentId     String?  // For token rotation
+  
+  // Device tracking
+  deviceId     String?
+  ipAddress    String?
+  userAgent    String?
+  
+  // Timestamps
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  
+  @@map("refresh_tokens")
+}
+
+// API Keys for service-to-service communication
+model ApiKey {
+  id           String   @id @default(cuid())
+  name         String
+  keyHash      String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  
+  // Access control
+  scopes       String[] // Array of allowed scopes
+  isActive     Boolean  @default(true)
+  lastUsed     DateTime?
+  usageCount   Int      @default(0)
+  
+  // Rate limiting
+  rateLimit    Int      @default(1000) // Requests per hour
+  rateLimitWindow Int   @default(3600) // Window in seconds
+  
+  // Timestamps
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  
+  @@map("api_keys")
+}
+
+// Comprehensive audit logging for GDPR compliance
+model AuditLog {
+  id              String      @id @default(cuid())
+  user            User?       @relation(fields: [userId], references: [id])
+  userId          String?
+  
+  // Event information
+  action          AuditAction
+  resource        String      // Resource type (user, transcription, report, etc.)
+  resourceId      String?     // Specific resource ID
+  description     String      // Human-readable description
+  
+  // Request details
+  method          String?     // HTTP method
+  endpoint        String?     // API endpoint
+  requestBody     Json?       // Request payload (sanitized)
+  responseStatus  Int?        // HTTP status code
+  
+  // Security and compliance
+  ipAddress       String?
+  userAgent       String?
+  sessionId       String?
+  
+  // Medical compliance
+  patientId       String?     // Patient identifier (anonymized)
+  medicalDataType String?     // Type of medical data accessed
+  gdprLawfulBasis String?     // GDPR lawful basis for processing
+  
+  // Risk assessment
+  riskLevel       RiskLevel   @default(LOW)
+  flagged         Boolean     @default(false)
+  reviewRequired  Boolean     @default(false)
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  
+  // Timestamps
+  createdAt       DateTime    @default(now())
+  
+  @@map("audit_logs")
+}
+
+enum AuditAction {
+  // Authentication events
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  PASSWORD_CHANGED
+  PASSWORD_RESET_REQUESTED
+  PASSWORD_RESET_COMPLETED
+  EMAIL_VERIFIED
+  ACCOUNT_LOCKED
+  ACCOUNT_UNLOCKED
+  
+  // User management
+  USER_CREATED
+  USER_UPDATED
+  USER_DELETED
+  USER_ACTIVATED
+  USER_DEACTIVATED
+  PERMISSION_GRANTED
+  PERMISSION_REVOKED
+  ROLE_CHANGED
+  
+  // Medical data access
+  TRANSCRIPTION_ACCESSED
+  TRANSCRIPTION_CREATED
+  TRANSCRIPTION_UPDATED
+  TRANSCRIPTION_DELETED
+  REPORT_ACCESSED
+  REPORT_CREATED
+  REPORT_UPDATED
+  REPORT_DELETED
+  REPORT_SIGNED
+  SUMMARY_ACCESSED
+  SUMMARY_CREATED
+  SUMMARY_UPDATED
+  SUMMARY_DELETED
+  
+  // System events
+  API_KEY_CREATED
+  API_KEY_REVOKED
+  SESSION_CREATED
+  SESSION_TERMINATED
+  CONFIGURATION_CHANGED
+  SYSTEM_BACKUP
+  DATA_EXPORT
+  DATA_IMPORT
+  
+  // Security events
+  UNAUTHORIZED_ACCESS
+  SUSPICIOUS_ACTIVITY
+  RATE_LIMIT_EXCEEDED
+  GDPR_VIOLATION
+  DATA_BREACH_DETECTED
+  
+  @@map("audit_actions")
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+  
+  @@map("risk_levels")
+}
+
+// System configuration and feature flags
+model SystemConfig {
+  id           String   @id @default(cuid())
+  key          String   @unique
+  value        String
+  description  String?
+  category     String   @default("general")
+  isSecure     Boolean  @default(false) // Whether value should be encrypted
+  
+  // Change tracking
+  changedBy    String?  // User ID
+  changedAt    DateTime @default(now())
+  previousValue String?
+  
+  // Validation
+  validationRule String? // JSON schema or regex for validation
+  
+  @@map("system_config")
+}
+
+// Health check and monitoring
+model ServiceHealth {
+  id           String      @id @default(cuid())
+  serviceName  String      @unique
+  status       HealthStatus @default(UNKNOWN)
+  lastCheck    DateTime    @default(now())
+  responseTime Int?        // Response time in milliseconds
+  errorCount   Int         @default(0)
+  uptime       Float       @default(0.0) // Percentage uptime
+  
+  // Service details
+  version      String?
+  endpoint     String
+  port         Int?
+  
+  // Health data
+  cpuUsage     Float?
+  memoryUsage  Float?
+  diskUsage    Float?
+  
+  // Timestamps
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  
+  @@map("service_health")
+}
+
+enum HealthStatus {
+  HEALTHY
+  DEGRADED
+  UNHEALTHY
+  UNKNOWN
+  MAINTENANCE
+  
+  @@map("health_status")
+}
+
+// Rate limiting and usage tracking
+model RateLimitEntry {
+  id           String   @id @default(cuid())
+  identifier   String   // IP address, user ID, or API key
+  route        String   // API route or service
+  count        Int      @default(1)
+  windowStart  DateTime
+  windowEnd    DateTime
+  blocked      Boolean  @default(false)
+  
+  @@unique([identifier, route, windowStart])
+  @@map("rate_limit_entries")
+}
+
+// Circuit breaker state
+model CircuitBreakerState {
+  id           String          @id @default(cuid())
+  serviceName  String          @unique
+  state        CircuitState    @default(CLOSED)
+  failureCount Int             @default(0)
+  lastFailure  DateTime?
+  nextAttempt  DateTime?
+  
+  // Configuration
+  failureThreshold Int         @default(5)
+  timeoutMs        Int         @default(30000)
+  resetTimeoutMs   Int         @default(60000)
+  
+  // Statistics
+  totalRequests    Int         @default(0)
+  successfulRequests Int       @default(0)
+  failedRequests   Int         @default(0)
+  
+  @@map("circuit_breaker_states")
+}
+
+enum CircuitState {
+  CLOSED
+  OPEN
+  HALF_OPEN
+  
+  @@map("circuit_states")
+}
