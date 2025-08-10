@@ -16,7 +16,7 @@ services:
     networks:
       - radiology-network
 
-  # WebSocket proxy service
+  # WebSocket proxy service (for reports and summaries only)
   websocket-proxy:
     build:
       context: ./services/core
@@ -25,42 +25,17 @@ services:
       - "8080:8080"
     environment:
       - NODE_ENV=production
-      - USE_VOSK=${USE_VOSK:-true}
-      - VOSK_SERVICE_URL=ws://vosk-service:8002
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - AI_PROVIDER_PRIORITY=gemini,claude,openai
+      - AI_PROVIDER_PRIORITY=claude,openai,gemini
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
     depends_on:
-      - vosk-service
       - redis
     networks:
       - radiology-network
-
-  # Vosk transcription service
-  vosk-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.vosk
-    ports:
-      - "8002:8002"
-      - "8003:8003"
-    volumes:
-      - ./vosk-models:/app/vosk-models:ro
-      - ./logs:/app/logs
-    environment:
-      - VOSK_MODEL_PATH=/app/vosk-models/vosk-model-de-0.21
-    networks:
-      - radiology-network
-    deploy:
-      resources:
-        limits:
-          memory: 8G
-        reservations:
-          memory: 4G
 
   # Redis for caching and session management
   redis:

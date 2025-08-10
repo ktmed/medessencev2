@@ -185,4 +185,24 @@
   .med-bg-light {
     background-color: var(--background-primary);
   }
+
+  /* Three-column dashboard responsive adjustments */
+  @media (max-width: 1279px) and (min-width: 768px) {
+    /* Two-column layout on tablets: left column spans full width, center/right stack */
+    .dashboard-grid {
+      grid-template-areas: 
+        "input input"
+        "reports summaries";
+    }
+    .dashboard-input { grid-area: input; }
+    .dashboard-reports { grid-area: reports; }
+    .dashboard-summaries { grid-area: summaries; }
+  }
+
+  @media (max-width: 767px) {
+    /* Single column layout on mobile */
+    .medical-card {
+      @apply p-4; /* Reduce padding on mobile */
+    }
+  }
 }

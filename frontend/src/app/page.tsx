@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Activity, AlertCircle, Wifi, WifiOff } from 'lucide-react';
-import AudioRecorder from '@/components/AudioRecorder';
+import WebSpeechRecorder from '@/components/WebSpeechRecorder';
 import TranscriptionDisplay from '@/components/TranscriptionDisplay';
 import ReportViewer from '@/components/ReportViewer';
 import SummaryGenerator from '@/components/SummaryGenerator';
 import LanguageSelector, { CompactLanguageSelector } from '@/components/LanguageSelector';
 import { WebSocketClient } from '@/utils/websocket';
-import { AudioRecorder as AudioRecorderUtil } from '@/utils/audio';
+import { multiLLMService } from '@/services/multiLLMService';
 import { 
   Language, 
   TranscriptionData, 
@@ -29,21 +29,14 @@ export default function Dashboard() {
   const [currentSummary, setCurrentSummary] = useState<PatientSummary | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const transcriptionStartedRef = useRef(false);
-  const [recordingState, setRecordingState] = useState<AudioRecordingState>({
-    isRecording: false,
-    isPaused: false,
-    duration: 0,
-    audioLevel: 0,
-  });
+  const [refinedTranscript, setRefinedTranscript] = useState<string>('');
   const [uiState, setUIState] = useState<UIState>({
     loading: false,
     error: null,
     success: null,
   });
   
-  // WebSocket connection
+  // WebSocket connection for reports and summaries
   const [wsClient, setWsClient] = useState<WebSocketClient | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
@@ -210,49 +203,43 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Handle audio data from recorder
-  const handleAudioData = useCallback((audioData: ArrayBuffer) => {
-    console.log('handleAudioData called, wsClient:', !!wsClient, 'isConnected:', isConnected);
-    
-    // Double-check connection status
-    const actuallyConnected = wsClient?.isConnected() || false;
-    console.log('Actual connection status:', actuallyConnected);
-    
-    if (wsClient && actuallyConnected) {
-      console.log('Sending audio data chunk, size:', audioData.byteLength);
-      
-      // Start transcription session only once at the beginning
-      if (!transcriptionStartedRef.current && wsClient.socket) {
-        console.log('Starting transcription session');
-        wsClient.socket.emit('start_transcription', { language });
-        transcriptionStartedRef.current = true;
-        setIsTranscribing(true);
+  // Handle transcription from Web Speech API
+  const handleTranscription = useCallback((transcription: TranscriptionData) => {
+    console.log('New transcription received:', transcription);
+    setTranscriptions(prev => {
+      // Replace or add the transcription
+      const existingIndex = prev.findIndex(t => t.id === transcription.id);
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = transcription;
+        return updated;
+      } else {
+        return [...prev, transcription];
       }
-      
-      // Send audio data chunk
-      wsClient.sendAudioData(audioData, language);
-    } else {
-      console.error('Cannot send audio - not connected. wsClient:', !!wsClient, 'connected:', actuallyConnected);
-      setUIState(prev => ({ 
-        ...prev, 
-        error: 'Not connected to transcription service' 
-      }));
-    }
-  }, [wsClient, language, isTranscribing]);
+    });
+  }, []);
 
-  // Handle recording errors
-  const handleRecordingError = useCallback((error: RecordingError) => {
+  // Handle refined transcription from AI
+  const handleRefinedTranscription = useCallback((refined: string) => {
+    console.log('Refined transcription received');
+    setRefinedTranscript(refined);
     setUIState(prev => ({ 
       ...prev, 
-      error: `Recording error: ${error.message}` 
+      success: 'Transcription refined with AI' 
     }));
+    
+    // Clear success message after 3 seconds
+    setTimeout(() => {
+      setUIState(prev => ({ ...prev, success: null }));
+    }, 3000);
   }, []);
+
 
   // Generate medical report
   const handleGenerateReport = useCallback(() => {
     const finalTranscriptions = transcriptions.filter(t => t.isFinal);
     
-    if (finalTranscriptions.length === 0) {
+    if (finalTranscriptions.length === 0 && !refinedTranscript) {
       setUIState(prev => ({ 
         ...prev, 
         error: 'No transcription available to generate report' 
@@ -268,15 +255,18 @@ export default function Dashboard() {
       setIsGeneratingReport(true);
       setUIState(prev => ({ ...prev, error: null }));
       
-      // Use the first transcription ID as reference
-      wsClient.requestReport(finalTranscriptions[0].id, language);
+      // Use refined transcript if available, otherwise use original transcription
+      const textToUse = refinedTranscript || (finalTranscriptions.length > 0 ? finalTranscriptions[0].text : '');
+      const transcriptionId = finalTranscriptions.length > 0 ? finalTranscriptions[0].id : `refined-${Date.now()}`;
+      
+      wsClient.requestReport(transcriptionId, language, textToUse);
     } else {
       setUIState(prev => ({ 
         ...prev, 
         error: 'Not connected to report generation service' 
       }));
     }
-  }, [transcriptions, wsClient, isConnected, language]);
+  }, [transcriptions, refinedTranscript, wsClient, isConnected, language]);
 
   // Generate report from pasted text
   const handleGenerateReportFromText = useCallback(() => {
@@ -411,7 +401,7 @@ export default function Dashboard() {
           <CompactLanguageSelector
             selectedLanguage={language}
             onLanguageChange={handleLanguageChange}
-            disabled={recordingState.isRecording}
+            disabled={false}
           />
         </div>
 
@@ -456,34 +446,22 @@ export default function Dashboard() {
           </div>
           <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-200">
             <div className="text-2xl font-bold text-orange-700">
-              {Math.round(recordingState.duration)}s
+              {refinedTranscript ? 1 : 0}
             </div>
-            <div className="text-sm text-orange-600">Recording Time</div>
+            <div className="text-sm text-orange-600">AI Refined</div>
           </div>
         </div>
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column */}
-        <div className="space-y-6">
-          {/* Audio Recorder */}
-          <AudioRecorder
+      {/* Main Content Grid - Three Column Layout */}
+      <div className="dashboard-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {/* Left Column - Input & Transcription */}
+        <div className="dashboard-input space-y-6">
+          {/* Web Speech Recorder */}
+          <WebSpeechRecorder
             language={language}
-            onAudioData={handleAudioData}
-            onRecordingStateChange={(state) => {
-              setRecordingState(state);
-              // Reset transcribing flag when recording stops
-              if (!state.isRecording) {
-                setIsTranscribing(false);
-                transcriptionStartedRef.current = false;
-                // Emit stop transcription event
-                if (wsClient?.socket) {
-                  wsClient.socket.emit('stop_transcription');
-                }
-              }
-            }}
-            onError={handleRecordingError}
+            onTranscription={handleTranscription}
+            onRefinedTranscription={handleRefinedTranscription}
           />
 
           {/* Transcription Display */}
@@ -582,8 +560,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Right Column */}
-        <div className="space-y-6">
+        {/* Center Column - Medical Reports */}
+        <div className="dashboard-reports space-y-6">
           {/* Report Viewer */}
           <ReportViewer
             report={currentReport}
@@ -592,15 +570,25 @@ export default function Dashboard() {
           />
 
           {/* Manual Report Generation */}
-          {transcriptions.filter(t => t.isFinal).length > 0 && !currentReport && !isGeneratingReport && (
+          {(transcriptions.filter(t => t.isFinal).length > 0 || refinedTranscript) && !currentReport && !isGeneratingReport && (
             <div className="medical-card">
               <div className="text-center">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   Generate Medical Report
                 </h3>
                 <p className="text-sm text-gray-600 mb-4">
-                  Create a structured medical report from your transcription
+                  {refinedTranscript 
+                    ? 'Create a structured medical report from your AI-refined transcription' 
+                    : 'Create a structured medical report from your transcription'
+                  }
                 </p>
+                {refinedTranscript && (
+                  <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-md">
+                    <p className="text-sm text-orange-700">
+                      ✨ AI-refined transcript available - will be used for report generation
+                    </p>
+                  </div>
+                )}
                 <button
                   onClick={handleGenerateReport}
                   disabled={!isConnected}
@@ -611,7 +599,10 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+        </div>
 
+        {/* Right Column - Patient Summaries */}
+        <div className="dashboard-summaries space-y-6">
           {/* Summary Generator */}
           <SummaryGenerator
             summary={currentSummary}

@@ -61,7 +61,6 @@ services:
     environment:
       - DATABASE_URL=postgresql://meduser:medpass@postgres:5432/radiology_db
       - REDIS_URL=redis://redis:6379
-      - TRANSCRIPTION_SERVICE_URL=http://transcription-service:8081
       - REPORT_SERVICE_URL=http://report-generation:8082
       - SUMMARY_SERVICE_URL=http://summary-generation:8083
       - JWT_SECRET=medical-radiology-jwt-secret-2024-secure-key-development-only
@@ -73,23 +72,6 @@ services:
       redis:
         condition: service_healthy
 
-  # Transcription Service
-  transcription-service:
-    build:
-      context: ./services/transcription
-      dockerfile: Dockerfile.simple
-    ports:
-      - "8081:8001"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - REDIS_URL=redis://redis:6379
-      - USE_LOCAL_WHISPER=false
-      - DEBUG=true
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - default
 
   # Report Generation Service
   report-generation:

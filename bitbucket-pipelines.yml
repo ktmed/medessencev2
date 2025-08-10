@@ -86,7 +86,7 @@ definitions:
         - cd ../frontend && npm run type-check
         # Python code quality
         - pip install flake8 black mypy
-        - for service in transcription report-generation summary-generation; do
+        - for service in report-generation summary-generation; do
             if [ -d "services/$service/app" ]; then
               flake8 "services/$service/app/" --max-line-length=88 --extend-ignore=E203,W503 || true;
             fi;
@@ -133,7 +133,7 @@ definitions:
         - export DATABASE_URL="postgresql://test_user:test_password@localhost:5432/medessence_test"
         - export REDIS_URL="redis://localhost:6379"
         - export PYTHONPATH="/opt/atlassian/pipelines/agent/build"
-        - for service in transcription report-generation summary-generation; do
+        - for service in report-generation summary-generation; do
             if [ -d "services/$service" ]; then
               cd "services/$service";
               pip install -r requirements.txt;
@@ -181,7 +181,7 @@ definitions:
         # Build backend image  
         - docker build -t $BITBUCKET_REPO_FULL_NAME-backend:$IMAGE_TAG -f backend/Dockerfile backend/
         # Build service images
-        - for service in transcription report-generation summary-generation; do
+        - for service in report-generation summary-generation; do
             docker build -t $BITBUCKET_REPO_FULL_NAME-$service:$IMAGE_TAG -f services/$service/Dockerfile services/$service/;
           done
         # Test image functionality
@@ -200,7 +200,7 @@ definitions:
         # Log into Bitbucket container registry
         - docker login -u $BITBUCKET_USERNAME -p $BITBUCKET_APP_PASSWORD bitbucket-docker.pkg.dev
         # Push all service images
-        - for service in frontend backend transcription report-generation summary-generation; do
+        - for service in frontend backend report-generation summary-generation; do
             docker tag $BITBUCKET_REPO_FULL_NAME-$service:$IMAGE_TAG bitbucket-docker.pkg.dev/$BITBUCKET_WORKSPACE/$BITBUCKET_REPO_SLUG/$service:$IMAGE_TAG;
             docker push bitbucket-docker.pkg.dev/$BITBUCKET_WORKSPACE/$BITBUCKET_REPO_SLUG/$service:$IMAGE_TAG;
             if [ "$BITBUCKET_BRANCH" = "main" ]; then
@@ -389,7 +389,7 @@ pipelines:
           script:
             - export IMAGE_TAG=$BITBUCKET_TAG
             - docker login -u $BITBUCKET_USERNAME -p $BITBUCKET_APP_PASSWORD bitbucket-docker.pkg.dev
-            - for service in frontend backend transcription report-generation summary-generation; do
+            - for service in frontend backend report-generation summary-generation; do
                 docker tag $BITBUCKET_REPO_FULL_NAME-$service:${BITBUCKET_COMMIT:0:8} bitbucket-docker.pkg.dev/$BITBUCKET_WORKSPACE/$BITBUCKET_REPO_SLUG/$service:$IMAGE_TAG;
                 docker push bitbucket-docker.pkg.dev/$BITBUCKET_WORKSPACE/$BITBUCKET_REPO_SLUG/$service:$IMAGE_TAG;
                 docker tag $BITBUCKET_REPO_FULL_NAME-$service:${BITBUCKET_COMMIT:0:8} bitbucket-docker.pkg.dev/$BITBUCKET_WORKSPACE/$BITBUCKET_REPO_SLUG/$service:stable;

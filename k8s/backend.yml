@@ -214,8 +214,6 @@ spec:
                   key: AI_PROVIDER_PRIORITY
             
             # Service URLs
-            - name: TRANSCRIPTION_SERVICE_URL
-              value: "http://medessence-transcription:8000"
             - name: REPORT_GENERATION_SERVICE_URL
               value: "http://medessence-report-generation:8001"
             - name: SUMMARY_GENERATION_SERVICE_URL
@@ -527,13 +525,6 @@ spec:
         - protocol: TCP
           port: 6379
     # Allow communication to internal services
-    - to:
-        - podSelector:
-            matchLabels:
-              app: medessence-transcription
-      ports:
-        - protocol: TCP
-          port: 8000
     - to:
         - podSelector:
             matchLabels:

@@ -71,8 +71,6 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
-      - USE_VOSK=${USE_VOSK:-true}
-      - VOSK_SERVICE_URL=ws://vosk-service:8002
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
@@ -88,7 +86,6 @@ services:
       - app-logs:/app/logs
       - app-data:/app/data
     depends_on:
-      - vosk-service
       - redis
       - postgres
     networks:
@@ -111,37 +108,6 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
-
-  # =============================================================================
-  # Vosk Transcription Service
-  # =============================================================================
-  vosk-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.vosk
-      target: production
-    restart: unless-stopped
-    environment:
-      - VOSK_MODEL_PATH=${VOSK_MODEL_PATH}
-      - LOG_LEVEL=${LOG_LEVEL}
-    volumes:
-      - ./vosk-models:/app/vosk-models:ro
-      - app-logs:/app/logs
-    networks:
-      - medessenceai-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8002/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    deploy:
-      resources:
-        limits:
-          memory: ${VOSK_MEMORY_LIMIT:-8G}
-          cpus: '2.0'
-        reservations:
-          memory: 4G
 
   # =============================================================================
   # Database Services

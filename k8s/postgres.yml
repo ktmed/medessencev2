@@ -429,9 +429,6 @@ spec:
               app: medessence-backend
         - podSelector:
             matchLabels:
-              app: medessence-transcription
-        - podSelector:
-            matchLabels:
               app: medessence-report-generation
         - podSelector:
             matchLabels:
