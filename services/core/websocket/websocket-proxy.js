@@ -54,7 +54,7 @@ function fixSourceSpans(structuredFindings, contentText) {
 // Socket.IO server for frontend
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:3001", "http://localhost:3005", "file://", "*"],
+    origin: ["http://localhost:3000", "http://localhost:3001", "http://localhost:3005", "http://localhost:3010", "file://", "*"],
     methods: ["GET", "POST"],
     credentials: true,
     allowedHeaders: ["*"]
@@ -1354,12 +1354,12 @@ io.on('connection', (socket) => {
       let structuredReport = null;
       
       try {
-        // Process report through orchestrator
-        console.log('Processing report through orchestrator...');
+        // Process report through orchestrator with processing mode
+        console.log('Processing report through orchestrator with mode:', data.processingMode || 'cloud');
         const orchestratorResult = await reportOrchestrator.processReport(
           combinedText, 
           data.language || 'de',
-          { source: 'transcription', timestamp: new Date().toISOString() }
+          { source: 'transcription', timestamp: new Date().toISOString(), processingMode: data.processingMode || 'cloud' }
         );
         
         console.log('Orchestrator result:', {

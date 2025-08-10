@@ -1,6 +1,6 @@
 /**
  * Multi-LLM Service for Frontend with fallback support
- * Priority: Claude -> OpenAI -> Gemini
+ * Priority: Claude -> Gemini -> OpenAI
  */
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
@@ -26,7 +26,7 @@ export class MultiLLMService {
 
   private initializeProviders() {
     // Get provider priority from environment variable
-    const providerPriority = (process.env.NEXT_PUBLIC_AI_PROVIDER_PRIORITY || 'claude,openai,gemini')
+    const providerPriority = (process.env.NEXT_PUBLIC_AI_PROVIDER_PRIORITY || 'claude,gemini,openai')
       .split(',')
       .map(p => p.trim());
     
@@ -88,16 +88,21 @@ export class MultiLLMService {
   /**
    * Refine transcript using available LLMs with fallback
    */
-  async refineTranscript(rawText: string): Promise<string> {
+  async refineTranscript(rawText: string, processingMode: 'cloud' | 'local' = 'cloud'): Promise<string> {
     if (!rawText) {
       return "";
     }
 
     const prompt = this.createGermanMedicalPrompt(rawText);
     
+    // For local processing, use Ollama models
+    if (processingMode === 'local') {
+      return await this.refineWithOllama(prompt);
+    }
+    
     let lastError: Error | null = null;
     
-    // Try each provider in order
+    // Try each provider in order for cloud processing
     for (let i = 0; i < this.providers.length; i++) {
       const provider = this.providers[i];
       try {
@@ -124,17 +129,8 @@ export class MultiLLMService {
    * Create German medical transcription prompt
    */
   private createGermanMedicalPrompt(rawText: string): string {
-    return `You are a highly skilled medical transcriptionist specializing in the German language.
-Your task is to process a raw, unedited transcript from a voice dictation.
-Please perform the following actions:
-1. Correct any speech-to-text errors.
-2. Format the text into a clear and professional medical note. Use paragraphs, bullet points, or numbered lists where appropriate for clarity.
-3. Ensure the use of correct German medical terminology.
-4. Correct grammatical errors and ensure the text is coherent and easy to read.
-5. Do not add any information that is not present in the original text. Your role is to clean, format, and correct the provided dictation.
-The output must be only the refined German text, without any introductory phrases like "Here is the refined transcript:".
+    return `Korrigiere und formatiere den folgenden deutschen medizinischen Text. Behebe nur Fehler in der Rechtschreibung, Grammatik und Interpunktion. Verwende korrekte medizinische Fachbegriffe. Füge keine neuen Informationen hinzu. Antworte nur mit dem korrigierten Text:
 
-Raw transcript:
 ${rawText}`;
   }
 
@@ -289,12 +285,86 @@ ${rawText}`;
   hasProviders(): boolean {
     return this.providers.length > 0;
   }
+
+  /**
+   * Get the intended provider priority order (even when no API keys are configured)
+   */
+  getProviderPriority(): string[] {
+    const providerPriority = (process.env.NEXT_PUBLIC_AI_PROVIDER_PRIORITY || 'claude,gemini,openai')
+      .split(',')
+      .map(p => p.trim());
+    return providerPriority;
+  }
+
+  /**
+   * Refine transcript using local Ollama models
+   */
+  private async refineWithOllama(prompt: string): Promise<string> {
+    // Try medical-gemma-2b first, then gpt-oss:20b as fallback (use exact model names)
+    const models = ['medical-gemma-2b:latest', 'gpt-oss:20b'];
+    const ollamaBaseUrl = process.env.NEXT_PUBLIC_OLLAMA_BASE_URL || 'http://localhost:11434';
+    
+    let lastError: Error | null = null;
+    
+    for (const model of models) {
+      try {
+        console.log(`Attempting local refinement with ${model}...`);
+        
+        const response = await fetch(`${ollamaBaseUrl}/api/generate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: model,
+            prompt: prompt,
+            stream: false,
+            options: {
+              temperature: 0.2,
+              top_p: 0.9,
+              repeat_penalty: 1.1
+            }
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Ollama API error: ${response.status} - ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log(`Successfully refined transcript with local ${model}`);
+        
+        // Clean up the response by removing quotes, end tokens, and extra formatting
+        let cleanedResponse = data.response || '';
+        
+        // Remove common model artifacts
+        cleanedResponse = cleanedResponse
+          .replace(/<\|im_end\|>/g, '')
+          .replace(/<\/\|im_end\|>/g, '')
+          .replace(/^["']|["']$/g, '') // Remove quotes at start/end
+          .replace(/\s+/g, ' ') // Normalize spaces
+          .trim();
+        
+        return cleanedResponse;
+        
+      } catch (error) {
+        console.error(`Local model ${model} failed:`, error instanceof Error ? error.message : 'Unknown error');
+        lastError = error instanceof Error ? error : new Error('Unknown error');
+        
+        // Continue to next model
+        continue;
+      }
+    }
+    
+    // All local models failed
+    throw new Error(`All local models failed. Last error: ${lastError?.message || 'Unknown error'}. Make sure Ollama is running and models are installed.`);
+  }
 }
 
 // Create singleton instance
 export const multiLLMService = new MultiLLMService();
 
 // Legacy export for backward compatibility
-export const refineTranscript = async (rawText: string): Promise<string> => {
-  return multiLLMService.refineTranscript(rawText);
+export const refineTranscript = async (rawText: string, processingMode: 'cloud' | 'local' = 'cloud'): Promise<string> => {
+  return multiLLMService.refineTranscript(rawText, processingMode);
 };

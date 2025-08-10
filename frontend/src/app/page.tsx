@@ -30,6 +30,12 @@ export default function Dashboard() {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [refinedTranscript, setRefinedTranscript] = useState<string>('');
+  const [reportProcessingMode, setReportProcessingMode] = useState<'cloud' | 'local'>('cloud');
+  
+  // Debug logging for processing mode changes
+  useEffect(() => {
+    console.log('Report processing mode changed to:', reportProcessingMode);
+  }, [reportProcessingMode]);
   const [uiState, setUIState] = useState<UIState>({
     loading: false,
     error: null,
@@ -259,14 +265,14 @@ export default function Dashboard() {
       const textToUse = refinedTranscript || (finalTranscriptions.length > 0 ? finalTranscriptions[0].text : '');
       const transcriptionId = finalTranscriptions.length > 0 ? finalTranscriptions[0].id : `refined-${Date.now()}`;
       
-      wsClient.requestReport(transcriptionId, language, textToUse);
+      wsClient.requestReport(transcriptionId, language, textToUse, reportProcessingMode);
     } else {
       setUIState(prev => ({ 
         ...prev, 
         error: 'Not connected to report generation service' 
       }));
     }
-  }, [transcriptions, refinedTranscript, wsClient, isConnected, language]);
+  }, [transcriptions, refinedTranscript, wsClient, isConnected, language, reportProcessingMode]);
 
   // Generate report from pasted text
   const handleGenerateReportFromText = useCallback(() => {
@@ -300,7 +306,8 @@ export default function Dashboard() {
       setUIState(prev => ({ ...prev, error: null }));
       
       // Request report generation with the actual text
-      wsClient.requestReport(fakeTranscription.id, language, pastedText);
+      console.log('Sending report generation request with processing mode:', reportProcessingMode);
+      wsClient.requestReport(fakeTranscription.id, language, pastedText, reportProcessingMode);
       
       // Clear the paste input
       setPastedText('');
@@ -311,7 +318,7 @@ export default function Dashboard() {
         error: 'Not connected to report generation service' 
       }));
     }
-  }, [pastedText, wsClient, isConnected, language]);
+  }, [pastedText, wsClient, isConnected, language, reportProcessingMode]);
 
   // Generate patient summary
   const handleGenerateSummary = useCallback((reportId: string, summaryLanguage: Language) => {
@@ -462,6 +469,8 @@ export default function Dashboard() {
             language={language}
             onTranscription={handleTranscription}
             onRefinedTranscription={handleRefinedTranscription}
+            processingMode={reportProcessingMode}
+            onProcessingModeChange={setReportProcessingMode}
           />
 
           {/* Transcription Display */}
@@ -495,7 +504,7 @@ export default function Dashboard() {
                 setUIState(prev => ({ ...prev, error: null }));
                 
                 // Request report generation with the edited text
-                wsClient.requestReport(editedTranscription.id, language, text);
+                wsClient.requestReport(editedTranscription.id, language, text, reportProcessingMode);
               } else {
                 setUIState(prev => ({
                   ...prev,

@@ -113,6 +113,7 @@ export default function TranscriptionDisplay({
 
   return (
     <div className={cn('medical-card', className)}>
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
           <FileText className="w-5 h-5 text-navy-600" />
@@ -122,48 +123,52 @@ export default function TranscriptionDisplay({
           </span>
         </div>
         
-        <div className="flex items-center space-x-2">
-          {/* Connection Status */}
-          <div className="flex items-center space-x-1">
-            <div className={cn(
-              'w-2 h-2 rounded-full',
-              isConnected ? 'bg-success-500' : 'bg-error-500'
-            )} />
-            <span className="text-xs text-navy-500">
-              {isConnected ? 'Connected' : 'Disconnected'}
-            </span>
+        {/* Connection Status */}
+        <div className="flex items-center space-x-1">
+          <div className={cn(
+            'w-2 h-2 rounded-full',
+            isConnected ? 'bg-success-500' : 'bg-error-500'
+          )} />
+          <span className="text-xs text-navy-500">
+            {isConnected ? 'Connected' : 'Disconnected'}
+          </span>
+        </div>
+      </div>
+
+      {/* Action Toolbar - Split into rows for better fit */}
+      <div className="space-y-3 mb-4">
+        {/* First row: View controls and basic actions */}
+        <div className="flex items-center justify-between">
+          {/* Left side: Display Mode Toggle */}
+          <div className="flex items-center bg-navy-100 rounded-lg p-1">
+            <button
+              onClick={() => setDisplayMode('flowing')}
+              className={cn(
+                'p-1.5 rounded transition-colors text-xs',
+                displayMode === 'flowing' 
+                  ? 'bg-white text-navy-600 shadow-sm' 
+                  : 'text-navy-500 hover:text-navy-700'
+              )}
+              title="Flowing text"
+            >
+              <Type className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setDisplayMode('segments')}
+              className={cn(
+                'p-1.5 rounded transition-colors text-xs',
+                displayMode === 'segments' 
+                  ? 'bg-white text-navy-600 shadow-sm' 
+                  : 'text-navy-500 hover:text-navy-700'
+              )}
+              title="Segments view"
+            >
+              <List className="w-4 h-4" />
+            </button>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center space-x-2">
-            {/* Display Mode Toggle */}
-            <div className="flex items-center bg-navy-100 rounded-lg p-1">
-              <button
-                onClick={() => setDisplayMode('flowing')}
-                className={cn(
-                  'p-1.5 rounded transition-colors',
-                  displayMode === 'flowing' 
-                    ? 'bg-white text-navy-600 shadow-sm' 
-                    : 'text-navy-500 hover:text-navy-700'
-                )}
-                title="Flowing text"
-              >
-                <Type className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setDisplayMode('segments')}
-                className={cn(
-                  'p-1.5 rounded transition-colors',
-                  displayMode === 'segments' 
-                    ? 'bg-white text-navy-600 shadow-sm' 
-                    : 'text-navy-500 hover:text-navy-700'
-                )}
-                title="Segments view"
-              >
-                <List className="w-4 h-4" />
-              </button>
-            </div>
-            
+          {/* Right side: Basic actions */}
+          <div className="flex items-center space-x-1">
             <button
               onClick={copyToClipboard}
               disabled={finalTranscriptions.length === 0}
@@ -171,9 +176,9 @@ export default function TranscriptionDisplay({
               title="Copy transcription"
             >
               {copied ? (
-                <Check className="w-4 h-4 text-success-600" />
+                <Check className="w-3 h-3 text-success-600" />
               ) : (
-                <Copy className="w-4 h-4" />
+                <Copy className="w-3 h-3" />
               )}
             </button>
             
@@ -183,7 +188,7 @@ export default function TranscriptionDisplay({
               className="p-2 text-navy-500 hover:text-navy-700 disabled:opacity-50"
               title="Export transcription"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-3 h-3" />
             </button>
             
             {onClear && (
@@ -193,52 +198,58 @@ export default function TranscriptionDisplay({
                 className="p-2 text-navy-500 hover:text-error-600 disabled:opacity-50"
                 title="Clear transcription"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3 h-3" />
               </button>
             )}
+          </div>
+        </div>
 
-            {/* Edit/Save buttons - Show when we have transcriptions */}
-            {finalTranscriptions.length > 0 && (
-              <>
-                {isEditing ? (
-                  <>
-                    <button
-                      onClick={saveEdit}
-                      disabled={!editedText.trim() || !isConnected}
-                      className="p-2 text-success-600 hover:text-success-700 disabled:opacity-50"
-                      title={currentLanguage === 'de' ? 'Speichern und Bericht generieren' : 'Save and generate report'}
-                    >
-                      <Save className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={cancelEdit}
-                      className="p-2 text-gray-500 hover:text-gray-700"
-                      title={currentLanguage === 'de' ? 'Bearbeitung abbrechen' : 'Cancel editing'}
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </>
-                ) : (
+        {/* Second row: Edit and Generate buttons - only show when we have content */}
+        {finalTranscriptions.length > 0 && (
+          <div className="flex items-center justify-between bg-navy-50 rounded-lg p-2">
+            {/* Edit controls */}
+            <div className="flex items-center space-x-2">
+              {isEditing ? (
+                <>
                   <button
-                    onClick={startEdit}
-                    disabled={finalTranscriptions.length === 0}
-                    className="p-2 text-navy-600 hover:text-navy-700 disabled:opacity-50"
-                    title={currentLanguage === 'de' ? 'Transkription bearbeiten' : 'Edit transcription'}
+                    onClick={saveEdit}
+                    disabled={!editedText.trim() || !isConnected}
+                    className="px-3 py-1.5 bg-success-600 text-white rounded-md hover:bg-success-700 disabled:opacity-50 text-sm font-medium flex items-center space-x-1"
+                    title={currentLanguage === 'de' ? 'Speichern und Bericht generieren' : 'Save and generate report'}
                   >
-                    <Edit3 className="w-4 h-4" />
+                    <Save className="w-3 h-3" />
+                    <span>{currentLanguage === 'de' ? 'Speichern' : 'Save'}</span>
                   </button>
-                )}
-              </>
-            )}
+                  <button
+                    onClick={cancelEdit}
+                    className="px-3 py-1.5 bg-gray-500 text-white rounded-md hover:bg-gray-600 text-sm font-medium flex items-center space-x-1"
+                    title={currentLanguage === 'de' ? 'Bearbeitung abbrechen' : 'Cancel editing'}
+                  >
+                    <X className="w-3 h-3" />
+                    <span>{currentLanguage === 'de' ? 'Abbrechen' : 'Cancel'}</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={startEdit}
+                  disabled={finalTranscriptions.length === 0}
+                  className="px-3 py-1.5 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50 text-sm font-medium flex items-center space-x-1"
+                  title={currentLanguage === 'de' ? 'Transkription bearbeiten' : 'Edit transcription'}
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span>{currentLanguage === 'de' ? 'Bearbeiten' : 'Edit'}</span>
+                </button>
+              )}
+            </div>
             
-            {/* Generate Report buttons */}
-            {!isEditing && finalTranscriptions.length > 0 && (
-              <>
+            {/* Generate Report buttons - only show when not editing */}
+            {!isEditing && (
+              <div className="flex items-center space-x-2">
                 {onGenerateReportFromText && (
                   <button
                     onClick={onGenerateReport || (() => {})}
                     disabled={!isConnected}
-                    className="px-3 py-1.5 bg-navy-600 text-white rounded-lg hover:bg-navy-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                    className="px-3 py-1.5 bg-navy-600 text-white rounded-md hover:bg-navy-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                     title={currentLanguage === 'de' ? 'Original-Bericht generieren' : 'Generate Original Report'}
                   >
                     {currentLanguage === 'de' ? 'Original' : 'Original'}
@@ -248,16 +259,16 @@ export default function TranscriptionDisplay({
                   <button
                     onClick={onGenerateReport}
                     disabled={!isConnected}
-                    className="px-3 py-1.5 bg-navy-600 text-white rounded-lg hover:bg-navy-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                    className="px-3 py-1.5 bg-navy-600 text-white rounded-md hover:bg-navy-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                     title={currentLanguage === 'de' ? 'Bericht generieren' : 'Generate Report'}
                   >
                     {currentLanguage === 'de' ? 'Bericht' : 'Report'}
                   </button>
                 )}
-              </>
+              </div>
             )}
           </div>
-        </div>
+        )}
       </div>
 
       {/* Stats */}

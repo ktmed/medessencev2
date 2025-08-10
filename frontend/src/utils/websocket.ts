@@ -113,12 +113,13 @@ export class WebSocketClient {
   }
 
   // Request report generation
-  requestReport(transcriptionId: string, language: string, transcriptionText?: string): void {
+  requestReport(transcriptionId: string, language: string, transcriptionText?: string, processingMode: 'cloud' | 'local' = 'cloud'): void {
     if (this.socket && this.socket.connected) {
       this.socket.emit('generate_report', {
         transcriptionId,
         language,
         transcriptionText, // Include the actual text for pasted content
+        processingMode, // Include processing mode for backend decision
         timestamp: Date.now(),
       });
     }

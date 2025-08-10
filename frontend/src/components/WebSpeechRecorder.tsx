@@ -12,6 +12,8 @@ interface WebSpeechRecorderProps {
   language: Language;
   onTranscription?: (transcription: TranscriptionData) => void;
   onRefinedTranscription?: (refined: string) => void;
+  processingMode?: 'cloud' | 'local';
+  onProcessingModeChange?: (mode: 'cloud' | 'local') => void;
   className?: string;
 }
 
@@ -19,18 +21,22 @@ export default function WebSpeechRecorder({
   language,
   onTranscription,
   onRefinedTranscription,
+  processingMode = 'cloud',
+  onProcessingModeChange,
   className = ''
 }: WebSpeechRecorderProps) {
   const [refinedText, setRefinedText] = useState<string>('');
   const [isRefining, setIsRefining] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [finalTranscript, setFinalTranscript] = useState<string>('');
+  const [mounted, setMounted] = useState<boolean>(false);
 
   const {
     isListening,
     transcript,
     startListening,
     stopListening,
+    resetFinalTranscript,
     hasRecognitionSupport,
     error: speechError
   } = useSpeechToText({
@@ -39,20 +45,26 @@ export default function WebSpeechRecorder({
     interimResults: true,
   });
 
-  // Handle final transcriptions
+  // Handle hydration issue by only showing browser-dependent content after mount
   useEffect(() => {
-    if (!isListening && transcript.final) {
+    setMounted(true);
+  }, []);
+
+  // Handle final transcriptions - only when we get new final results
+  useEffect(() => {
+    if (transcript.final && transcript.final.trim()) {
+      // Append new final transcript to existing one
       const newFinal = finalTranscript 
         ? `${finalTranscript} ${transcript.final}`.trim() 
-        : transcript.final;
+        : transcript.final.trim();
       
       setFinalTranscript(newFinal);
       
-      // Create TranscriptionData object
+      // Create TranscriptionData object for the new final transcript piece
       if (onTranscription) {
         const transcriptionData: TranscriptionData = {
           id: generateId(),
-          text: newFinal,
+          text: transcript.final.trim(), // Only send the new piece
           confidence: 0.9, // Web Speech API doesn't provide confidence, use default
           timestamp: Date.now(),
           language: language,
@@ -60,8 +72,11 @@ export default function WebSpeechRecorder({
         };
         onTranscription(transcriptionData);
       }
+      
+      // Reset the final transcript to prevent reprocessing
+      resetFinalTranscript();
     }
-  }, [transcript.final, isListening, finalTranscript, onTranscription, language]);
+  }, [transcript.final, onTranscription, language, resetFinalTranscript, finalTranscript]);
 
   const handleToggleRecording = useCallback(() => {
     if (!hasRecognitionSupport) {
@@ -88,7 +103,8 @@ export default function WebSpeechRecorder({
     setError(null);
     
     try {
-      const refined = await multiLLMService.refineTranscript(finalTranscript);
+      // Always use local processing for transcription refinement (simple text cleanup)
+      const refined = await multiLLMService.refineTranscript(finalTranscript, 'local');
       setRefinedText(refined);
       if (onRefinedTranscription) {
         onRefinedTranscription(refined);
@@ -119,8 +135,8 @@ export default function WebSpeechRecorder({
         </div>
       </div>
 
-      {/* Browser Support Warning */}
-      {!hasRecognitionSupport && (
+      {/* Browser Support Warning - only show after mount */}
+      {mounted && !hasRecognitionSupport && (
         <div className="mb-4 p-3 bg-error-50 border border-error-200 rounded-md">
           <div className="flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 text-error-600" />
@@ -145,30 +161,30 @@ export default function WebSpeechRecorder({
       <div className="flex items-center justify-center space-x-4 mb-6">
         <button
           onClick={handleToggleRecording}
-          disabled={!hasRecognitionSupport}
+          disabled={!mounted || !hasRecognitionSupport}
           className={`
             flex items-center justify-center w-16 h-16 rounded-full transition-all duration-300 
             focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-navy-500 shadow-md
-            ${isListening 
+            ${mounted && isListening 
               ? 'bg-error-500 hover:bg-error-600 text-white animate-pulse' 
               : 'bg-navy-600 hover:bg-navy-700 text-white'
             } 
             disabled:bg-gray-300 disabled:cursor-not-allowed
           `}
         >
-          {isListening ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
+          {mounted && isListening ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
         </button>
 
         <div className="text-center">
           <p className="font-semibold text-lg med-text-navy">
-            {isListening ? 'Recording...' : 'Ready to record'}
+            {mounted && isListening ? 'Recording...' : 'Ready to record'}
           </p>
           <p className="text-sm text-navy-600">
-            {isListening ? 'Click to stop recording' : 'Click microphone to start'}
+            {mounted && isListening ? 'Click to stop recording' : 'Click microphone to start'}
           </p>
         </div>
         
-        {isListening && (
+        {mounted && isListening && (
           <div className="w-4 h-4 rounded-full bg-error-500 animate-pulse"></div>
         )}
       </div>
@@ -181,25 +197,61 @@ export default function WebSpeechRecorder({
             {finalTranscript && (
               <span className="block mb-1">{finalTranscript}</span>
             )}
-            {isListening && transcript.interim && (
+            {mounted && isListening && transcript.interim && (
               <span className="text-navy-500 italic">{transcript.interim}</span>
             )}
-            {!finalTranscript && !transcript.interim && (
+            {!finalTranscript && (!mounted || !transcript.interim) && (
               <span className="text-navy-400">Your transcription will appear here...</span>
             )}
           </div>
         </div>
 
-        {/* AI Refinement */}
-        {finalTranscript && (
-          <div className="flex items-center justify-between pt-4 border-t border-navy-200">
-            <div className="text-sm">
-              <span className="font-medium text-navy-700">German Medical AI Refinement</span>
-              <p className="text-navy-600">Available providers: {multiLLMService.getAvailableProviders().join(', ')}</p>
+        {/* Report Generation Mode Toggle */}
+        <div className="flex items-center justify-between pt-4 border-t border-navy-200">
+          <div className="flex items-center space-x-4">
+            <span className="text-sm font-medium text-navy-700">Report Generation:</span>
+            <div className="flex items-center bg-navy-100 rounded-lg p-1">
+              <button
+                onClick={() => onProcessingModeChange?.('cloud')}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  processingMode === 'cloud' 
+                    ? 'bg-white text-navy-600 shadow-sm' 
+                    : 'text-navy-500 hover:text-navy-700'
+                }`}
+                title="Use cloud AI providers for Befund reports (Claude, Gemini, OpenAI)"
+              >
+                ☁️ Cloud
+              </button>
+              <button
+                onClick={() => onProcessingModeChange?.('local')}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  processingMode === 'local' 
+                    ? 'bg-white text-navy-600 shadow-sm' 
+                    : 'text-navy-500 hover:text-navy-700'
+                }`}
+                title="Use local Ollama models for Befund reports (medical-gemma-2b, gpt-oss:20b)"
+              >
+                🖥️ Local
+              </button>
             </div>
+          </div>
+          <div className="text-xs text-navy-500">
+            For Befund reports: {processingMode === 'cloud' ? 'claude → gemini → openai' : 'medical-gemma-2b → gpt-oss:20b'}
+          </div>
+        </div>
+
+        {/* AI Refinement */}
+        <div className="flex items-center justify-between pt-4">
+          <div className="text-sm">
+            {!finalTranscript && (
+              <p className="text-navy-500 text-xs mt-1">Record audio to enable refinement</p>
+            )}
+          </div>
+          
+          {finalTranscript && (
             <button
               onClick={handleRefineTranscript}
-              disabled={isRefining || !finalTranscript || isListening}
+              disabled={!mounted || isRefining || !finalTranscript || isListening}
               className="medical-button-success flex items-center space-x-2 disabled:opacity-50"
             >
               {isRefining ? (
@@ -214,8 +266,8 @@ export default function WebSpeechRecorder({
                 </>
               )}
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Refined Output */}
         {refinedText && (

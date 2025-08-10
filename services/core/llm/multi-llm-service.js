@@ -1,5 +1,6 @@
 const OpenAI = require('openai');
 const crypto = require('crypto');
+const OllamaModelService = require('./ollama-model-service');
 
 /**
  * Multi-LLM Service with fallback support and caching
@@ -14,6 +15,11 @@ class MultiLLMService {
     
     // Initialize LLM clients if API keys are provided
     this.providers = [];
+    
+    // Initialize Ollama service for local processing
+    this.ollamaService = new OllamaModelService();
+    this.isOllamaInitialized = false;
+    this.initializeOllama();
     
     // Get provider priority from environment variable
     const providerPriority = (process.env.AI_PROVIDER_PRIORITY || 'claude,gemini,openai').split(',').map(p => p.trim());
@@ -143,9 +149,29 @@ class MultiLLMService {
   }
   
   /**
+   * Initialize Ollama service for local processing
+   */
+  async initializeOllama() {
+    try {
+      console.log('Initializing Ollama service for local processing...');
+      const initialized = await this.ollamaService.initialize();
+      this.isOllamaInitialized = initialized;
+      
+      if (initialized) {
+        console.log('Ollama service initialized successfully');
+      } else {
+        console.log('Ollama service initialization failed - local processing will not be available');
+      }
+    } catch (error) {
+      console.error('Ollama initialization error:', error.message);
+      this.isOllamaInitialized = false;
+    }
+  }
+  
+  /**
    * Generate a radiology report using available LLMs with fallback
    */
-  async generateReport(transcriptionText, language = 'de', metadata = {}) {
+  async generateReport(transcriptionText, language = 'de', metadata = {}, processingMode = 'cloud') {
     // Check cache first
     const cacheKey = this.generateCacheKey(transcriptionText, language, 'report');
     const cachedResponse = this.getCachedResponse(cacheKey);
@@ -158,9 +184,14 @@ class MultiLLMService {
     
     const prompt = this.createReportPrompt(transcriptionText, language, metadata);
     
+    // For local processing, use Ollama models
+    if (processingMode === 'local') {
+      return await this.generateReportWithOllama(prompt, language, transcriptionText);
+    }
+    
     let lastError = null;
     
-    // Try each provider in order
+    // Try each provider in order for cloud processing
     for (const provider of this.providers) {
       try {
         console.log(`Attempting report generation with ${provider.name}...`);
@@ -342,9 +373,9 @@ WICHTIG: Antworten Sie NUR mit dem JSON-Objekt, KEINE zusätzlichen Erklärungen
    */
   async callClaude(prompt, language) {
     try {
-      // Add timeout wrapper - reduced for faster failover
+      // Add timeout wrapper - increased timeout for complex medical reports
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Claude API timeout after 10s')), 10000)
+        setTimeout(() => reject(new Error('Claude API timeout after 60s')), 60000)
       );
       
       const requestPromise = fetch('https://api.anthropic.com/v1/messages', {
@@ -795,6 +826,37 @@ ${selectedPrompt.sections}
 ${selectedPrompt.format}
 
 IMPORTANT: Generate the response in ${language === 'de' ? 'German' : language === 'en' ? 'English' : language === 'tr' ? 'Turkish' : language === 'es' ? 'Spanish' : language === 'fr' ? 'French' : language === 'it' ? 'Italian' : 'the requested language'}.`;
+  }
+  
+  /**
+   * Generate report using local Ollama models
+   */
+  async generateReportWithOllama(prompt, language, transcriptionText) {
+    if (!this.isOllamaInitialized) {
+      throw new Error('Ollama service not initialized. Please ensure Ollama is running and models are installed.');
+    }
+    
+    try {
+      console.log('Attempting report generation with Ollama (local processing)...');
+      
+      const result = await this.ollamaService.generateReport(prompt, language);
+      console.log(`Successfully generated report with Ollama (model: ${result.model})`);
+      
+      // Cache the successful response
+      const cacheKey = this.generateCacheKey(transcriptionText, language, 'report');
+      const response = {
+        ...result,
+        provider: 'ollama-local',
+        fallback: false
+      };
+      
+      this.setCachedResponse(cacheKey, response);
+      return response;
+      
+    } catch (error) {
+      console.error('Ollama report generation failed:', error.message);
+      throw new Error(`Local model processing failed: ${error.message}. Please check Ollama setup and model availability.`);
+    }
   }
 }
 

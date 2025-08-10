@@ -32,7 +32,7 @@ class SpecializedAgent {
         const llmResult = await this.llmService.generateReport(reportText, language, {
           ...metadata,
           examination_type: this.type
-        });
+        }, metadata.processingMode || 'cloud');
         
         sections = {
           findings: llmResult.findings || '',

@@ -265,7 +265,7 @@ class AIProviderFactory:
         }
         
         # Set priority order from environment or use default
-        priority_str = os.getenv("AI_PROVIDER_PRIORITY", "openai,claude,gemini")
+        priority_str = os.getenv("AI_PROVIDER_PRIORITY", "claude,gemini,openai")
         self.priority_order = [
             AIProvider(p.strip()) 
             for p in priority_str.split(",") 

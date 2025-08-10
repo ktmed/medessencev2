@@ -43,19 +43,30 @@ export const useSpeechToText = (options: SpeechToTextOptions) => {
 
     recognition.onresult = (event: any) => {
       let interimTranscript = '';
-      let finalTranscript = '';
+      let newFinalTranscript = '';
 
+      // Only process new results from event.resultIndex onwards to avoid duplication
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
+          newFinalTranscript += event.results[i][0].transcript;
         } else {
           interimTranscript += event.results[i][0].transcript;
         }
       }
-      setTranscript({
-        interim: interimTranscript,
-        final: finalTranscript,
-      });
+
+      // Only update final transcript if we have new final results
+      if (newFinalTranscript) {
+        setTranscript(prev => ({
+          interim: interimTranscript,
+          final: newFinalTranscript.trim(), // Set only the new final result
+        }));
+      } else {
+        // Only update interim if no new final results
+        setTranscript(prev => ({
+          ...prev,
+          interim: interimTranscript,
+        }));
+      }
     };
 
     recognition.onerror = (event: any) => {
@@ -88,6 +99,10 @@ export const useSpeechToText = (options: SpeechToTextOptions) => {
     }
   }, [isListening]);
 
+  const resetFinalTranscript = useCallback(() => {
+    setTranscript(prev => ({ ...prev, final: '' }));
+  }, []);
+
   const stopListening = useCallback(() => {
     if (recognitionRef.current && isListening) {
       recognitionRef.current.stop();
@@ -95,5 +110,5 @@ export const useSpeechToText = (options: SpeechToTextOptions) => {
     }
   }, [isListening]);
 
-  return { isListening, transcript, startListening, stopListening, hasRecognitionSupport, error };
+  return { isListening, transcript, startListening, stopListening, resetFinalTranscript, hasRecognitionSupport, error };
 };
