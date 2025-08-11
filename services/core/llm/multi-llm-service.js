@@ -58,6 +58,13 @@ class MultiLLMService {
           };
         }
         return null;
+      },
+      ollama: () => {
+        // Always add Ollama as a fallback provider
+        return {
+          name: 'ollama',
+          handler: this.callOllama.bind(this)
+        };
       }
     };
     
@@ -510,6 +517,33 @@ WICHTIG: Antworten Sie NUR mit dem JSON-Objekt, KEINE zusätzlichen Erklärungen
       } else {
         throw new Error(`Gemini API error: ${error.message}`);
       }
+    }
+  }
+  
+  /**
+   * Call Ollama API (local fallback)
+   */
+  async callOllama(prompt, language) {
+    try {
+      if (!this.isOllamaInitialized) {
+        throw new Error('Ollama service not initialized');
+      }
+      
+      console.log('Attempting report generation with Ollama...');
+      const result = await this.ollamaService.generateReport(prompt, language);
+      
+      // Convert Ollama response to expected format
+      if (result && typeof result === 'object') {
+        console.log('Ollama response format:', Object.keys(result));
+        return result;
+      } else {
+        // If result is text, parse it
+        return this.parseTextResponse(result || '');
+      }
+      
+    } catch (error) {
+      console.error('Ollama generation failed:', error.message);
+      throw new Error(`Ollama local processing failed: ${error.message}`);
     }
   }
   

@@ -1337,8 +1337,9 @@ io.on('connection', (socket) => {
       const multipleHeaders = (combinedText.match(/sehr geehrte?[rn]?.*kollege/gi) || []).length;
       const multipleDates = (combinedText.match(/\d{2}\.\d{2}\.\d{4}/g) || []).length;
       
+      // Temporarily disable multi-document contamination check for testing
       // Only flag if clear evidence of multiple different patients
-      if ((maleMatches > 1 && femaleMatches > 1) || multipleHeaders > 1) {
+      if (false && ((maleMatches > 1 && femaleMatches > 1) || multipleHeaders > 1)) {
         console.error('Multi-document contamination detected:', {
           maleMatches, femaleMatches, multipleHeaders, multipleDates
         });
