@@ -117,7 +117,7 @@ class ReportOrchestrator {
       } else {
         // Low confidence - use ensemble approach
         console.log(`🔍 Orchestrator Debug: Using ensemble parsing, confidence: ${classification.confidence}`);
-        result = await this.ensembleParsing(reportText, language, classification);
+        result = await this.ensembleParsing(reportText, language, classification, metadata);
       }
       
       // 3. Add metadata
@@ -146,7 +146,7 @@ class ReportOrchestrator {
   /**
    * Ensemble parsing using multiple agents
    */
-  async ensembleParsing(reportText, language, classification) {
+  async ensembleParsing(reportText, language, classification, metadata = {}) {
     console.log('Using ensemble parsing due to low confidence');
     
     // Get top 3 most likely report types
@@ -155,10 +155,10 @@ class ReportOrchestrator {
       .slice(0, 3)
       .map(item => item.type);
     
-    // Run all relevant agents
+    // Run all relevant agents with metadata (including processing mode)
     const results = await Promise.all(
       topTypes.map(type => 
-        this.agents[type].parseReport(reportText, language)
+        this.agents[type].parseReport(reportText, language, metadata)
           .catch(err => ({ error: err.message, type }))
       )
     );

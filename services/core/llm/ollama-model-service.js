@@ -252,8 +252,32 @@ class OllamaModelService {
     try {
       console.log('OllamaModelService: Generating report with Ollama model...');
       
+      // Check and limit input size for optimal processing
+      const maxInputLength = 4000; // Optimal size for gpt-oss model
+      let processedPrompt = prompt;
+      
+      if (prompt.length > maxInputLength) {
+        console.log(`OllamaModelService: Input too long (${prompt.length} chars), truncating to ${maxInputLength} chars`);
+        // Try to find a good breaking point (end of sentence or paragraph)
+        const truncated = prompt.substring(0, maxInputLength);
+        const lastSentence = truncated.lastIndexOf('.');
+        const lastParagraph = truncated.lastIndexOf('\n');
+        const breakPoint = Math.max(lastSentence, lastParagraph);
+        
+        processedPrompt = breakPoint > maxInputLength * 0.7 ? 
+          prompt.substring(0, breakPoint + 1) : 
+          truncated;
+          
+        console.log(`OllamaModelService: Truncated to ${processedPrompt.length} characters`);
+      }
+      
       // Optimize prompt for medical context
-      const optimizedPrompt = this.optimizePromptForMedical(prompt, language);
+      const optimizedPrompt = this.optimizePromptForMedical(processedPrompt, language);
+      
+      // Debug: Log prompt details
+      console.log('OllamaModelService: Original prompt length:', prompt.length);
+      console.log('OllamaModelService: Processed prompt length:', processedPrompt.length);
+      console.log('OllamaModelService: Optimized prompt length:', optimizedPrompt.length);
       
       // Merge options with defaults
       const inferenceParams = {
@@ -270,31 +294,76 @@ class OllamaModelService {
         options: inferenceParams
       };
 
-      // Generate response using Ollama API
+      // Generate response using Ollama API with retry logic for empty responses
       const startTime = Date.now();
-      const response = await this.makeRequest('POST', '/api/generate', requestBody);
-      const inferenceTime = Date.now() - startTime;
+      let response;
+      let inferenceTime;
+      let fullResponse = '';
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      // Retry loop for empty responses
+      do {
+        if (retryCount > 0) {
+          console.log(`OllamaModelService: Retrying request (attempt ${retryCount + 1}/${maxRetries}) due to empty response...`);
+          // Small delay between retries
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        }
+        
+        console.log(`OllamaModelService: Starting attempt ${retryCount + 1}/${maxRetries}`);
+        
+        const attemptStartTime = Date.now();
+        response = await this.makeRequest('POST', '/api/generate', requestBody);
+        const attemptTime = Date.now() - attemptStartTime;
+        
+        if (retryCount === 0) {
+          inferenceTime = attemptTime; // Use first attempt time
+        }
+        
+        if (response.status !== 200) {
+          throw new Error(`Ollama API returned status ${response.status}: ${response.data}`);
+        }
+        
+        // Quick check for empty response before full parsing
+        const quickCheck = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        const testLines = quickCheck.trim().split('\n').filter(line => line.trim());
+        let testResponse = '';
+        
+        for (const line of testLines) {
+          try {
+            const jsonObj = JSON.parse(line);
+            if (jsonObj.response) {
+              testResponse += jsonObj.response;
+            }
+          } catch (e) {
+            // Ignore parse errors for quick check
+          }
+        }
+        
+        fullResponse = testResponse.trim();
+        
+        console.log(`OllamaModelService: Attempt ${retryCount + 1} - Response length: ${fullResponse.length}`);
+        if (fullResponse.length === 0) {
+          console.log(`OllamaModelService: Empty response detected on attempt ${retryCount + 1}`);
+        }
+        
+        retryCount++;
+        
+      } while (fullResponse.length === 0 && retryCount < maxRetries);
+      
+      inferenceTime = Date.now() - startTime;
 
-      if (response.status !== 200) {
-        throw new Error(`Ollama API returned status ${response.status}: ${response.data}`);
-      }
-
+      // Final validation and parsing of the response
       let responseData;
       try {
-        // Handle Ollama's streaming response format - multiple JSON objects separated by newlines
+        // We already have fullResponse from the retry loop, now get metadata
         const rawData = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-        
-        // Parse streaming JSON response (each line is a separate JSON object)
         const lines = rawData.trim().split('\n').filter(line => line.trim());
-        let fullResponse = '';
         let finalData = null;
         
         for (const line of lines) {
           try {
             const jsonObj = JSON.parse(line);
-            if (jsonObj.response) {
-              fullResponse += jsonObj.response;
-            }
             // Keep the last complete response data for metadata
             if (jsonObj.done !== false) {
               finalData = jsonObj;
@@ -307,6 +376,16 @@ class OllamaModelService {
         // Create the final response data structure
         responseData = finalData || { response: fullResponse, prompt_eval_count: 0, eval_count: 0 };
         responseData.response = fullResponse;
+        
+        // Debug: Log response details
+        console.log('OllamaModelService: Raw response length:', fullResponse.length);
+        console.log('OllamaModelService: Response preview:', fullResponse.substring(0, 300));
+        
+        // Final check for empty response after retries
+        if (fullResponse.trim().length === 0) {
+          console.warn(`OllamaModelService: Empty response after ${retryCount} attempts`);
+          throw new Error('Ollama returned empty response after multiple retry attempts');
+        }
         
       } catch (parseError) {
         console.error('OllamaModelService: Failed to parse streaming response:', parseError.message);
@@ -339,26 +418,32 @@ class OllamaModelService {
    * Optimize prompt specifically for medical Ollama models
    */
   optimizePromptForMedical(originalPrompt, language) {
-    // Add medical context and formatting instructions
+    // Simplified medical context - focus on natural language first, then structure
     const medicalContext = language === 'de' ? 
-      `Du bist ein spezialisierter medizinischer AI-Assistent für deutsche Radiologie-Befunde. Antworte präzise und strukturiert im JSON-Format.
+      `Du bist ein spezialisierter medizinischer AI-Assistent für deutsche Radiologie-Befunde.
 
-WICHTIGE ANWEISUNGEN:
-- Verwende ausschließlich medizinische Fachsprache
-- Halte dich strikt an das vorgegebene JSON-Schema
-- Extrahiere ALLE medizinischen Informationen vollständig
-- Ignoriere administrative Inhalte (Adressen, Briefköpfe, etc.)
-- Antworte NUR mit einem gültigen JSON-Objekt, ohne zusätzlichen Text
+AUFGABE: Analysiere den folgenden medizinischen Befund und erstelle einen strukturierten Bericht.
+
+ANWEISUNGEN:
+- Fokussiere dich auf die medizinischen Inhalte
+- Ignoriere Adressen, Briefköpfe und administrative Daten  
+- Extrahiere die wichtigsten Befunde und Beurteilungen
+- Antworte auf Deutsch in klarer, verständlicher Form
+
+Medizinischer Befund:
 
 ` : 
-      `You are a specialized medical AI assistant for radiology reports. Respond precisely and structured in JSON format.
+      `You are a specialized medical AI assistant for radiology reports.
 
-IMPORTANT INSTRUCTIONS:
-- Use only medical terminology
-- Strictly follow the given JSON schema
-- Extract ALL medical information completely
-- Ignore administrative content (addresses, letterheads, etc.)
-- Respond ONLY with a valid JSON object, without additional text
+TASK: Analyze the following medical report and create a structured assessment.
+
+INSTRUCTIONS:
+- Focus on medical content only
+- Ignore addresses, letterheads, and administrative data
+- Extract key findings and assessments
+- Respond in clear, understandable language
+
+Medical Report:
 
 `;
 
@@ -371,61 +456,60 @@ IMPORTANT INSTRUCTIONS:
    */
   parseModelResponse(response, language) {
     try {
-      // Extract JSON from response (models sometimes add extra text)
+      // First try to extract JSON from response (models sometimes add extra text)
       const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in model response');
-      }
-
-      const parsed = JSON.parse(jsonMatch[0]);
       
-      // Validate required fields and provide defaults
-      if (!parsed.findings) {
-        console.warn(`OllamaModelService: Missing required field 'findings', using fallback`);
-        parsed.findings = { content: 'No findings extracted from response', structuredFindings: [] };
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          return this.validateAndStructureResponse(parsed, response);
+        } catch (jsonError) {
+          console.warn('OllamaModelService: Failed to parse JSON, falling back to text processing');
+        }
       }
       
-      if (!parsed.impression) {
-        console.warn(`OllamaModelService: Missing required field 'impression', using fallback`);
-        parsed.impression = 'No impression extracted from response';
-      }
+      // Fallback: Parse as natural language medical text
+      console.log('OllamaModelService: Processing as natural language response');
+      return this.parseNaturalLanguageResponse(response, language);
       
-      // Ensure findings is properly structured
-      if (typeof parsed.findings === 'string') {
-        parsed.findings = { content: parsed.findings, structuredFindings: [] };
-      }
-
-      // Ensure structured findings format
-      if (parsed.findings && typeof parsed.findings === 'string') {
-        parsed.findings = {
-          content: parsed.findings,
-          structuredFindings: this.createBasicStructuredFindings(parsed.findings)
-        };
-      } else if (parsed.findings && typeof parsed.findings === 'object' && !parsed.findings.content) {
-        // If findings is an object but doesn't have the expected structure, add missing parts
-        parsed.findings.content = parsed.findings.content || '';
-        parsed.findings.structuredFindings = parsed.findings.structuredFindings || [];
-      }
-
-      return parsed;
-
     } catch (error) {
       console.error('OllamaModelService: Failed to parse model response:', error);
       console.log('OllamaModelService: Raw response:', response.substring(0, 500) + '...');
       
-      // Return fallback structure
-      return {
-        technicalDetails: '',
-        findings: {
-          content: response.substring(0, 1000), // Take first 1000 chars as fallback
-          structuredFindings: this.createBasicStructuredFindings(response.substring(0, 1000))
-        },
-        impression: '',
-        recommendations: '',
-        parseError: true,
-        originalResponse: response
-      };
+      // Return fallback structure with actual response content
+      return this.createFallbackResponse(response);
     }
+  }
+  
+  validateAndStructureResponse(parsed, originalResponse) {
+    // Validate required fields and provide defaults
+    if (!parsed.findings) {
+      console.warn(`OllamaModelService: Missing required field 'findings', using fallback`);
+      parsed.findings = { content: 'No findings extracted from response', structuredFindings: [] };
+    }
+    
+    if (!parsed.impression) {
+      console.warn(`OllamaModelService: Missing required field 'impression', using fallback`);
+      parsed.impression = 'No impression extracted from response';
+    }
+    
+    // Ensure findings is properly structured
+    if (typeof parsed.findings === 'string') {
+      parsed.findings = { 
+        content: parsed.findings, 
+        structuredFindings: this.createBasicStructuredFindings(parsed.findings)
+      };
+    } else if (parsed.findings && typeof parsed.findings === 'object' && !parsed.findings.content) {
+      // If findings is an object but doesn't have the expected structure, add missing parts
+      parsed.findings.content = parsed.findings.content || '';
+      parsed.findings.structuredFindings = parsed.findings.structuredFindings || [];
+    }
+    
+    // Ensure other required fields exist
+    parsed.technicalDetails = parsed.technicalDetails || '';
+    parsed.recommendations = parsed.recommendations || 'Weitere klinische Korrelation empfohlen.';
+    
+    return parsed;
   }
 
   /**
@@ -474,6 +558,219 @@ IMPORTANT INSTRUCTIONS:
     }
     
     return structuredFindings;
+  }
+
+  /**
+   * Parse natural language medical text response from Ollama
+   */
+  parseNaturalLanguageResponse(response, language) {
+    console.log('OllamaModelService: Parsing natural language response, length:', response.length);
+    
+    // Clean up the response by removing any non-medical content
+    let cleanedResponse = response.trim();
+    
+    // Remove model artifacts and prompts
+    cleanedResponse = cleanedResponse
+      .replace(/^(Assistant:|AI:|Model:|Response:|Answer:)/gi, '')
+      .replace(/^(Here is|Here are|Based on|According to)/gi, '')
+      .trim();
+    
+    // Extract medical sections using common German patterns
+    const sections = this.extractMedicalSections(cleanedResponse, language);
+    
+    // Create structured findings from the response
+    const structuredFindings = this.createBasicStructuredFindings(sections.findings || cleanedResponse);
+    
+    return {
+      technicalDetails: sections.technique || '',
+      findings: {
+        content: sections.findings || cleanedResponse,
+        structuredFindings: structuredFindings
+      },
+      impression: sections.impression || this.generateBasicImpression(cleanedResponse, language),
+      recommendations: sections.recommendations || this.generateBasicRecommendations(language),
+      metadata: {
+        source: 'ollama-natural-language',
+        originalLength: response.length,
+        processedLength: cleanedResponse.length
+      }
+    };
+  }
+
+  /**
+   * Extract medical sections from natural language text
+   */
+  extractMedicalSections(text, language) {
+    const sections = {};
+    
+    // Handle Ollama's markdown-formatted response
+    console.log('OllamaModelService: Extracting sections from response length:', text.length);
+    
+    // First try to extract from Ollama's structured format
+    const markdownSections = this.extractFromMarkdownFormat(text);
+    if (markdownSections.findings || markdownSections.impression) {
+      console.log('OllamaModelService: Using markdown extraction');
+      return markdownSections;
+    }
+    
+    // German medical section patterns (original format)
+    const patterns = {
+      technique: /(?:Technik|Untersuchung|Methode)[:：]?\s*([^.]*(?:\.[^.]*){0,2})/gi,
+      findings: /(?:Befund|Befunde|Bildgebung)[:：]?\s*([\s\S]*?)(?=(?:Beurteilung|Impression|Empfehlung|Mit freundlichen|$))/gi,
+      impression: /(?:Beurteilung|Impression|Diagnose|Zusammenfassung)[:：]?\s*([\s\S]*?)(?=(?:Empfehlung|Mit freundlichen|$))/gi,
+      recommendations: /(?:Empfehlung|Empfehlungen|Procedere|Weiteres Vorgehen)[:：]?\s*([\s\S]*?)(?=Mit freundlichen|$)/gi
+    };
+    
+    // Extract each section
+    for (const [sectionName, pattern] of Object.entries(patterns)) {
+      const match = text.match(pattern);
+      if (match && match[1]) {
+        sections[sectionName] = match[1].trim();
+      }
+    }
+    
+    // If no specific findings section found, use the entire meaningful text
+    if (!sections.findings) {
+      // Remove headers, addresses, and signatures, but keep medical content
+      const cleanedText = text
+        .replace(/^.*?(?:Sehr geehrte?r?.*?,|geb\.\s*am\s*[\d.]+)/gi, '')
+        .replace(/Mit freundlichen.*$/gi, '')
+        .replace(/Dr\.\s*med\..*$/gi, '')
+        .replace(/^\*\*.*?\*\*$/gm, '') // Remove markdown headers
+        .replace(/^#{1,6}\s+.*$/gm, '') // Remove markdown headers
+        .replace(/^---+$/gm, '') // Remove markdown dividers
+        .trim();
+      
+      if (cleanedText.length > 50) {
+        sections.findings = cleanedText;
+      }
+    }
+    
+    console.log('OllamaModelService: Extracted sections:', Object.keys(sections));
+    return sections;
+  }
+  
+  /**
+   * Extract medical content from Ollama's markdown-formatted response
+   */
+  extractFromMarkdownFormat(text) {
+    const sections = {};
+    
+    // Look for structured medical content patterns in Ollama's output
+    const lines = text.split('\n');
+    let currentSection = '';
+    let currentContent = [];
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      // Skip empty lines, markdown formatting
+      if (!trimmedLine || trimmedLine.startsWith('---') || trimmedLine.startsWith('**Radiologischer')) {
+        continue;
+      }
+      
+      // Detect section headers
+      if (trimmedLine.match(/^#{1,3}\s*(Technik|Befund|Beurteilung|Empfehlung)/i)) {
+        // Save previous section
+        if (currentSection && currentContent.length > 0) {
+          sections[currentSection] = currentContent.join(' ').trim();
+        }
+        
+        // Start new section
+        const sectionMatch = trimmedLine.match(/^#{1,3}\s*(Technik|Befund|Beurteilung|Empfehlung)/i);
+        if (sectionMatch) {
+          currentSection = sectionMatch[1].toLowerCase();
+          if (currentSection === 'befund') currentSection = 'findings';
+          if (currentSection === 'beurteilung') currentSection = 'impression';
+          if (currentSection === 'empfehlung') currentSection = 'recommendations';
+          if (currentSection === 'technik') currentSection = 'technique';
+          currentContent = [];
+        }
+      } else if (trimmedLine.startsWith('**') && trimmedLine.includes(':')) {
+        // Handle bold headers like "**Indikation:**"
+        const content = trimmedLine.replace(/^\*\*.*?\*\*:?\s*/, '');
+        if (content) {
+          currentContent.push(content);
+        }
+      } else if (trimmedLine.startsWith('-') || trimmedLine.includes(':')) {
+        // Handle bullet points and key-value pairs
+        const content = trimmedLine.replace(/^[-•]\s*/, '').replace(/^\*\*.*?\*\*:?\s*/, '');
+        if (content && content.length > 3) {
+          currentContent.push(content);
+        }
+      } else if (trimmedLine.length > 10) {
+        // Regular content lines
+        currentContent.push(trimmedLine);
+      }
+    }
+    
+    // Save final section
+    if (currentSection && currentContent.length > 0) {
+      sections[currentSection] = currentContent.join(' ').trim();
+    }
+    
+    // If no structured sections found, extract key medical information
+    if (Object.keys(sections).length === 0) {
+      const medicalContent = text
+        .replace(/^\*\*.*?\*\*$/gm, '') // Remove markdown headers
+        .replace(/^#{1,6}.*$/gm, '') // Remove headers
+        .replace(/^---+$/gm, '') // Remove dividers
+        .replace(/\*\*/g, '') // Remove bold formatting
+        .split('\n')
+        .filter(line => line.trim().length > 10)
+        .join(' ')
+        .trim();
+        
+      if (medicalContent.length > 50) {
+        sections.findings = medicalContent;
+      }
+    }
+    
+    return sections;
+  }
+
+  /**
+   * Generate basic impression from medical text
+   */
+  generateBasicImpression(text, language) {
+    // Look for existing assessment patterns
+    const assessmentMatch = text.match(/(?:unauffällig|auffällig|pathologisch|normal|regelrecht|verändert)/gi);
+    
+    if (assessmentMatch) {
+      return `Befund zeigt ${assessmentMatch.join(', ').toLowerCase()} Veränderungen.`;
+    }
+    
+    // Fallback based on language
+    return language === 'de' ? 'Siehe Befund für Details.' : 'See findings for details.';
+  }
+
+  /**
+   * Generate basic recommendations
+   */
+  generateBasicRecommendations(language) {
+    return language === 'de' ? 
+      'Weitere klinische Korrelation und ärztliche Beurteilung empfohlen.' :
+      'Further clinical correlation and medical assessment recommended.';
+  }
+
+  /**
+   * Create fallback response structure
+   */
+  createFallbackResponse(response) {
+    return {
+      technicalDetails: '',
+      findings: {
+        content: response.substring(0, 1000), // Take first 1000 chars as fallback
+        structuredFindings: this.createBasicStructuredFindings(response.substring(0, 1000))
+      },
+      impression: 'Automatische Analyse des medizinischen Befundes.',
+      recommendations: 'Weitere klinische Korrelation empfohlen.',
+      metadata: {
+        source: 'ollama-fallback',
+        originalLength: response.length,
+        fallbackUsed: true
+      }
+    };
   }
 
   /**

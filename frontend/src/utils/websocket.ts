@@ -114,25 +114,43 @@ export class WebSocketClient {
 
   // Request report generation
   requestReport(transcriptionId: string, language: string, transcriptionText?: string, processingMode: 'cloud' | 'local' = 'cloud'): void {
+    console.log('DEBUG: requestReport called with:', {
+      transcriptionId,
+      language,
+      transcriptionTextLength: transcriptionText?.length || 0,
+      transcriptionTextPreview: transcriptionText?.substring(0, 100) + '...',
+      processingMode
+    });
+    
     if (this.socket && this.socket.connected) {
-      this.socket.emit('generate_report', {
+      const payload = {
         transcriptionId,
         language,
         transcriptionText, // Include the actual text for pasted content
         processingMode, // Include processing mode for backend decision
         timestamp: Date.now(),
+      };
+      
+      console.log('DEBUG: emitting generate_report with payload:', {
+        ...payload,
+        transcriptionText: payload.transcriptionText?.substring(0, 100) + '...'
       });
+      
+      this.socket.emit('generate_report', payload);
     }
   }
 
   // Request summary generation
   requestSummary(reportId: string, language: string): void {
+    console.log('🔍 DEBUG: Requesting summary via websocket with language:', language);
     if (this.socket && this.socket.connected) {
-      this.socket.emit('generate_summary', {
+      const payload = {
         reportId,
         language,
         timestamp: Date.now(),
-      });
+      };
+      console.log('🔍 DEBUG: Emitting generate_summary with payload:', payload);
+      this.socket.emit('generate_summary', payload);
     }
   }
 

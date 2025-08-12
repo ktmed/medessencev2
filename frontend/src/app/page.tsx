@@ -212,6 +212,14 @@ export default function Dashboard() {
   // Handle transcription from Web Speech API
   const handleTranscription = useCallback((transcription: TranscriptionData) => {
     console.log('New transcription received:', transcription);
+    
+    // Send transcription to websocket if it's final
+    if (transcription.isFinal && transcription.text.trim() && wsClient && isConnected) {
+      console.log('Sending final transcription to backend:', transcription.text.substring(0, 100) + '...');
+      // Send transcription to backend for history tracking
+      wsClient.socket?.emit('transcription_data', transcription);
+    }
+    
     setTranscriptions(prev => {
       // Replace or add the transcription
       const existingIndex = prev.findIndex(t => t.id === transcription.id);
@@ -223,22 +231,8 @@ export default function Dashboard() {
         return [...prev, transcription];
       }
     });
-  }, []);
+  }, [wsClient, isConnected]);
 
-  // Handle refined transcription from AI
-  const handleRefinedTranscription = useCallback((refined: string) => {
-    console.log('Refined transcription received');
-    setRefinedTranscript(refined);
-    setUIState(prev => ({ 
-      ...prev, 
-      success: 'Transcription refined with AI' 
-    }));
-    
-    // Clear success message after 3 seconds
-    setTimeout(() => {
-      setUIState(prev => ({ ...prev, success: null }));
-    }, 3000);
-  }, []);
 
 
   // Generate medical report
@@ -274,6 +268,21 @@ export default function Dashboard() {
     }
   }, [transcriptions, refinedTranscript, wsClient, isConnected, language, reportProcessingMode]);
 
+  // Handle refined transcription from AI
+  const handleRefinedTranscription = useCallback((refined: string) => {
+    console.log('Refined transcription received');
+    setRefinedTranscript(refined);
+    setUIState(prev => ({ 
+      ...prev, 
+      success: 'Transcription refined with AI' 
+    }));
+    
+    // Clear success message after 3 seconds
+    setTimeout(() => {
+      setUIState(prev => ({ ...prev, success: null }));
+    }, 3000);
+  }, []);
+
   // Generate report from pasted text
   const handleGenerateReportFromText = useCallback(() => {
     if (!pastedText.trim()) {
@@ -307,6 +316,8 @@ export default function Dashboard() {
       
       // Request report generation with the actual text
       console.log('Sending report generation request with processing mode:', reportProcessingMode);
+      console.log('DEBUG: Pasted text being sent:', pastedText.substring(0, 200) + '...');
+      console.log('DEBUG: Pasted text length:', pastedText.length);
       wsClient.requestReport(fakeTranscription.id, language, pastedText, reportProcessingMode);
       
       // Clear the paste input
@@ -450,12 +461,6 @@ export default function Dashboard() {
               {currentSummary ? 1 : 0}
             </div>
             <div className="text-sm text-navy-600">Summaries</div>
-          </div>
-          <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-200">
-            <div className="text-2xl font-bold text-orange-700">
-              {refinedTranscript ? 1 : 0}
-            </div>
-            <div className="text-sm text-orange-600">AI Refined</div>
           </div>
         </div>
       </div>

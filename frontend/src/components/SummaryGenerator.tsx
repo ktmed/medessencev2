@@ -40,6 +40,7 @@ export default function SummaryGenerator({
   const [selectedLanguage, setSelectedLanguage] = useState<Language>(language);
 
   const handleGenerate = () => {
+    console.log('🔍 DEBUG: Generating summary with language:', selectedLanguage);
     if (report && onGenerate) {
       onGenerate(report.id, selectedLanguage);
     }
@@ -82,8 +83,8 @@ ${getMedicalTerm('summary', summary.language).toUpperCase()}
 ${'-'.repeat(getMedicalTerm('summary', summary.language).length)}
 ${summary.summary}
 
-KEY FINDINGS
-------------
+${getMedicalTerm('keyFindings', summary.language).toUpperCase()}
+${'-'.repeat(getMedicalTerm('keyFindings', summary.language).length)}
 ${summary.keyFindings && summary.keyFindings.length > 0 
   ? summary.keyFindings.map(finding => `• ${finding}`).join('\n')
   : 'No key findings available.'}
@@ -240,7 +241,7 @@ This summary has been generated automatically and should be reviewed with your h
               <div className="bg-white border border-gray-200 rounded-lg p-6">
                 <div className="flex items-center space-x-2 mb-4">
                   <Activity className="w-5 h-5 text-gray-600" />
-                  <h4 className="font-semibold text-gray-800">Key Findings</h4>
+                  <h4 className="font-semibold text-gray-800">{getMedicalTerm('keyFindings', summary.language)}</h4>
                 </div>
                 <ul className="space-y-2">
                   {summary.keyFindings.map((finding, index) => (

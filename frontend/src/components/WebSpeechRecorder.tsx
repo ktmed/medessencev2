@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { Mic, MicOff, AlertCircle, Activity } from 'lucide-react';
-import { useSpeechToText } from '@/hooks/useSpeechToText';
+import { Mic, MicOff, AlertCircle, Activity, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useEnhancedSpeechToText } from '@/hooks/useEnhancedSpeechToText';
 import { multiLLMService } from '@/services/multiLLMService';
 import { Language, TranscriptionData } from '@/types';
 import { getMedicalTerm } from '@/utils/languages';
@@ -25,24 +25,45 @@ export default function WebSpeechRecorder({
   onProcessingModeChange,
   className = ''
 }: WebSpeechRecorderProps) {
+  const [error, setError] = useState<string | null>(null);
   const [refinedText, setRefinedText] = useState<string>('');
   const [isRefining, setIsRefining] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [finalTranscript, setFinalTranscript] = useState<string>('');
+  // Remove duplicate finalTranscript state - use speechFinalTranscript from hook
   const [mounted, setMounted] = useState<boolean>(false);
 
   const {
     isListening,
     transcript,
+    finalTranscript: speechFinalTranscript,
     startListening,
     stopListening,
     resetFinalTranscript,
     hasRecognitionSupport,
-    error: speechError
-  } = useSpeechToText({
+    error: speechError,
+    validationEnabled,
+    toggleValidation,
+    getQualityAssessment,
+    confidence
+  } = useEnhancedSpeechToText({
     lang: language === 'de' ? 'de-DE' : 'en-US',
     continuous: true,
     interimResults: true,
+    medicalValidation: true,
+    confidenceThreshold: 0.6,
+    onTranscriptChange: useCallback((transcriptData) => {
+      // The hook handles accumulation, we just need to pass through final transcripts
+      if (transcriptData.isFinal && onTranscription) {
+        const transcriptionObj: TranscriptionData = {
+          id: generateId(),
+          text: transcriptData.text,
+          isFinal: true,
+          confidence: transcriptData.confidence,
+          language: language,
+          timestamp: Date.now()
+        };
+        onTranscription(transcriptionObj);
+      }
+    }, [language, onTranscription])
   });
 
   // Handle hydration issue by only showing browser-dependent content after mount
@@ -50,33 +71,41 @@ export default function WebSpeechRecorder({
     setMounted(true);
   }, []);
 
-  // Handle final transcriptions - only when we get new final results
+  // Handle final transcriptions from the hook
   useEffect(() => {
-    if (transcript.final && transcript.final.trim()) {
-      // Append new final transcript to existing one
-      const newFinal = finalTranscript 
-        ? `${finalTranscript} ${transcript.final}`.trim() 
-        : transcript.final.trim();
-      
-      setFinalTranscript(newFinal);
-      
-      // Create TranscriptionData object for the new final transcript piece
-      if (onTranscription) {
-        const transcriptionData: TranscriptionData = {
-          id: generateId(),
-          text: transcript.final.trim(), // Only send the new piece
-          confidence: 0.9, // Web Speech API doesn't provide confidence, use default
-          timestamp: Date.now(),
-          language: language,
-          isFinal: true
-        };
-        onTranscription(transcriptionData);
-      }
-      
-      // Reset the final transcript to prevent reprocessing
-      resetFinalTranscript();
+    if (transcript.isFinal && transcript.text.trim() && onTranscription) {
+      const transcriptionData: TranscriptionData = {
+        id: generateId(),
+        text: transcript.text.trim(),
+        confidence: transcript.confidence || 0.9,
+        timestamp: Date.now(),
+        language: language,
+        isFinal: true
+      };
+      onTranscription(transcriptionData);
     }
-  }, [transcript.final, onTranscription, language, resetFinalTranscript, finalTranscript]);
+  }, [transcript, onTranscription, language]);
+
+  const handleRefineTranscript = useCallback(async () => {
+    if (!speechFinalTranscript || isRefining) return;
+    
+    setIsRefining(true);
+    setError(null);
+    
+    try {
+      // Always use local processing for transcription refinement (simple text cleanup)
+      const refined = await multiLLMService.refineTranscript(speechFinalTranscript, 'local');
+      setRefinedText(refined);
+      if (onRefinedTranscription) {
+        onRefinedTranscription(refined);
+      }
+    } catch (err) {
+      console.error('Failed to refine transcript:', err);
+      setError('Failed to refine transcript. Please check your API keys and try again.');
+    } finally {
+      setIsRefining(false);
+    }
+  }, [speechFinalTranscript, isRefining, onRefinedTranscription]);
 
   const handleToggleRecording = useCallback(() => {
     if (!hasRecognitionSupport) {
@@ -90,32 +119,11 @@ export default function WebSpeechRecorder({
       stopListening();
     } else {
       // Reset on new recording
-      setFinalTranscript('');
       setRefinedText('');
       startListening();
     }
   }, [isListening, startListening, stopListening, hasRecognitionSupport]);
 
-  const handleRefineTranscript = useCallback(async () => {
-    if (!finalTranscript || isRefining) return;
-    
-    setIsRefining(true);
-    setError(null);
-    
-    try {
-      // Always use local processing for transcription refinement (simple text cleanup)
-      const refined = await multiLLMService.refineTranscript(finalTranscript, 'local');
-      setRefinedText(refined);
-      if (onRefinedTranscription) {
-        onRefinedTranscription(refined);
-      }
-    } catch (err) {
-      console.error('Failed to refine transcript:', err);
-      setError('Failed to refine transcript. Please check your API keys and try again.');
-    } finally {
-      setIsRefining(false);
-    }
-  }, [finalTranscript, isRefining, onRefinedTranscription]);
 
   const displayError = error || speechError;
 
@@ -189,22 +197,140 @@ export default function WebSpeechRecorder({
         )}
       </div>
 
+      {/* Medical Validation Controls and Confidence Indicators */}
+      {mounted && (
+        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-medium text-navy-700">Medical Validation</h4>
+            <button
+              onClick={toggleValidation}
+              className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                validationEnabled 
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                  : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+              }`}
+            >
+              {validationEnabled ? 'Enabled' : 'Disabled'}
+            </button>
+          </div>
+          
+          {/* Real-time Quality Indicators */}
+          {transcript.text && (
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              {/* Confidence Score */}
+              <div className="flex items-center space-x-2">
+                <span className="text-navy-600">Confidence:</span>
+                <div className={`flex items-center space-x-1 ${
+                  confidence >= 0.8 ? 'text-green-600' :
+                  confidence >= 0.6 ? 'text-yellow-600' : 'text-red-600'
+                }`}>
+                  {confidence >= 0.8 ? <CheckCircle className="w-3 h-3" /> :
+                   confidence >= 0.6 ? <AlertTriangle className="w-3 h-3" /> :
+                   <AlertCircle className="w-3 h-3" />}
+                  <span>{Math.round(confidence * 100)}%</span>
+                </div>
+              </div>
+              
+              {/* Quality Assessment */}
+              <div className="flex items-center space-x-2">
+                <span className="text-navy-600">Quality:</span>
+                {(() => {
+                  const quality = getQualityAssessment();
+                  return (
+                    <div className={`flex items-center space-x-1 ${
+                      quality.overall === 'excellent' || quality.overall === 'good' ? 'text-green-600' :
+                      quality.overall === 'fair' ? 'text-yellow-600' : 'text-red-600'
+                    }`}>
+                      <span className="capitalize">{quality.overall}</span>
+                      {quality.issues > 0 && <span>({quality.issues} issues)</span>}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* Medical Corrections Display */}
+          {validationEnabled && transcript.validation && transcript.validation.corrections.length > 0 && (
+            <div className="mt-3 p-2 bg-blue-50 rounded text-xs">
+              <div className="font-medium text-blue-800 mb-1">Medical Corrections Applied:</div>
+              {transcript.validation.corrections.map((correction, idx) => (
+                <div key={idx} className="text-blue-700">
+                  "{correction.original}" → "{correction.corrected}"
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Validation Warnings */}
+          {validationEnabled && transcript.validation && transcript.validation.warnings.length > 0 && (
+            <div className="mt-2 p-2 bg-yellow-50 rounded text-xs">
+              <div className="font-medium text-yellow-800 mb-1">Warnings:</div>
+              {transcript.validation.warnings.map((warning, idx) => (
+                <div key={idx} className={`${
+                  warning.severity === 'high' ? 'text-red-700' : 
+                  warning.severity === 'medium' ? 'text-yellow-700' : 'text-gray-700'
+                } flex items-center space-x-1`}>
+                  {warning.severity === 'high' ? <AlertCircle className="w-3 h-3" /> :
+                   warning.severity === 'medium' ? <AlertTriangle className="w-3 h-3" /> :
+                   <AlertCircle className="w-3 h-3" />}
+                  <span>{warning.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Live Transcript */}
       <div className="space-y-4">
         <div className="bg-navy-50 rounded-lg p-4 min-h-[100px]">
           <h4 className="text-sm font-medium text-navy-700 mb-2">Live Transcription:</h4>
-          <div className="text-sm text-navy-800">
-            {finalTranscript && (
-              <span className="block mb-1">{finalTranscript}</span>
-            )}
-            {mounted && isListening && transcript.interim && (
-              <span className="text-navy-500 italic">{transcript.interim}</span>
-            )}
-            {!finalTranscript && (!mounted || !transcript.interim) && (
-              <span className="text-navy-400">Your transcription will appear here...</span>
+          <div className="text-sm text-navy-800 overflow-y-auto">
+            {mounted && isListening ? (
+              /* During recording: show complete current transcription */
+              <div>
+                {transcript.text ? (
+                  <div>
+                    <span className="block text-navy-900">{transcript.text}</span>
+                    {!transcript.isFinal && (
+                      <span className="text-navy-500 italic text-xs ml-2">(speaking...)</span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-navy-500 italic">Listening...</span>
+                )}
+              </div>
+            ) : (
+              /* When not recording: show final complete text */
+              <div>
+                {speechFinalTranscript ? (
+                  <div>
+                    <div className="text-xs text-navy-500 mb-1">Final Transcription:</div>
+                    <span className="block text-navy-900 whitespace-pre-wrap">{speechFinalTranscript}</span>
+                  </div>
+                ) : transcript.text ? (
+                  <div>
+                    <div className="text-xs text-navy-500 mb-1">Last Recording:</div>
+                    <span className="block text-navy-900 whitespace-pre-wrap">{transcript.text}</span>
+                  </div>
+                ) : (
+                  <span className="text-navy-400">Your transcription will appear here...</span>
+                )}
+              </div>
             )}
           </div>
         </div>
+        
+        {/* Final Transcript Display - shows complete accumulated text */}
+        {speechFinalTranscript && (
+          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+            <h4 className="text-sm font-medium text-green-700 mb-2">Final:</h4>
+            <div className="text-sm text-green-800 whitespace-pre-wrap overflow-y-auto">
+              {speechFinalTranscript}
+            </div>
+          </div>
+        )}
 
         {/* Report Generation Mode Toggle */}
         <div className="flex items-center justify-between pt-4 border-t border-navy-200">
@@ -243,15 +369,15 @@ export default function WebSpeechRecorder({
         {/* AI Refinement */}
         <div className="flex items-center justify-between pt-4">
           <div className="text-sm">
-            {!finalTranscript && (
+            {!speechFinalTranscript && (
               <p className="text-navy-500 text-xs mt-1">Record audio to enable refinement</p>
             )}
           </div>
           
-          {finalTranscript && (
+          {speechFinalTranscript && (
             <button
               onClick={handleRefineTranscript}
-              disabled={!mounted || isRefining || !finalTranscript || isListening}
+              disabled={!mounted || isRefining || !speechFinalTranscript || isListening}
               className="medical-button-success flex items-center space-x-2 disabled:opacity-50"
             >
               {isRefining ? (

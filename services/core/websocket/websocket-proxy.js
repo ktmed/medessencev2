@@ -7,6 +7,7 @@ const WebSocket = require('ws');
 const cors = require('cors');
 const WebMStreamConverter = require('../transcription/webm-stream-converter');
 const VADProcessor = require('../transcription/vad-processor');
+const MedicalValidator = require('../transcription/medical-validator');
 const { ReportOrchestrator } = require('../llm/report-orchestrator');
 const MultiLLMService = require('../llm/multi-llm-service');
 
@@ -18,6 +19,9 @@ const multiLLMService = new MultiLLMService();
 
 // Initialize Report Orchestrator with LLM service
 const reportOrchestrator = new ReportOrchestrator(multiLLMService);
+
+// Initialize Medical Validator
+const medicalValidator = new MedicalValidator();
 
 /**
  * Fix source spans by recalculating them against the actual content text
@@ -644,6 +648,8 @@ function extractRecommendations(text) {
 
 // Function to generate patient-friendly summary
 function generatePatientFriendlySummary(reportText, language = 'de') {
+  console.log('🚨 CRITICAL DEBUG: generatePatientFriendlySummary called with language:', language);
+  
   const summaryTemplates = {
     de: {
       title: 'Zusammenfassung für Patienten',
@@ -671,10 +677,30 @@ function generatePatientFriendlySummary(reportText, language = 'de') {
         'Bu sizin için ne anlama geliyor?': 'İnceleme, doktorunuzun sizinle görüşeceği bazı bulgular gösteriyor. Bu sonuçları semptomlarınız ve tıbbi geçmişiniz bağlamında değerlendirmek önemlidir.',
         'Sonraki adımlar': 'Lütfen bu sonuçları tedavi eden doktorunuzla görüşün. Size bulguların sağlığınız için ne anlama geldiğini ve başka inceleme veya tedavilerin gerekli olup olmadığını açıklayacaktır.'
       }
+    },
+    ar: {
+      title: 'ملخص للمريض',
+      sections: {
+        'ما الذي تم فحصه؟': 'تم إجراء فحص تصويري للتحقيق في أعراضك بشكل أكثر تفصيلاً.',
+        'ماذا وُجد؟': simplifyFindings(reportText, 'ar'),
+        'ماذا يعني هذا بالنسبة لك؟': 'يُظهر الفحص بعض النتائج التي سيناقشها طبيبك معك. من المهم النظر في هذه النتائج في سياق أعراضك وتاريخك الطبي.',
+        'الخطوات التالية': 'يُرجى مناقشة هذه النتائج مع طبيبك المعالج. سيشرح لك ما تعنيه النتائج لصحتك وما إذا كانت هناك حاجة لمزيد من الفحوصات أو العلاجات.'
+      }
+    },
+    uk: {
+      title: 'Резюме для пацієнта',
+      sections: {
+        'Що було досліджено?': 'Було проведено візуалізаційне обстеження для більш детального дослідження ваших симптомів.',
+        'Що було виявлено?': simplifyFindings(reportText, 'uk'),
+        'Що це означає для вас?': 'Обстеження показує деякі результати, які ваш лікар обговорить з вами. Важливо розглядати ці результати в контексті ваших симптомів та медичної історії.',
+        'Наступні кроки': 'Будь ласка, обговоріть ці результати з вашим лікуючим лікарем. Він пояснить, що означають ці знахідки для вашого здоров\'я і чи потрібні додаткові обстеження або лікування.'
+      }
     }
   };
   
-  return summaryTemplates[language] || summaryTemplates.en;
+  const result = summaryTemplates[language] || summaryTemplates.en;
+  console.log('DEBUG: Returning template for language:', language, 'Found template?', !!summaryTemplates[language]);
+  return result;
 }
 
 // Function to simplify medical findings for patients
@@ -713,6 +739,22 @@ function simplifyFindings(text, language = 'de') {
       discIssues: 'Bazı diskler fıtıklaşma veya taşma gösteriyor. ',
       spondylolisthesis: 'Bir omur diğerine göre kaymış durumda. ',
       conclusion: 'Bu değişiklikler şikayetlerinize neden olabilir. Doktorunuz sizinle en iyi tedavi seçeneklerini görüşecektir.'
+    },
+    ar: {
+      intro: 'يُظهر فحص عمودك الفقري عدة تغييرات. ',
+      highGradeStenosis: 'تم اكتشاف تضييق واضح في قناة العمود الفقري، خاصة في الجزء السفلي من العمود القطني. ',
+      stenosis: 'تم اكتشاف تضييق في قناة العمود الفقري. ',
+      discIssues: 'تُظهر بعض الأقراص انتفاخاً أو فتقاً. ',
+      spondylolisthesis: 'لقد انزلقت إحدى الفقرات مقارنة بالأخرى. ',
+      conclusion: 'قد تكون هذه التغييرات هي سبب أعراضك. سيناقش طبيبك معك أفضل خيارات العلاج.'
+    },
+    uk: {
+      intro: 'Обстеження вашого хребта показує кілька змін. ',
+      highGradeStenosis: 'Було виявлено значне звуження хребетного каналу, особливо в нижній частині поперекового відділу. ',
+      stenosis: 'Було виявлено звуження хребетного каналу. ',
+      discIssues: 'Деякі міжхребтові диски показують випинання або грижі. ',
+      spondylolisthesis: 'Один хребець змістився відносно іншого. ',
+      conclusion: 'Ці зміни можуть бути причиною ваших симптомів. Ваш лікар обговорить з вами найкращі варіанти лікування.'
     }
   };
   
@@ -981,13 +1023,44 @@ io.on('connection', (socket) => {
               quality_score: transcriptionData.quality_score,
               segments_count: transcriptionData.segments?.length || 0
             });
+            
+            // Apply medical validation to transcription
+            let validatedText = transcriptionData.text || '';
+            let validationResult = null;
+            let finalConfidence = transcriptionData.confidence || 0;
+            
+            try {
+              validationResult = medicalValidator.validateTranscription(
+                validatedText,
+                finalConfidence,
+                false // not final yet
+              );
+              
+              // Use corrected text and updated confidence
+              validatedText = validationResult.correctedText;
+              finalConfidence = validationResult.confidence;
+              
+              console.log('Medical validation applied:', {
+                corrections: validationResult.corrections.length,
+                warnings: validationResult.warnings.length,
+                qualityScore: validationResult.qualityScore,
+                originalConfidence: transcriptionData.confidence,
+                updatedConfidence: finalConfidence
+              });
+              
+            } catch (validationError) {
+              console.error('Medical validation error:', validationError);
+              // Continue without validation if it fails
+            }
+            
             const transcriptionResult = {
               id: `trans-${Date.now()}`,
-              text: transcriptionData.text || '',
+              text: validatedText,
               isFinal: false, // Will be set to true when session ends
-              confidence: transcriptionData.confidence || 0,
+              confidence: finalConfidence,
               language: transcriptionData.language || 'de',
-              timestamp: new Date()
+              timestamp: new Date(),
+              validation: validationResult
             };
             
             // Store in history for report generation - prevent duplicates
@@ -1031,10 +1104,9 @@ io.on('connection', (socket) => {
                 }
               });
               
-              const combinedText = socket.transcriptionHistory
-                .map(t => t.text)
-                .join(' ')
-                .trim();
+              // Use only the most recent transcription to avoid multi-document concatenation
+              const lastTranscription = socket.transcriptionHistory[socket.transcriptionHistory.length - 1];
+              const combinedText = lastTranscription ? lastTranscription.text.trim() : '';
               
               if (combinedText) {
                 const finalTranscription = {
@@ -1242,6 +1314,33 @@ io.on('connection', (socket) => {
     }
   });
   
+  // Handle individual transcription data from Web Speech API
+  socket.on('transcription_data', (transcription) => {
+    console.log('Received transcription data:', { 
+      id: transcription.id, 
+      isFinal: transcription.isFinal, 
+      textLength: transcription.text?.length || 0,
+      textPreview: transcription.text?.substring(0, 100) + '...'
+    });
+    
+    if (!socket.transcriptionHistory) {
+      socket.transcriptionHistory = [];
+    }
+    
+    // Only store final transcriptions to avoid duplicates
+    if (transcription.isFinal && transcription.text && transcription.text.trim()) {
+      // Check if this transcription is significantly different from the last one
+      const lastTranscription = socket.transcriptionHistory[socket.transcriptionHistory.length - 1];
+      
+      if (!lastTranscription || !isDuplicateTranscription(transcription.text, lastTranscription.text)) {
+        socket.transcriptionHistory.push(transcription);
+        console.log('Stored transcription in history. Total:', socket.transcriptionHistory.length);
+      } else {
+        console.log('Skipping duplicate transcription');
+      }
+    }
+  });
+  
   // Handle transcription stop
   socket.on('stop_transcription', async () => {
     console.log('Stopping transcription');
@@ -1303,17 +1402,32 @@ io.on('connection', (socket) => {
       let combinedText = '';
       
       // Check if transcription text was provided directly (for pasted content)
+      console.log('DEBUG: data.transcriptionText exists?', !!data.transcriptionText);
+      console.log('DEBUG: data object keys:', Object.keys(data));
+      console.log('DEBUG: full data object:', JSON.stringify(data, null, 2));
+      
       if (data.transcriptionText) {
         combinedText = data.transcriptionText;
         console.log('Using provided transcription text, length:', combinedText.length);
+        console.log('First 200 chars of provided text:', combinedText.substring(0, 200));
       } else {
         // Get all transcriptions for this session
         const transcriptions = socket.transcriptionHistory || [];
         console.log('Report generation - transcription history length:', transcriptions.length);
-        combinedText = transcriptions
-          .filter(t => t.text && t.text.trim())
-          .map(t => t.text)
-          .join(' ');
+        console.log('Transcription history contents:', transcriptions.map(t => ({ text: t.text?.substring(0, 100) + '...', isFinal: t.isFinal })));
+        
+        // Use only the most recent transcription to avoid multi-document contamination
+        const validTranscriptions = transcriptions.filter(t => t.text && t.text.trim());
+        console.log('Valid transcriptions found:', validTranscriptions.length);
+        
+        if (validTranscriptions.length > 0) {
+          combinedText = validTranscriptions[validTranscriptions.length - 1].text;
+          console.log('Using most recent transcription, length:', combinedText.length);
+          console.log('First 200 chars of transcription:', combinedText.substring(0, 200));
+        } else {
+          console.log('No valid transcriptions found - will show no findings available');
+          combinedText = '';
+        }
       }
       
       console.log('Combined transcription text length:', combinedText.length);
@@ -1478,7 +1592,11 @@ io.on('connection', (socket) => {
       const technicalDetails = formatTechnicalDetails(sections, data.language);
       if (technicalDetails && technicalDetails !== 'Standard examination performed') {
         sectionsList.push({
-          title: data.language === 'de' ? 'Technik' : 'Technical Details',
+          title: data.language === 'de' ? 'Technik' : 
+                 data.language === 'ar' ? 'تقنية' :
+                 data.language === 'uk' ? 'Техніка' :
+                 data.language === 'tr' ? 'Teknik' :
+                 'Technical Details',
           content: technicalDetails,
           order: 0
         });
@@ -1487,7 +1605,11 @@ io.on('connection', (socket) => {
       // Add main findings if present
       if (mainFindings) {
         sectionsList.push({
-          title: data.language === 'de' ? 'Befund' : 'Findings',
+          title: data.language === 'de' ? 'Befund' : 
+                 data.language === 'ar' ? 'النتائج' :
+                 data.language === 'uk' ? 'Результати' :
+                 data.language === 'tr' ? 'Bulgular' :
+                 'Findings',
           content: mainFindings,
           order: 1
         });
@@ -1496,7 +1618,11 @@ io.on('connection', (socket) => {
         console.log('DEBUG: Using fallback findings from structuredReport.findings');
         const cleanedFindings = cleanMedicalFindings(structuredReport.findings, data.transcription || '');
         sectionsList.push({
-          title: data.language === 'de' ? 'Befund' : 'Findings',
+          title: data.language === 'de' ? 'Befund' : 
+                 data.language === 'ar' ? 'النتائج' :
+                 data.language === 'uk' ? 'Результати' :
+                 data.language === 'tr' ? 'Bulgular' :
+                 'Findings',
           content: formatStructuredFindings(cleanedFindings),
           order: 1
         });
@@ -1515,14 +1641,22 @@ io.on('connection', (socket) => {
       // Add impression
       const impression = formatAssessment(sections['impression'] || sections['Beurteilung'] || sections['Impression'] || structuredReport.impression || 'Siehe Befund.');
       sectionsList.push({
-        title: data.language === 'de' ? 'Beurteilung' : 'Impression',
+        title: data.language === 'de' ? 'Beurteilung' : 
+               data.language === 'ar' ? 'الانطباع' :
+               data.language === 'uk' ? 'Врاження' :
+               data.language === 'tr' ? 'İzlenim' :
+               'Impression',
         content: impression,
         order: order++
       });
       
       // Add recommendations
       sectionsList.push({
-        title: data.language === 'de' ? 'Empfehlung' : 'Recommendations',
+        title: data.language === 'de' ? 'Empfehlung' : 
+               data.language === 'ar' ? 'التوصيات' :
+               data.language === 'uk' ? 'Рекомендації' :
+               data.language === 'tr' ? 'Öneriler' :
+               'Recommendations',
         content: recommendations,
         order: order++
       });
@@ -1690,6 +1824,7 @@ io.on('connection', (socket) => {
   // Handle summary generation request
   socket.on('generate_summary', async (data) => {
     console.log('Summary generation requested:', data);
+    console.log('DEBUG: Summary language requested:', data.language);
     
     try {
       // Get the report content from the stored data
@@ -1700,8 +1835,10 @@ io.on('connection', (socket) => {
       
       // Try AI-powered summary generation first
       try {
-        console.log('Attempting AI-powered summary generation...');
+        console.log('Attempting AI-powered summary generation with language:', data.language);
         const llmSummary = await multiLLMService.generatePatientSummary(reportText, data.language || 'de');
+        console.log('DEBUG: AI summary result keys:', Object.keys(llmSummary || {}));
+        console.log('DEBUG: AI summary result structure check:', llmSummary);
         
         aiSummary = {
           examination: llmSummary.examination || '',
@@ -1756,7 +1893,9 @@ io.on('connection', (socket) => {
         console.log('Using fallback summary generation');
         
         // Generate patient-friendly summary
+        console.log('DEBUG: About to call generatePatientFriendlySummary with language:', data.language);
         const summary = generatePatientFriendlySummary(reportText, data.language || 'de');
+        console.log('DEBUG: Summary returned title:', summary.title);
         
         console.log('Summary generated successfully');
         
@@ -1764,6 +1903,8 @@ io.on('connection', (socket) => {
         // Get the correct section key based on language
         const sectionKey = data.language === 'tr' ? 'Ne bulundu?' : 
                           data.language === 'de' ? 'Was wurde gefunden?' : 
+                          data.language === 'ar' ? 'ماذا وُجد؟' :
+                          data.language === 'uk' ? 'Що було виявлено?' :
                           'What was found?';
         
         const formattedSummary = {

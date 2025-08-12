@@ -52,10 +52,11 @@ export default function TranscriptionDisplay({
   };
 
   const copyToClipboard = async () => {
-    const text = transcriptions
-      .filter(t => t.isFinal)
-      .map(t => t.text)
-      .join(' ');
+    // Use only the most recent transcription to avoid multi-document contamination
+    const finalTranscriptions = transcriptions.filter(t => t.isFinal);
+    const text = finalTranscriptions.length > 0 
+      ? finalTranscriptions[finalTranscriptions.length - 1].text 
+      : '';
     
     try {
       await navigator.clipboard.writeText(text);
@@ -70,11 +71,11 @@ export default function TranscriptionDisplay({
     if (onExport) {
       onExport(transcriptions);
     } else {
-      // Default export as text file
-      const text = transcriptions
-        .filter(t => t.isFinal)
-        .map(t => `[${formatTimestamp(t.timestamp)}] ${t.text}`)
-        .join('\n');
+      // Default export as text file - use only the most recent transcription
+      const finalTranscriptions = transcriptions.filter(t => t.isFinal);
+      const text = finalTranscriptions.length > 0 
+        ? `[${formatTimestamp(finalTranscriptions[finalTranscriptions.length - 1].timestamp)}] ${finalTranscriptions[finalTranscriptions.length - 1].text}`
+        : '';
       
       const blob = new Blob([text], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
@@ -93,8 +94,11 @@ export default function TranscriptionDisplay({
   const totalWords = finalTranscriptions.reduce((acc, t) => acc + t.text.split(' ').length, 0);
 
   const startEdit = () => {
-    const combinedText = finalTranscriptions.map(t => t.text).join(' ');
-    setEditedText(combinedText);
+    // Use only the most recent transcription to avoid multi-document contamination
+    const mostRecentText = finalTranscriptions.length > 0 
+      ? finalTranscriptions[finalTranscriptions.length - 1].text 
+      : '';
+    setEditedText(mostRecentText);
     setIsEditing(true);
   };
 
@@ -329,7 +333,10 @@ export default function TranscriptionDisplay({
           // Flowing text mode
           <div className="p-4 bg-navy-50 rounded-lg">
             <p className="transcription-text text-navy-900 leading-relaxed">
-              {finalTranscriptions.map(t => t.text).join(' ')}
+              {/* Show only the most recent transcription to avoid multi-document concatenation */}
+              {finalTranscriptions.length > 0 
+                ? finalTranscriptions[finalTranscriptions.length - 1].text
+                : ''}
               {currentTranscription && (
                 <span className="text-orange-600 animate-pulse-soft">
                   {' ' + currentTranscription.text}

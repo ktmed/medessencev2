@@ -1,0 +1,141 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "language": "de",
+    "type": "enhanced_medical_dictionary",
+    "created": "2025-08-11",
+    "description": "Enhanced German medical dictionary with phonetic corrections and validation"
+  },
+  "phonetic_corrections": {
+    "mamma": ["mama", "mamer", "mamme"],
+    "mammographie": ["mammografie", "mamografie", "mamographie"],
+    "sonographie": ["sonografie", "sono graphie", "sono grafie"],
+    "ultraschall": ["ultra schall", "ultraschall"],
+    "befund": ["be fund", "befunt"],
+    "beurteilung": ["be urteilung", "beurtheilung"],
+    "empfehlung": ["em pfehlung", "empfelung"],
+    "ganglion": ["ganglien", "ganglium"],
+    "zyste": ["ciste", "ziste"],
+    "karzinom": ["karzinom", "kartzinom"],
+    "metastase": ["meta stase", "metastaze"],
+    "lymphknoten": ["lymph knoten", "limfknoten"],
+    "patologisch": ["pathologisch"],
+    "auffällig": ["auf fällig", "auffaellig"],
+    "unauffällig": ["un auffällig", "unauffaellig"],
+    "kontrastmittel": ["kontrast mittel", "kontrastmittel"],
+    "gadolinium": ["gado linium", "gadolenium"],
+    "technik": ["tek nik", "technic"],
+    "sequenz": ["se quenz", "sequentz"],
+    "rekonstruktion": ["re konstruktion", "rekunstruktion"]
+  },
+  "medical_terms": {
+    "radiology": {
+      "imaging": [
+        "MRT", "mrt", "Magnetresonanztomographie", "magnetresonanztomographie",
+        "CT", "ct", "Computertomographie", "computertomographie",
+        "Röntgen", "röntgen", "radiographie", "Radiographie",
+        "Ultraschall", "ultraschall", "Sonographie", "sonographie",
+        "Mammographie", "mammographie", "mammografie"
+      ],
+      "anatomy": [
+        "Mamma", "mamma", "Brustdrüse", "brustdrüse",
+        "Axilla", "axilla", "Achselhöhle", "achselhöhle",
+        "Thorax", "thorax", "Brustkorb", "brustkorb",
+        "Wirbelsäule", "wirbelsäule", "Columna vertebralis",
+        "Abdomen", "abdomen", "Bauchraum", "bauchraum",
+        "Pelvis", "pelvis", "Becken", "becken"
+      ],
+      "pathology": [
+        "Befund", "befund", "Diagnose", "diagnose",
+        "Karzinom", "karzinom", "Tumor", "tumor",
+        "Metastase", "metastase", "Metastasen", "metastasen",
+        "Ganglion", "ganglion", "Zyste", "zyste", "zystisch", "zystischer", "zystische",
+        "Fibroadenom", "fibroadenom", "Lipom", "lipom",
+        "Hämatom", "hämatom", "Ödem", "ödem",
+        "Mikrokalk", "mikrokalk", "Mikrokalifikation", "mikrokalifikation",
+        "Mastopathie", "mastopathie", "mastopathisch", "mastopathische",
+        "Malignität", "malignität", "maligne", "benigne",
+        "Lymphknoten", "lymphknoten", "axillär", "axillen"
+      ],
+      "descriptors": [
+        "auffällig", "unauffällig", "suspekt", "benigne",
+        "maligne", "pathologisch", "physiologisch",
+        "homogen", "inhomogen", "echoarm", "echoreich",
+        "hyperintens", "hypointens", "isointens",
+        "kontrastmittelaufnehmend", "avaskular", "vaskularisiert"
+      ]
+    },
+    "measurements": [
+      "mm", "cm", "ml", "größe", "durchmesser", "ausdehnung",
+      "volumen", "länge", "breite", "höhe", "tiefe"
+    ],
+    "directions": [
+      "rechts", "links", "bilateral", "unilateral",
+      "kranial", "kaudal", "ventral", "dorsal",
+      "medial", "lateral", "anterior", "posterior",
+      "superior", "inferior", "proximal", "distal"
+    ],
+    "common_phrases": [
+      "kein Nachweis", "keine Darstellung", "nicht darstellbar",
+      "im Vergleich zur Voruntersuchung", "sonst unauffällig",
+      "weitere Kontrolle empfohlen", "klinische Korrelation",
+      "ärztliche Beurteilung", "radiologisch unauffällig"
+    ]
+  },
+  "hallucination_patterns": [
+    {
+      "pattern": "\\b[a-zA-ZäöüÄÖÜß]{20,}\\b",
+      "description": "Extremely long words (likely hallucinated)",
+      "severity": "high",
+      "exceptions": ["magnetresonanztomographie", "computertomographie", "kontrastmittelaufnehmend"]
+    },
+    {
+      "pattern": "\\b\\w*[xyz]{3,}\\w*\\b",
+      "description": "Words with many repeated uncommon letters",
+      "severity": "high",
+      "exceptions": ["zystisch", "zystischer", "zystische"]
+    },
+    {
+      "pattern": "\\b[bcdfghjklmnpqrstvwxyz]{6,}\\b",
+      "description": "Words with too many consecutive consonants",
+      "severity": "medium",
+      "exceptions": ["lymphknoten", "brustdrüse"]
+    },
+    {
+      "pattern": "\\b[aeiouäöü]{5,}\\b",
+      "description": "Words with too many consecutive vowels", 
+      "severity": "medium",
+      "exceptions": []
+    },
+    {
+      "pattern": "\\b\\w*[qx]\\w*[qx]\\w*\\b",
+      "description": "Words with multiple rare letters",
+      "severity": "high",
+      "exceptions": []
+    }
+  ],
+  "confidence_thresholds": {
+    "minimum_for_medical_terms": 0.8,
+    "minimum_for_measurements": 0.9,
+    "minimum_for_final_transcription": 0.7,
+    "flag_for_review_below": 0.6
+  },
+  "contextual_validation": {
+    "mammography_context": [
+      "BI-RADS", "birads", "kategorie", "dichte", "parenchym",
+      "mikrokalk", "architekturstörung", "asymmetrie", "raumforderung"
+    ],
+    "ultrasound_context": [
+      "schallkopf", "doppler", "farbdoppler", "echogenität",
+      "schallschatten", "schallverstärkung", "anisotropie"
+    ],
+    "mrt_context": [
+      "t1", "t2", "flair", "dwi", "adc", "kontrastmittel",
+      "gadolinium", "signal", "intensität", "suppression"
+    ],
+    "ct_context": [
+      "hounsfield", "fensterung", "kontrastmittel", "jod",
+      "dichte", "verschattung", "aufhellung", "verkalkung"
+    ]
+  }
+}

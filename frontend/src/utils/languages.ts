@@ -7,6 +7,8 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
   { code: 'es', name: 'Español', flag: '🇪🇸' },
   { code: 'it', name: 'Italiano', flag: '🇮🇹' },
   { code: 'tr', name: 'Türkçe', flag: '🇹🇷' },
+  { code: 'ar', name: 'العربية', flag: '🇸🇦' },
+  { code: 'uk', name: 'Українська', flag: '🇺🇦' },
 ];
 
 export const getLanguageName = (code: Language): string => {
@@ -32,6 +34,8 @@ export const MEDICAL_TERMS = {
     es: 'Hallazgos',
     it: 'Risultati',
     tr: 'Bulgular',
+    ar: 'النتائج',
+    uk: 'Результати',
   },
   impression: {
     de: 'Beurteilung',
@@ -40,6 +44,8 @@ export const MEDICAL_TERMS = {
     es: 'Impresión',
     it: 'Impressione',
     tr: 'İzlenim',
+    ar: 'الانطباع',
+    uk: 'Враження',
   },
   recommendations: {
     de: 'Empfehlungen',
@@ -48,6 +54,8 @@ export const MEDICAL_TERMS = {
     es: 'Recomendaciones',
     it: 'Raccomandazioni',
     tr: 'Öneriler',
+    ar: 'التوصيات',
+    uk: 'Рекомендації',
   },
   summary: {
     de: 'Zusammenfassung',
@@ -56,6 +64,8 @@ export const MEDICAL_TERMS = {
     es: 'Resumen',
     it: 'Riassunto',
     tr: 'Özet',
+    ar: 'ملخص',
+    uk: 'Підсумок',
   },
   recording: {
     de: 'Aufnahme',
@@ -64,6 +74,8 @@ export const MEDICAL_TERMS = {
     es: 'Grabación',
     it: 'Registrazione',
     tr: 'Kayıt',
+    ar: 'تسجيل',
+    uk: 'Запис',
   },
   transcription: {
     de: 'Transkription',
@@ -72,6 +84,8 @@ export const MEDICAL_TERMS = {
     es: 'Transcripción',
     it: 'Trascrizione',
     tr: 'Transkripsiyon',
+    ar: 'نسخ',
+    uk: 'Транскрипція',
   },
   dashboard: {
     de: 'Medizinisches Dashboard',
@@ -80,6 +94,8 @@ export const MEDICAL_TERMS = {
     es: 'Panel Médico',
     it: 'Dashboard Medico',
     tr: 'Tıbbi Kontrol Paneli',
+    ar: 'لوحة التحكم الطبية',
+    uk: 'Медична панель',
   },
   audioRecording: {
     de: 'Audio-Aufnahme',
@@ -88,6 +104,8 @@ export const MEDICAL_TERMS = {
     es: 'Grabación de Audio',
     it: 'Registrazione Audio',
     tr: 'Ses Kaydı',
+    ar: 'تسجيل صوتي',
+    uk: 'Аудіозапис',
   },
   liveTranscription: {
     de: 'Live-Transkription',
@@ -96,6 +114,18 @@ export const MEDICAL_TERMS = {
     es: 'Transcripción en Vivo',
     it: 'Trascrizione dal Vivo',
     tr: 'Canlı Transkripsiyon',
+    ar: 'نسخ مباشر',
+    uk: 'Пряма транскрипція',
+  },
+  keyFindings: {
+    de: 'Hauptbefunde',
+    en: 'Key Findings',
+    fr: 'Résultats Clés',
+    es: 'Hallazgos Clave',
+    it: 'Risultati Chiave',
+    tr: 'Temel Bulgular',
+    ar: 'النتائج الرئيسية',
+    uk: 'Основні результати',
   },
 };
 

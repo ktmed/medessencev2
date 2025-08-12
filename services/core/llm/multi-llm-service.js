@@ -845,6 +845,24 @@ WICHTIG: Antworten Sie NUR mit dem JSON-Objekt, KEINE zusätzlichen Erklärungen
 3. Cosa significa questo per il paziente?
 4. Prossimi passi raccomandati`,
         format: 'Formato: JSON con chiavi: examination, findings, meaning, nextSteps'
+      },
+      ar: {
+        instruction: 'إنشاء ملخص للمريض حول التقرير الإشعاعي.',
+        sections: `الرجاء إنشاء ملخص بسيط ومفهوم للمرضى يتضمن:
+1. ما الذي تم فحصه؟
+2. ماذا تم العثور عليه؟ (بمصطلحات بسيطة)
+3. ماذا يعني هذا للمريض؟
+4. الخطوات التالية الموصى بها`,
+        format: 'تنسيق: JSON مع مفاتيح: examination, findings, meaning, nextSteps'
+      },
+      uk: {
+        instruction: 'Створіть дружній для пацієнта підсумок радіологічного звіту.',
+        sections: `Будь ласка, створіть простий, зрозумілий підсумок для пацієнтів з:
+1. Що було досліджено?
+2. Що було знайдено? (простими термінами)
+3. Що це означає для пацієнта?
+4. Рекомендовані наступні кроки`,
+        format: 'Формат: JSON з ключами: examination, findings, meaning, nextSteps'
       }
     };
     
@@ -859,7 +877,7 @@ ${selectedPrompt.sections}
 
 ${selectedPrompt.format}
 
-IMPORTANT: Generate the response in ${language === 'de' ? 'German' : language === 'en' ? 'English' : language === 'tr' ? 'Turkish' : language === 'es' ? 'Spanish' : language === 'fr' ? 'French' : language === 'it' ? 'Italian' : 'the requested language'}.`;
+IMPORTANT: Generate the response in ${language === 'de' ? 'German' : language === 'en' ? 'English' : language === 'tr' ? 'Turkish' : language === 'es' ? 'Spanish' : language === 'fr' ? 'French' : language === 'it' ? 'Italian' : language === 'ar' ? 'Arabic' : language === 'uk' ? 'Ukrainian' : 'the requested language'}.`;
   }
   
   /**
