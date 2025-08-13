@@ -2,35 +2,30 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const healthData = {
-      status: 'healthy',
+    return NextResponse.json({
+      status: 'healthy-updated',
       service: 'medessence-frontend',
       timestamp: new Date().toISOString(),
-      version: '1.0.0',
+      version: '2.0.0',
       environment: process.env.NODE_ENV || 'development',
-      vercel: {
-        env: process.env.VERCEL_ENV,
-        region: process.env.VERCEL_REGION,
-        url: process.env.VERCEL_URL
+      deployment: {
+        commit: '328a04f',
+        vercelEnv: process.env.VERCEL_ENV
       },
-      aiProviders: {
-        hasClaudeKey: !!process.env.ANTHROPIC_API_KEY,
+      environmentCheck: {
+        // New environment variables
+        hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
         hasOpenAIKey: !!process.env.OPENAI_API_KEY,
         hasGoogleKey: !!process.env.GOOGLE_API_KEY,
-        providerPriority: process.env.AI_PROVIDER_PRIORITY || 'claude,gemini,openai',
-        claudeModel: process.env.CLAUDE_MODEL || 'not-set',
-        openaiModel: process.env.OPENAI_MODEL || 'not-set',
-        geminiModel: process.env.GEMINI_MODEL || 'not-set'
-      },
-      apis: {
-        generateReport: '/api/generate-report',
-        generateSummary: '/api/generate-summary', 
-        generateICD: '/api/generate-icd',
-        health: '/api/health'
+        aiProviderPriority: process.env.AI_PROVIDER_PRIORITY || 'not-set',
+        
+        // Old environment variables (should be false)
+        hasOldAnthropicKey: !!process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY,
+        hasOldOpenAIKey: !!process.env.NEXT_PUBLIC_OPENAI_API_KEY,
+        hasOldGoogleKey: !!process.env.NEXT_PUBLIC_GOOGLE_API_KEY,
+        oldProviderPriority: process.env.NEXT_PUBLIC_AI_PROVIDER_PRIORITY || 'not-set'
       }
-    };
-
-    return NextResponse.json(healthData);
+    });
   } catch (error) {
     return NextResponse.json(
       {
