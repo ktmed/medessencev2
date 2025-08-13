@@ -135,7 +135,7 @@ ${reportContent}
 Analyze systematically and return only the most probable and relevant ${codeSystem} codes:`
     };
 
-    return templates[language] || templates.en;
+    return templates[language as keyof typeof templates] || templates.en;
   }
 
   private async callClaude(prompt: string): Promise<string> {
