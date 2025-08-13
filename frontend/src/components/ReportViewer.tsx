@@ -257,17 +257,19 @@ ${formatContentValue(report.technicalDetails)}
   };
 
   return (
-    <div className={cn('medical-card', className)}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <FileText className="w-5 h-5 text-medical-600" />
-          <h3 className="text-lg font-semibold text-gray-900">
-            {getMedicalTerm('findings', language)} Report
-          </h3>
-          <span className="text-sm text-gray-500">
-            {getLanguageFlag(language)} {getLanguageName(language)}
-          </span>
-        </div>
+    <div className={className}>
+      {/* Main Medical Report Card */}
+      <div className="medical-card">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-2">
+            <FileText className="w-5 h-5 text-medical-600" />
+            <h3 className="text-lg font-semibold text-gray-900">
+              {getMedicalTerm('findings', language)} Report
+            </h3>
+            <span className="text-sm text-gray-500">
+              {getLanguageFlag(language)} {getLanguageName(language)}
+            </span>
+          </div>
 
         <div className="flex items-center space-x-2">
           {/* Status Indicator */}
@@ -565,16 +567,18 @@ ${formatContentValue(report.technicalDetails)}
             </div>
           </div>
         )}
-
-        {/* ICD-10-GM Predictions Section - Always render after main report as separate card */}
-        {currentReport && currentReport.icdPredictions && (
-          <div className="mt-6">
-            <ICDPredictionsComponent 
-              predictions={currentReport.icdPredictions}
-            />
-          </div>
-        )}
       </div>
+      {/* Close medical-card div */}
+      </div>
+
+      {/* ICD-10-GM Predictions Section - Completely separate card outside main report */}
+      {currentReport && currentReport.icdPredictions && (
+        <div className="mt-6">
+          <ICDPredictionsComponent 
+            predictions={currentReport.icdPredictions}
+          />
+        </div>
+      )}
     </div>
   );
 }
