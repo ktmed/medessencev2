@@ -7,7 +7,7 @@ export async function GET() {
       hasGoogleKey: !!process.env.GOOGLE_API_KEY,
       hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
       hasOpenAIKey: !!process.env.OPENAI_API_KEY,
-      geminiModel: process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp'
+      geminiModel: process.env.GEMINI_MODEL || 'gemini-1.5-pro'
     },
     tests: {} as any
   };
@@ -15,7 +15,7 @@ export async function GET() {
   // Test Gemini API call
   if (process.env.GOOGLE_API_KEY) {
     try {
-      const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp';
+      const model = process.env.GEMINI_MODEL || 'gemini-1.5-pro';
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GOOGLE_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

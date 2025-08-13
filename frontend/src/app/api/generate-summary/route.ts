@@ -238,7 +238,7 @@ Use medical terminology and precise formulations:`
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) throw new Error('Gemini API key not configured');
 
-    const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp';
+    const model = process.env.GEMINI_MODEL || 'gemini-1.5-pro';
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
