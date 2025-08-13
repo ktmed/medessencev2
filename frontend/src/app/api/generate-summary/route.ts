@@ -83,7 +83,7 @@ class ServerSummaryService {
         const aiResponse = await provider.handler(prompt);
         console.log(`✅ ${provider.name} succeeded for summary!`);
         
-        return this.parseSummaryResponse(aiResponse, language, provider.name, complexity);
+        return this.parseSummaryResponse(aiResponse, language, provider.name, complexity, reportContent);
       } catch (error) {
         console.error(`❌ ${provider.name} failed for summary:`, error instanceof Error ? error.message : 'Unknown error');
         continue;
@@ -496,7 +496,7 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
     return data.candidates[0].content.parts[0].text;
   }
 
-  private parseSummaryResponse(aiResponse: string, language: Language, provider: string, complexity: string = 'detailed'): PatientSummary {
+  private parseSummaryResponse(aiResponse: string, language: Language, provider: string, complexity: string = 'detailed', originalReportContent?: string): PatientSummary {
     console.log('🔍 Parsing summary response from', provider);
     console.log('📝 AI Response length:', aiResponse.length);
     console.log('📝 Response preview:', aiResponse.substring(0, 200) + '...');
@@ -627,14 +627,28 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
     console.log('- Recommendations extracted:', recommendations.length);
     console.log('- Summary text length:', finalSummary.length);
 
+    // If no structured findings found, try to extract from original report content
+    let finalKeyFindings = keyFindings;
+    let finalRecommendations = recommendations;
+    
+    if (keyFindings.length === 0 && originalReportContent) {
+      console.log('🔄 No key findings found in AI response, extracting from original report...');
+      finalKeyFindings = this.extractKeyFindingsFromReport(originalReportContent, language);
+    }
+    
+    if (recommendations.length === 0 && originalReportContent) {
+      console.log('🔄 No recommendations found in AI response, extracting from original report...');
+      finalRecommendations = this.extractRecommendationsFromReport(originalReportContent, language);
+    }
+
     return {
       id: `summary-${Date.now()}`,
       reportId: `report-${Date.now()}`,
       summary: finalSummary,
-      keyFindings: keyFindings.length > 0 ? keyFindings : [
+      keyFindings: finalKeyFindings.length > 0 ? finalKeyFindings : [
         language === 'de' ? 'Siehe detaillierte Zusammenfassung' : 'See detailed summary'
       ],
-      recommendations: recommendations.length > 0 ? recommendations : [
+      recommendations: finalRecommendations.length > 0 ? finalRecommendations : [
         language === 'de' ? 'Weitere ärztliche Betreuung empfohlen' : 'Further medical care recommended'
       ],
       language,
@@ -643,9 +657,62 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
       metadata: {
         aiProvider: provider,
         processingAgent: `summary-${provider}`,
-        confidence: keyFindings.length > 0 && recommendations.length > 0 ? 0.9 : 0.7
+        confidence: finalKeyFindings.length > 0 && finalRecommendations.length > 0 ? 0.9 : 0.7
       }
     };
+  }
+
+  private extractKeyFindingsFromReport(reportContent: string, language: Language): string[] {
+    const findings: string[] = [];
+    
+    // Split report into sentences and look for meaningful medical content
+    const sentences = reportContent.split(/[.!?]+/).filter(s => s.trim().length > 20);
+    
+    // Look for sentences that contain medical findings keywords
+    const findingKeywords = language === 'de' 
+      ? ['befund', 'zeigt', 'erkennbar', 'sichtbar', 'feststellbar', 'auffällig', 'normal', 'pathologisch', 'messwert', 'größe', 'durchmesser']
+      : ['finding', 'shows', 'visible', 'evident', 'notable', 'normal', 'abnormal', 'measurement', 'size', 'diameter', 'reveals'];
+    
+    for (const sentence of sentences.slice(0, 5)) { // Take first 5 meaningful sentences
+      const lowerSentence = sentence.toLowerCase().trim();
+      if (findingKeywords.some(keyword => lowerSentence.includes(keyword)) && lowerSentence.length > 30) {
+        findings.push(sentence.trim());
+        if (findings.length >= 3) break; // Limit to 3 findings
+      }
+    }
+    
+    return findings;
+  }
+
+  private extractRecommendationsFromReport(reportContent: string, language: Language): string[] {
+    const recommendations: string[] = [];
+    
+    // Split report into sentences and look for recommendation content
+    const sentences = reportContent.split(/[.!?]+/).filter(s => s.trim().length > 15);
+    
+    // Look for sentences that contain recommendation keywords
+    const recommendationKeywords = language === 'de'
+      ? ['empfehlung', 'empfohlen', 'sollte', 'ratsam', 'kontrolle', 'nachkontrolle', 'verlauf', 'follow-up', 'weiter']
+      : ['recommend', 'suggested', 'should', 'advisable', 'follow-up', 'monitor', 'continue', 'further', 'next'];
+    
+    for (const sentence of sentences) {
+      const lowerSentence = sentence.toLowerCase().trim();
+      if (recommendationKeywords.some(keyword => lowerSentence.includes(keyword)) && lowerSentence.length > 20) {
+        recommendations.push(sentence.trim());
+        if (recommendations.length >= 2) break; // Limit to 2 recommendations
+      }
+    }
+    
+    // If no specific recommendations found, provide generic ones
+    if (recommendations.length === 0) {
+      recommendations.push(
+        language === 'de' 
+          ? 'Weitere ärztliche Betreuung nach klinischer Einschätzung'
+          : 'Further medical care per clinical assessment'
+      );
+    }
+    
+    return recommendations;
   }
 
   private generateFallbackSummary(reportContent: string, language: Language): PatientSummary {
