@@ -8,7 +8,6 @@ import ReportViewer from '@/components/ReportViewer';
 import SummaryGenerator from '@/components/SummaryGenerator';
 import LanguageSelector, { CompactLanguageSelector } from '@/components/LanguageSelector';
 import { WebSocketClient } from '@/utils/websocket';
-import { multiLLMService } from '@/services/multiLLMService';
 import { apiService } from '@/services/apiService';
 import { 
   Language, 

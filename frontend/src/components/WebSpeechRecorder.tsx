@@ -3,7 +3,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Mic, MicOff, AlertCircle, Activity, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useEnhancedSpeechToText } from '@/hooks/useEnhancedSpeechToText';
-import { multiLLMService } from '@/services/multiLLMService';
 import { Language, TranscriptionData } from '@/types';
 import { getMedicalTerm } from '@/utils/languages';
 import { generateId } from '@/utils';
@@ -89,21 +88,11 @@ export default function WebSpeechRecorder({
   const handleRefineTranscript = useCallback(async () => {
     if (!speechFinalTranscript || isRefining) return;
     
-    setIsRefining(true);
-    setError(null);
-    
-    try {
-      // Always use local processing for transcription refinement (simple text cleanup)
-      const refined = await multiLLMService.refineTranscript(speechFinalTranscript, 'local');
-      setRefinedText(refined);
-      if (onRefinedTranscription) {
-        onRefinedTranscription(refined);
-      }
-    } catch (err) {
-      console.error('Failed to refine transcript:', err);
-      setError('Failed to refine transcript. Please check your API keys and try again.');
-    } finally {
-      setIsRefining(false);
+    // Transcription refinement disabled - now handled server-side in report generation
+    console.log('📝 Transcription refinement disabled - using raw transcription for server-side processing');
+    setRefinedText(speechFinalTranscript); // Use original text
+    if (onRefinedTranscription) {
+      onRefinedTranscription(speechFinalTranscript);
     }
   }, [speechFinalTranscript, isRefining, onRefinedTranscription]);
 
