@@ -30,7 +30,11 @@ export class MultiLLMService {
       .split(',')
       .map(p => p.trim());
     
-    console.log('Frontend Provider priority order:', providerPriority);
+    console.log('🚀 INITIALIZING FRONTEND PROVIDERS:');
+    console.log('- Provider priority order:', providerPriority);
+    console.log('- Claude API Key:', process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY ? 'SET' : 'NOT SET');
+    console.log('- OpenAI API Key:', process.env.NEXT_PUBLIC_OPENAI_API_KEY ? 'SET' : 'NOT SET');
+    console.log('- Google API Key:', process.env.NEXT_PUBLIC_GOOGLE_API_KEY ? 'SET' : 'NOT SET');
 
     // Initialize available providers
     const availableProviders: { [key: string]: () => LLMProvider | null } = {
@@ -89,15 +93,31 @@ export class MultiLLMService {
    * Refine transcript using available LLMs with fallback
    */
   async refineTranscript(rawText: string, processingMode: 'cloud' | 'local' = 'cloud'): Promise<string> {
+    console.log('🔍 REFINE TRANSCRIPT DEBUG:');
+    console.log('- Raw text length:', rawText?.length || 0);
+    console.log('- Processing mode:', processingMode);
+    console.log('- Available providers:', this.providers.map(p => p.name));
+    console.log('- Providers count:', this.providers.length);
+    
     if (!rawText) {
+      console.log('❌ No raw text provided, returning empty string');
       return "";
     }
 
     const prompt = this.createGermanMedicalPrompt(rawText);
+    console.log('✅ Created prompt, length:', prompt.length);
     
     // For local processing, use Ollama models
     if (processingMode === 'local') {
+      console.log('🏠 Using local processing mode (Ollama)');
       return await this.refineWithOllama(prompt);
+    }
+    
+    console.log('☁️ Using cloud processing mode');
+    
+    if (this.providers.length === 0) {
+      console.error('❌ NO PROVIDERS AVAILABLE - this explains rule-based fallback');
+      throw new Error('No AI providers available. Check API keys.');
     }
     
     let lastError: Error | null = null;
@@ -106,14 +126,15 @@ export class MultiLLMService {
     for (let i = 0; i < this.providers.length; i++) {
       const provider = this.providers[i];
       try {
-        console.log(`Attempting transcript refinement with ${provider.name}...`);
+        console.log(`🤖 Attempting transcript refinement with ${provider.name}...`);
         const result = await provider.handler(prompt);
-        console.log(`Successfully refined transcript with ${provider.name}`);
+        console.log(`✅ Successfully refined transcript with ${provider.name}`);
+        console.log('- Result length:', result?.length || 0);
         
         return result;
         
       } catch (error) {
-        console.error(`${provider.name} failed:`, error instanceof Error ? error.message : 'Unknown error');
+        console.error(`❌ ${provider.name} failed:`, error instanceof Error ? error.message : 'Unknown error');
         lastError = error instanceof Error ? error : new Error('Unknown error');
         
         // Continue to next provider
@@ -122,6 +143,7 @@ export class MultiLLMService {
     }
     
     // All providers failed
+    console.error('❌ ALL PROVIDERS FAILED');
     throw new Error(`All LLM providers failed. Last error: ${lastError?.message || 'Unknown error'}`);
   }
 
