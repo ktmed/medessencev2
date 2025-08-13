@@ -238,6 +238,66 @@ export class APIService {
   }
 
   /**
+   * Generate enhanced findings using AI providers
+   */
+  async generateEnhancedFindings(
+    reportId: string,
+    reportContent: string,
+    language: Language
+  ): Promise<import('@/types').EnhancedFindings> {
+    console.log('🌐 API Service: Generating enhanced findings');
+    console.log('- Report ID:', reportId);
+    console.log('- Language:', language);
+    console.log('- Content length:', reportContent.length);
+
+    // Check cache first
+    const cacheKey = this.getCacheKey('enhanced-findings', { reportContent: reportContent.substring(0, 100), language });
+    const cached = this.getFromCache<import('@/types').EnhancedFindings>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const response = await fetch(`${this.baseUrl}/api/generate-enhanced-findings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reportId,
+          reportContent,
+          language,
+        }),
+      });
+
+      console.log('📡 Enhanced Findings API Response Status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Enhanced Findings API Error Response:', errorText);
+        try {
+          const errorData = JSON.parse(errorText);
+          throw new Error(errorData.error || errorData.details || `HTTP ${response.status}: ${response.statusText}`);
+        } catch (e) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+        }
+      }
+
+      const enhancedFindings = await response.json();
+      console.log('✅ Enhanced findings generated successfully');
+      console.log('- Normal findings count:', enhancedFindings.normalFindings?.length || 0);
+      console.log('- Pathological findings count:', enhancedFindings.pathologicalFindings?.length || 0);
+      
+      // Cache the result (longer cache for enhanced findings)
+      this.setCache(cacheKey, enhancedFindings, 20 * 60 * 1000); // 20 minutes for enhanced findings
+      
+      return enhancedFindings;
+
+    } catch (error) {
+      console.error('❌ Failed to generate enhanced findings:', error);
+      throw new Error(`Enhanced findings generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Check API health
    */
   async checkHealth(): Promise<{ status: string; timestamp: number }> {

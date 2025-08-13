@@ -305,6 +305,26 @@ export default function Dashboard() {
         } catch (error) {
           console.warn('⚠️ ICD code generation failed:', error);
         }
+
+        // Auto-generate Enhanced Findings if AI was used successfully
+        try {
+          console.log('🔍 Auto-generating enhanced findings for AI report...');
+          const enhancedFindings = await apiService.generateEnhancedFindings(
+            report.id,
+            reportContent,
+            language
+          );
+          
+          // Update the report with enhanced findings
+          setCurrentReport(prev => prev ? {
+            ...prev,
+            enhancedFindings: enhancedFindings
+          } : prev);
+          
+          console.log('✅ Enhanced findings added to report');
+        } catch (error) {
+          console.warn('⚠️ Enhanced findings generation failed:', error);
+        }
       } else {
         console.log('❌ Skipping ICD generation - conditions not met');
         console.log('- AI Generated:', !!report.metadata?.aiGenerated);
@@ -417,6 +437,26 @@ export default function Dashboard() {
           console.log('✅ ICD codes added to pasted text report');
         } catch (error) {
           console.warn('⚠️ ICD code generation failed for pasted text:', error);
+        }
+
+        // Auto-generate Enhanced Findings for pasted text
+        try {
+          console.log('🔍 Auto-generating enhanced findings for pasted text report...');
+          const enhancedFindings = await apiService.generateEnhancedFindings(
+            report.id,
+            reportContent,
+            language
+          );
+          
+          // Update the report with enhanced findings
+          setCurrentReport(prev => prev ? {
+            ...prev,
+            enhancedFindings: enhancedFindings
+          } : prev);
+          
+          console.log('✅ Enhanced findings added to pasted text report');
+        } catch (error) {
+          console.warn('⚠️ Enhanced findings generation failed for pasted text:', error);
         }
       } else {
         console.log('❌ Skipping pasted text ICD generation - conditions not met');
