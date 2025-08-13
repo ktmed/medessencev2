@@ -171,6 +171,234 @@ Format:
 Report: ${reportContent}
 
 Use medical terminology and precise formulations:`
+      },
+      ar: {
+        simple: `قم بإنشاء ملخص بسيط ومفهوم للتقرير الطبي التالي للمرضى:
+
+التنسيق:
+- النتائج الرئيسية: [2-3 أهم النتائج بلغة بسيطة]
+- المعنى: [ماذا يعني هذا للمريض؟]
+- الخطوات التالية: [الإجراءات الموصى بها]
+
+التقرير: ${reportContent}
+
+استخدم لغة بسيطة وودية للمرضى:`,
+
+        detailed: `قم بإنشاء ملخص طبي مفصل للتقرير التالي:
+
+التنسيق:
+- الملخص: [نظرة عامة مفصلة على النتائج]
+- النتائج الرئيسية: [أهم النتائج المرضية والطبيعية]
+- الأهمية السريرية: [الأهمية الطبية للنتائج]
+- التوصيات: [الخطوات التالية المحددة والمتابعة]
+- ملاحظات خاصة: [الشذوذات التي تتطلب اهتماماً خاصاً]
+
+التقرير: ${reportContent}
+
+قم بإنشاء ملخص طبي مهني:`,
+
+        technical: `قم بإنشاء ملخص فني مهني للتقرير الطبي التالي للزملاء:
+
+التنسيق:
+- نظرة عامة على النتائج: [التفاصيل الفنية والقياسات]
+- التشخيص التفريقي: [التشخيصات المحتملة بناءً على النتائج]
+- الارتباط: [العلاقة بين النتائج المختلفة]
+- التوصيات المهنية: [توصيات طبية محددة]
+- المتابعة: [الفحوصات الموصى بها للمتابعة]
+
+التقرير: ${reportContent}
+
+استخدم المصطلحات الطبية والصياغات الدقيقة:`
+      },
+      uk: {
+        simple: `Створіть простий, зрозумілий резюме наступного медичного звіту для пацієнтів:
+
+Формат:
+- ОСНОВНІ РЕЗУЛЬТАТИ: [2-3 найважливіших результати простою мовою]
+- ЗНАЧЕННЯ: [Що це означає для пацієнта?]
+- НАСТУПНІ КРОКИ: [Рекомендовані дії]
+
+Звіт: ${reportContent}
+
+Використовуйте просту, доброзичливу до пацієнта мову:`,
+
+        detailed: `Створіть детальне медичне резюме наступного звіту:
+
+Формат:
+- РЕЗЮМЕ: [Детальний огляд результатів]
+- КЛЮЧОВІ РЕЗУЛЬТАТИ: [Найважливіші патологічні та нормальні результати]
+- КЛІНІЧНА ЗНАЧУЩІСТЬ: [Медичне значення результатів]
+- РЕКОМЕНДАЦІЇ: [Конкретні наступні кроки та подальше спостереження]
+- ОСОБЛИВІ ПРИМІТКИ: [Відхилення, що потребують особливої уваги]
+
+Звіт: ${reportContent}
+
+Створіть професійне медичне резюме:`,
+
+        technical: `Створіть технічне професійне резюме наступного медичного звіту для колег:
+
+Формат:
+- ОГЛЯД РЕЗУЛЬТАТІВ: [Технічні деталі та вимірювання]
+- ДИФЕРЕНЦІЙНІ ДІАГНОЗИ: [Можливі діагнози на основі результатів]
+- КОРЕЛЯЦІЯ: [Зв'язок між різними результатами]
+- ПРОФЕСІЙНІ РЕКОМЕНДАЦІЇ: [Специфічні медичні рекомендації]
+- ПОДАЛЬШЕ СПОСТЕРЕЖЕННЯ: [Рекомендовані подальші обстеження]
+
+Звіт: ${reportContent}
+
+Використовуйте медичну термінологію та точні формулювання:`
+      },
+      fr: {
+        simple: `Créez un résumé simple et compréhensible du rapport médical suivant pour les patients:
+
+Format:
+- PRINCIPALES CONSTATATIONS: [2-3 constatations les plus importantes en langage simple]
+- SIGNIFICATION: [Que signifie cela pour le patient?]
+- ÉTAPES SUIVANTES: [Actions recommandées]
+
+Rapport: ${reportContent}
+
+Utilisez un langage simple et convivial pour les patients:`,
+
+        detailed: `Créez un résumé médical détaillé du rapport suivant:
+
+Format:
+- RÉSUMÉ: [Aperçu détaillé des constatations]
+- CONSTATATIONS CLÉS: [Constatations pathologiques et normales les plus importantes]
+- PERTINENCE CLINIQUE: [Signification médicale des résultats]
+- RECOMMANDATIONS: [Étapes suivantes concrètes et suivi]
+- NOTES SPÉCIALES: [Anomalies nécessitant une attention particulière]
+
+Rapport: ${reportContent}
+
+Créez un résumé médical professionnel:`,
+
+        technical: `Créez un résumé technique professionnel du rapport médical suivant pour les collègues:
+
+Format:
+- APERÇU DES CONSTATATIONS: [Détails techniques et mesures]
+- DIAGNOSTICS DIFFÉRENTIELS: [Diagnostics possibles basés sur les constatations]
+- CORRÉLATION: [Relation entre différentes constatations]
+- RECOMMANDATIONS PROFESSIONNELLES: [Recommandations médicales spécifiques]
+- SUIVI: [Examens de suivi recommandés]
+
+Rapport: ${reportContent}
+
+Utilisez la terminologie médicale et des formulations précises:`
+      },
+      es: {
+        simple: `Crea un resumen simple y comprensible del siguiente informe médico para pacientes:
+
+Formato:
+- HALLAZGOS PRINCIPALES: [2-3 hallazgos más importantes en lenguaje simple]
+- SIGNIFICADO: [¿Qué significa esto para el paciente?]
+- PRÓXIMOS PASOS: [Acciones recomendadas]
+
+Informe: ${reportContent}
+
+Usa lenguaje simple y amigable para el paciente:`,
+
+        detailed: `Crea un resumen médico detallado del siguiente informe:
+
+Formato:
+- RESUMEN: [Visión general detallada de los hallazgos]
+- HALLAZGOS CLAVE: [Hallazgos patológicos y normales más importantes]
+- RELEVANCIA CLÍNICA: [Significado médico de los resultados]
+- RECOMENDACIONES: [Próximos pasos concretos y seguimiento]
+- NOTAS ESPECIALES: [Anormalidades que requieren atención especial]
+
+Informe: ${reportContent}
+
+Crea un resumen médico profesional:`,
+
+        technical: `Crea un resumen técnico profesional del siguiente informe médico para colegas:
+
+Formato:
+- VISIÓN GENERAL DE HALLAZGOS: [Detalles técnicos y mediciones]
+- DIAGNÓSTICOS DIFERENCIALES: [Posibles diagnósticos basados en hallazgos]
+- CORRELACIÓN: [Relación entre diferentes hallazgos]
+- RECOMENDACIONES PROFESIONALES: [Recomendaciones médicas específicas]
+- SEGUIMIENTO: [Exámenes de seguimiento recomendados]
+
+Informe: ${reportContent}
+
+Usa terminología médica y formulaciones precisas:`
+      },
+      it: {
+        simple: `Crea un riassunto semplice e comprensibile del seguente rapporto medico per i pazienti:
+
+Formato:
+- PRINCIPALI RISULTATI: [2-3 risultati più importanti in linguaggio semplice]
+- SIGNIFICATO: [Cosa significa questo per il paziente?]
+- PROSSIMI PASSI: [Azioni raccomandate]
+
+Rapporto: ${reportContent}
+
+Usa un linguaggio semplice e amichevole per i pazienti:`,
+
+        detailed: `Crea un riassunto medico dettagliato del seguente rapporto:
+
+Formato:
+- RIASSUNTO: [Panoramica dettagliata dei risultati]
+- RISULTATI CHIAVE: [Risultati patologici e normali più importanti]
+- RILEVANZA CLINICA: [Significato medico dei risultati]
+- RACCOMANDAZIONI: [Prossimi passi concreti e follow-up]
+- NOTE SPECIALI: [Anomalie che richiedono attenzione speciale]
+
+Rapporto: ${reportContent}
+
+Crea un riassunto medico professionale:`,
+
+        technical: `Crea un riassunto tecnico professionale del seguente rapporto medico per i colleghi:
+
+Formato:
+- PANORAMICA DEI RISULTATI: [Dettagli tecnici e misurazioni]
+- DIAGNOSI DIFFERENZIALI: [Possibili diagnosi basate sui risultati]
+- CORRELAZIONE: [Relazione tra diversi risultati]
+- RACCOMANDAZIONI PROFESSIONALI: [Raccomandazioni mediche specifiche]
+- FOLLOW-UP: [Esami di follow-up raccomandati]
+
+Rapporto: ${reportContent}
+
+Usa terminologia medica e formulazioni precise:`
+      },
+      tr: {
+        simple: `Aşağıdaki tıbbi raporun hastalar için basit ve anlaşılır bir özetini oluşturun:
+
+Format:
+- TEMEL BULGULAR: [Basit dilde 2-3 en önemli bulgu]
+- ANLAMИ: [Bu hasta için ne anlama geliyor?]
+- SONRAKİ ADIMLAR: [Önerilen eylemler]
+
+Rapor: ${reportContent}
+
+Basit, hasta dostu dil kullanın:`,
+
+        detailed: `Aşağıdaki raporun detaylı tıbbi özetini oluşturun:
+
+Format:
+- ÖZET: [Bulguların detaylı genel bakışı]
+- ANAHTAR BULGULAR: [En önemli patolojik ve normal bulgular]
+- KLİNİK ÖNEM: [Sonuçların tıbbi önemi]
+- ÖNERİLER: [Somut sonraki adımlar ve takip]
+- ÖZEL NOTLAR: [Özel dikkat gerektiren anormallikler]
+
+Rapor: ${reportContent}
+
+Profesyonel tıbbi özet oluşturun:`,
+
+        technical: `Aşağıdaki tıbbi raporun meslektaşlar için teknik profesyonel özetini oluşturun:
+
+Format:
+- BULGULAR GEREKSİNİMİ: [Teknik detaylar ve ölçümler]
+- DİFERANSİYEL TANILAR: [Bulgulara dayalı olası tanılar]
+- KORELASYON: [Farklı bulgular arasındaki ilişki]
+- PROFESYONEL ÖNERİLER: [Spesifik tıbbi öneriler]
+- TAKİP: [Önerilen takip incelemeleri]
+
+Rapor: ${reportContent}
+
+Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
       }
     };
 
@@ -271,18 +499,60 @@ Use medical terminology and precise formulations:`
     let currentSection = '';
     let summaryText = '';
     
-    // Section headers to look for (German and English)
+    // Section headers to look for (multilingual support)
     const findingHeaders = [
-      'HAUPTBEFUNDE', 'KEY FINDINGS', 'SCHLÜSSELBEFUNDE', 'BEFUNDÜBERSICHT', 
-      'FINDINGS OVERVIEW', 'WICHTIGE BEFUNDE', 'IMPORTANT FINDINGS'
+      // German
+      'HAUPTBEFUNDE', 'SCHLÜSSELBEFUNDE', 'BEFUNDÜBERSICHT', 'WICHTIGE BEFUNDE',
+      // English  
+      'KEY FINDINGS', 'FINDINGS OVERVIEW', 'IMPORTANT FINDINGS', 'MAIN FINDINGS',
+      // Arabic
+      'النتائج الرئيسية', 'نظرة عامة على النتائج',
+      // Ukrainian
+      'ОСНОВНІ РЕЗУЛЬТАТИ', 'КЛЮЧОВІ РЕЗУЛЬТАТИ', 'ОГЛЯД РЕЗУЛЬТАТІВ',
+      // French
+      'PRINCIPALES CONSTATATIONS', 'CONSTATATIONS CLÉS', 'APERÇU DES CONSTATATIONS',
+      // Spanish
+      'HALLAZGOS PRINCIPALES', 'HALLAZGOS CLAVE', 'VISIÓN GENERAL DE HALLAZGOS',
+      // Italian
+      'PRINCIPALI RISULTATI', 'RISULTATI CHIAVE', 'PANORAMICA DEI RISULTATI',
+      // Turkish
+      'TEMEL BULGULAR', 'ANAHTAR BULGULAR', 'BULGULAR GEREKSİNİMİ'
     ];
     const recommendationHeaders = [
-      'EMPFEHLUNG', 'RECOMMENDATION', 'NÄCHSTE SCHRITTE', 'NEXT STEPS',
-      'FACHEMPFEHLUNGEN', 'PROFESSIONAL RECOMMENDATIONS', 'VERLAUFSKONTROLLE',
-      'FOLLOW-UP', 'WEITERE MASSNAHMEN'
+      // German
+      'EMPFEHLUNG', 'EMPFEHLUNGEN', 'NÄCHSTE SCHRITTE', 'FACHEMPFEHLUNGEN', 'VERLAUFSKONTROLLE', 'WEITERE MASSNAHMEN',
+      // English
+      'RECOMMENDATION', 'RECOMMENDATIONS', 'NEXT STEPS', 'PROFESSIONAL RECOMMENDATIONS', 'FOLLOW-UP',
+      // Arabic
+      'التوصيات', 'الخطوات التالية', 'التوصيات المهنية', 'المتابعة',
+      // Ukrainian  
+      'РЕКОМЕНДАЦІЇ', 'НАСТУПНІ КРОКИ', 'ПРОФЕСІЙНІ РЕКОМЕНДАЦІЇ', 'ПОДАЛЬШЕ СПОСТЕРЕЖЕННЯ',
+      // French
+      'RECOMMANDATIONS', 'ÉTAPES SUIVANTES', 'RECOMMANDATIONS PROFESSIONNELLES', 'SUIVI',
+      // Spanish
+      'RECOMENDACIONES', 'PRÓXIMOS PASOS', 'RECOMENDACIONES PROFESIONALES', 'SEGUIMIENTO',
+      // Italian
+      'RACCOMANDAZIONI', 'PROSSIMI PASSI', 'RACCOMANDAZIONI PROFESSIONALI', 'FOLLOW-UP',
+      // Turkish
+      'ÖNERİLER', 'SONRAKİ ADIMLAR', 'PROFESYONEL ÖNERİLER', 'TAKİP'
     ];
     const summaryHeaders = [
-      'ZUSAMMENFASSUNG', 'SUMMARY', 'BEDEUTUNG', 'MEANING', 'ÜBERSICHT', 'OVERVIEW'
+      // German
+      'ZUSAMMENFASSUNG', 'BEDEUTUNG', 'ÜBERSICHT',
+      // English
+      'SUMMARY', 'MEANING', 'OVERVIEW',
+      // Arabic
+      'الملخص', 'المعنى',
+      // Ukrainian
+      'РЕЗЮМЕ', 'ЗНАЧЕННЯ',
+      // French
+      'RÉSUMÉ', 'SIGNIFICATION',
+      // Spanish
+      'RESUMEN', 'SIGNIFICADO',
+      // Italian
+      'RIASSUNTO', 'SIGNIFICATO',
+      // Turkish
+      'ÖZET', 'ANLAMИ'
     ];
 
     for (const line of lines) {
@@ -369,18 +639,57 @@ Use medical terminology and precise formulations:`
   private generateFallbackSummary(reportContent: string, language: Language): PatientSummary {
     console.log('📋 Generating fallback summary');
     
+    const fallbackTexts = {
+      de: {
+        summary: `Automatische Zusammenfassung des Berichts:\n\n${reportContent.substring(0, 500)}...`,
+        findings: 'Siehe ursprünglichen Bericht',
+        recommendations: 'Rücksprache mit behandelndem Arzt empfohlen'
+      },
+      en: {
+        summary: `Automatic summary of report:\n\n${reportContent.substring(0, 500)}...`,
+        findings: 'See original report',
+        recommendations: 'Consultation with attending physician recommended'
+      },
+      ar: {
+        summary: `ملخص تلقائي للتقرير:\n\n${reportContent.substring(0, 500)}...`,
+        findings: 'انظر التقرير الأصلي',
+        recommendations: 'يُنصح بالتشاور مع الطبيب المعالج'
+      },
+      uk: {
+        summary: `Автоматичне резюме звіту:\n\n${reportContent.substring(0, 500)}...`,
+        findings: 'Дивіться оригінальний звіт',
+        recommendations: 'Рекомендована консультація з лікарем'
+      },
+      fr: {
+        summary: `Résumé automatique du rapport:\n\n${reportContent.substring(0, 500)}...`,
+        findings: 'Voir le rapport original',
+        recommendations: 'Consultation avec le médecin traitant recommandée'
+      },
+      es: {
+        summary: `Resumen automático del informe:\n\n${reportContent.substring(0, 500)}...`,
+        findings: 'Ver informe original',
+        recommendations: 'Se recomienda consulta con el médico tratante'
+      },
+      it: {
+        summary: `Riassunto automatico del rapporto:\n\n${reportContent.substring(0, 500)}...`,
+        findings: 'Vedere rapporto originale',
+        recommendations: 'Consultazione con il medico curante raccomandata'
+      },
+      tr: {
+        summary: `Raporun otomatik özeti:\n\n${reportContent.substring(0, 500)}...`,
+        findings: 'Orijinal rapora bakınız',
+        recommendations: 'Tedavi eden doktor ile konsültasyon önerilir'
+      }
+    };
+
+    const texts = fallbackTexts[language as keyof typeof fallbackTexts] || fallbackTexts.en;
+    
     return {
       id: `summary-${Date.now()}`,
       reportId: `report-${Date.now()}`, 
-      summary: language === 'de' 
-        ? `Automatische Zusammenfassung des Berichts:\n\n${reportContent.substring(0, 500)}...`
-        : `Automatic summary of report:\n\n${reportContent.substring(0, 500)}...`,
-      keyFindings: [
-        language === 'de' ? 'Siehe ursprünglichen Bericht' : 'See original report'
-      ],
-      recommendations: [
-        language === 'de' ? 'Rücksprache mit behandelndem Arzt empfohlen' : 'Consultation with attending physician recommended'
-      ],
+      summary: texts.summary,
+      keyFindings: [texts.findings],
+      recommendations: [texts.recommendations],
       language,
       generatedAt: Date.now(),
       complexity: 'detailed',
