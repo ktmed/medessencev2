@@ -120,7 +120,7 @@ export const useEnhancedSpeechToText = ({
     const corrections: Array<{ original: string; corrected: string; type: string }> = [];
 
     // Apply phonetic corrections
-    for (const [incorrect, correct] of medicalCorrections.current.entries()) {
+    for (const [incorrect, correct] of Array.from(medicalCorrections.current.entries())) {
       const regex = new RegExp(`\\b${incorrect}\\b`, 'gi');
       if (regex.test(correctedText)) {
         correctedText = correctedText.replace(regex, correct);
