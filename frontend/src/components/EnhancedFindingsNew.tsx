@@ -76,9 +76,20 @@ export default function EnhancedFindingsNew({
       localizations: enhancedFindings.localizations?.length || 0,
       confidence: enhancedFindings.confidence,
       processingAgent: enhancedFindings.processingAgent,
-      totalFindings: allFindings.length
+      totalFindings: allFindings.length,
+      hasSourceContent: !!sourceContent,
+      sourceContentLength: sourceContent?.length || 0
     });
-  }, [enhancedFindings, allFindings]);
+
+    // Log some example findings for debugging
+    if (allFindings.length > 0) {
+      console.log('🔍 Sample findings for debugging:', allFindings.slice(0, 3).map(f => ({
+        text: f.text,
+        category: f.category,
+        significance: f.significance
+      })));
+    }
+  }, [enhancedFindings, allFindings, sourceContent]);
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({
@@ -136,23 +147,111 @@ export default function EnhancedFindingsNew({
   };
 
   const highlightFindingInText = (text: string, finding: FindingItem): React.ReactNode => {
-    if (!finding) return text;
+    if (!finding || !text) return text;
     
-    // Simple highlighting - look for the finding text in the source
-    const findingText = finding.text.toLowerCase();
+    console.log('🔍 Highlighting attempt:', {
+      findingText: finding.text,
+      category: finding.category,
+      sourceTextLength: text.length,
+      sourcePreview: text.substring(0, 200) + '...'
+    });
+    
+    const findingText = finding.text.toLowerCase().trim();
     const lowerText = text.toLowerCase();
-    const index = lowerText.indexOf(findingText);
     
-    if (index === -1) return text;
+    // Try multiple matching strategies
+    let highlightResults: Array<{start: number, end: number, matchType: string}> = [];
     
-    const before = text.substring(0, index);
-    const highlighted = text.substring(index, index + finding.text.length);
-    const after = text.substring(index + finding.text.length);
+    // Strategy 1: Exact match
+    let index = lowerText.indexOf(findingText);
+    if (index !== -1) {
+      highlightResults.push({
+        start: index,
+        end: index + finding.text.length,
+        matchType: 'exact'
+      });
+    }
+    
+    // Strategy 2: Try key words/phrases (for paraphrased content)
+    if (highlightResults.length === 0) {
+      // Extract meaningful words (filter out common words)
+      const stopWords = ['der', 'die', 'das', 'und', 'oder', 'in', 'an', 'auf', 'bei', 'mit', 'zu', 'von', 'für', 'durch', 'über', 'unter', 'vor', 'nach', 'zwischen', 'während', 'ohne', 'gegen', 'um', 'the', 'and', 'or', 'in', 'on', 'at', 'by', 'with', 'to', 'from', 'for', 'through', 'over', 'under', 'before', 'after', 'between', 'during', 'without', 'against', 'around', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'ist', 'sind', 'war', 'waren', 'haben', 'hat', 'hatte', 'werden', 'wird', 'wurde', 'wurden', 'sein', 'gewesen', 'worden'];
+      
+      const meaningfulWords = findingText
+        .split(/[\s,.-]+/)
+        .filter(word => word.length > 2 && !stopWords.includes(word.toLowerCase()))
+        .slice(0, 3); // Take first 3 meaningful words
+      
+      console.log('🔍 Meaningful words for fuzzy matching:', meaningfulWords);
+      
+      for (const word of meaningfulWords) {
+        const wordIndex = lowerText.indexOf(word);
+        if (wordIndex !== -1) {
+          // Try to find a reasonable phrase around this word
+          const contextStart = Math.max(0, wordIndex - 50);
+          const contextEnd = Math.min(text.length, wordIndex + word.length + 50);
+          
+          highlightResults.push({
+            start: contextStart,
+            end: contextEnd,
+            matchType: `fuzzy-${word}`
+          });
+          break; // Use the first match found
+        }
+      }
+    }
+    
+    // Strategy 3: Medical term matching (for specific medical terms)
+    if (highlightResults.length === 0) {
+      // Look for specific medical terms that might be mentioned
+      const medicalTerms = findingText.match(/\b[a-zA-ZäöüÄÖÜß]{4,}\b/g) || [];
+      for (const term of medicalTerms) {
+        const termIndex = lowerText.indexOf(term);
+        if (termIndex !== -1) {
+          highlightResults.push({
+            start: termIndex,
+            end: termIndex + term.length,
+            matchType: `medical-term-${term}`
+          });
+          break;
+        }
+      }
+    }
+    
+    if (highlightResults.length === 0) {
+      console.log('❌ No highlighting match found for:', finding.text);
+      return (
+        <div className="text-sm leading-relaxed">
+          <div className="bg-yellow-50 p-2 rounded border-l-4 border-yellow-400 mb-2">
+            <p className="text-sm text-yellow-700">
+              <strong>Finding:</strong> {finding.text}
+            </p>
+            <p className="text-xs text-yellow-600 mt-1">
+              No exact match found in source text. This finding may be a summarized or interpreted conclusion.
+            </p>
+          </div>
+          <div className="text-gray-700">{text}</div>
+        </div>
+      );
+    }
+    
+    // Use the first (best) match
+    const match = highlightResults[0];
+    const before = text.substring(0, match.start);
+    const highlighted = text.substring(match.start, match.end);
+    const after = text.substring(match.end);
+    
+    console.log('✅ Highlighting successful:', {
+      matchType: match.matchType,
+      highlighted: highlighted.substring(0, 100) + '...',
+      start: match.start,
+      end: match.end
+    });
     
     return (
       <>
         {before}
-        <mark className="bg-blue-200 px-1 rounded font-medium">
+        <mark className="bg-blue-200 px-1 rounded font-medium border border-blue-300">
           {highlighted}
         </mark>
         {after}
@@ -235,36 +334,52 @@ export default function EnhancedFindingsNew({
           </div>
           
           <div className="space-y-2 max-h-96 overflow-y-auto">
-            {allFindings.map((finding, index) => (
-              <div
-                key={index}
-                className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${getSignificanceColor(finding.significance)}`}
-                onMouseEnter={() => setHoveredFinding(finding)}
-                onMouseLeave={() => setHoveredFinding(null)}
-              >
-                <div className="flex items-start space-x-2">
-                  {getSignificanceIcon(finding.significance)}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-gray-600 bg-white px-2 py-1 rounded flex items-center">
-                        {getCategoryIcon(finding.category)}
-                        <span className="ml-1">{getCategoryLabel(finding.category)}</span>
-                      </span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                        finding.significance === 'critical' ? 'bg-red-500 text-white' :
-                        finding.significance === 'significant' ? 'bg-yellow-500 text-white' :
-                        'bg-gray-400 text-white'
-                      }`}>
-                        {finding.significance.toUpperCase()}
-                      </span>
+            {allFindings.map((finding, index) => {
+              // Quick check for highlighting capability
+              const canHighlight = sourceContent && (
+                sourceContent.toLowerCase().includes(finding.text.toLowerCase()) ||
+                finding.text.toLowerCase().split(/[\s,.-]+/)
+                  .filter(word => word.length > 3)
+                  .some(word => sourceContent.toLowerCase().includes(word))
+              );
+
+              return (
+                <div
+                  key={index}
+                  className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${getSignificanceColor(finding.significance)} ${hoveredFinding === finding ? 'ring-2 ring-blue-400' : ''}`}
+                  onMouseEnter={() => setHoveredFinding(finding)}
+                  onMouseLeave={() => setHoveredFinding(null)}
+                >
+                  <div className="flex items-start space-x-2">
+                    {getSignificanceIcon(finding.significance)}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-600 bg-white px-2 py-1 rounded flex items-center">
+                          {getCategoryIcon(finding.category)}
+                          <span className="ml-1">{getCategoryLabel(finding.category)}</span>
+                          {canHighlight && (
+                            <span className="ml-1 w-2 h-2 bg-green-500 rounded-full" title="Can highlight in source text"></span>
+                          )}
+                          {!canHighlight && sourceContent && (
+                            <span className="ml-1 w-2 h-2 bg-orange-400 rounded-full" title="Limited highlighting available"></span>
+                          )}
+                        </span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                          finding.significance === 'critical' ? 'bg-red-500 text-white' :
+                          finding.significance === 'significant' ? 'bg-yellow-500 text-white' :
+                          'bg-gray-400 text-white'
+                        }`}>
+                          {finding.significance.toUpperCase()}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium leading-relaxed">
+                        {finding.text}
+                      </p>
                     </div>
-                    <p className="text-sm font-medium leading-relaxed">
-                      {finding.text}
-                    </p>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           
           {allFindings.length === 0 && (
