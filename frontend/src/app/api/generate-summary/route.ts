@@ -174,7 +174,7 @@ Use medical terminology and precise formulations:`
       }
     };
 
-    const langTemplates = templates[language] || templates.en;
+    const langTemplates = templates[language as keyof typeof templates] || templates.en;
     return langTemplates[complexity as keyof typeof langTemplates] || langTemplates.detailed;
   }
 

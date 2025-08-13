@@ -305,7 +305,7 @@ Analyze systematically and return only the most probable and relevant ${codeSyst
       ]
     };
 
-    const langPatterns = patterns[language] || patterns.en;
+    const langPatterns = patterns[language as keyof typeof patterns] || patterns.en;
     
     for (const { pattern, code, description } of langPatterns) {
       if (pattern.test(reportContent)) {
