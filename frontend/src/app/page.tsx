@@ -588,7 +588,7 @@ export default function Dashboard() {
               <div className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-100 to-green-200 rounded-xl shadow-sm border border-green-300">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 <Wifi className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-medium text-green-700">AI API Ready</span>
+                <span className="text-sm font-medium text-green-700">AI Ready</span>
               </div>
             </div>
           </div>
