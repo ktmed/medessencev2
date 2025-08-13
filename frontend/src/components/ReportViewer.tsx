@@ -414,6 +414,7 @@ ${formatContentValue(report.technicalDetails)}
                       </h3>
                       <EnhancedFindingsNew
                         enhancedFindings={currentReport.enhancedFindings!}
+                        sourceContent={`${currentReport.findings}\n\n${currentReport.impression}\n\n${currentReport.recommendations}`}
                         isEditing={isEditing}
                         onContentChange={(content) => updateEditedField('findings', content)}
                       />
@@ -461,6 +462,7 @@ ${formatContentValue(report.technicalDetails)}
                     </h3>
                     <EnhancedFindingsNew
                       enhancedFindings={currentReport.enhancedFindings!}
+                      sourceContent={`${currentReport.findings}\n\n${currentReport.impression}\n\n${currentReport.recommendations}`}
                       isEditing={isEditing}
                       onContentChange={(content) => updateEditedField('findings', content)}
                     />

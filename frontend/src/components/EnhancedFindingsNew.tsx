@@ -4,8 +4,15 @@ import React, { useState } from 'react';
 import { AlertTriangle, Info, AlertCircle, Eye, ChevronDown, ChevronUp, MapPin, Ruler, Eye as EyeIcon } from 'lucide-react';
 import { EnhancedFindings } from '@/types';
 
+interface FindingItem {
+  text: string;
+  category: 'normal' | 'pathological' | 'special' | 'measurements' | 'localizations';
+  significance: 'general' | 'significant' | 'critical';
+}
+
 interface EnhancedFindingsProps {
   enhancedFindings: EnhancedFindings;
+  sourceContent?: string; // Original report content for highlighting
   isEditing?: boolean;
   onContentChange?: (content: string) => void;
   className?: string;
@@ -13,10 +20,13 @@ interface EnhancedFindingsProps {
 
 export default function EnhancedFindingsNew({
   enhancedFindings,
+  sourceContent,
   isEditing = false,
   onContentChange,
   className = ''
 }: EnhancedFindingsProps) {
+  const [hoveredFinding, setHoveredFinding] = useState<FindingItem | null>(null);
+  const [showSourceText, setShowSourceText] = useState(true);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     normal: true,
     pathological: true,
@@ -24,6 +34,37 @@ export default function EnhancedFindingsNew({
     measurements: false,
     localizations: false
   });
+
+  // Convert categorized findings to a combined array for hover interactions
+  const allFindings: FindingItem[] = React.useMemo(() => {
+    const findings: FindingItem[] = [];
+    
+    enhancedFindings.normalFindings?.forEach(text => 
+      findings.push({ text, category: 'normal', significance: 'general' })
+    );
+    enhancedFindings.pathologicalFindings?.forEach(text => 
+      findings.push({ text, category: 'pathological', significance: 'critical' })
+    );
+    enhancedFindings.specialObservations?.forEach(text => 
+      findings.push({ text, category: 'special', significance: 'significant' })
+    );
+    enhancedFindings.measurements?.forEach(text => 
+      findings.push({ text, category: 'measurements', significance: 'general' })
+    );
+    enhancedFindings.localizations?.forEach(text => 
+      findings.push({ text, category: 'localizations', significance: 'general' })
+    );
+    
+    return findings;
+  }, [enhancedFindings]);
+
+  // Use provided source content or fallback
+  const sourceText = React.useMemo(() => {
+    if (sourceContent) {
+      return sourceContent;
+    }
+    return "Source text not available. Enhanced findings were generated from the medical report content, but the original text is not available for highlighting.";
+  }, [sourceContent]);
 
   // Debug log enhanced findings data
   React.useEffect(() => {
@@ -34,9 +75,10 @@ export default function EnhancedFindingsNew({
       measurements: enhancedFindings.measurements?.length || 0,
       localizations: enhancedFindings.localizations?.length || 0,
       confidence: enhancedFindings.confidence,
-      processingAgent: enhancedFindings.processingAgent
+      processingAgent: enhancedFindings.processingAgent,
+      totalFindings: allFindings.length
     });
-  }, [enhancedFindings]);
+  }, [enhancedFindings, allFindings]);
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({
@@ -45,59 +87,86 @@ export default function EnhancedFindingsNew({
     }));
   };
 
-  const renderSection = (
-    title: string,
-    items: string[],
-    sectionKey: string,
-    icon: React.ReactNode,
-    colorClasses: string
-  ) => {
-    if (!items || items.length === 0) return null;
+  const getSignificanceColor = (significance: string) => {
+    switch (significance) {
+      case 'critical':
+        return 'bg-red-100 border-red-300 text-red-800 hover:bg-red-150';
+      case 'significant':
+        return 'bg-yellow-100 border-yellow-300 text-yellow-800 hover:bg-yellow-150';
+      default:
+        return 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-150';
+    }
+  };
 
-    const isExpanded = expandedSections[sectionKey];
+  const getSignificanceIcon = (significance: string) => {
+    switch (significance) {
+      case 'critical':
+        return <AlertCircle className="w-4 h-4 text-red-600" />;
+      case 'significant':
+        return <AlertTriangle className="w-4 h-4 text-yellow-600" />;
+      default:
+        return <Info className="w-4 h-4 text-gray-500" />;
+    }
+  };
 
+  const getCategoryLabel = (category: string) => {
+    const labels = {
+      normal: 'Normal Finding',
+      pathological: 'Pathological Finding', 
+      special: 'Special Observation',
+      measurements: 'Measurement',
+      localizations: 'Localization'
+    };
+    return labels[category as keyof typeof labels] || category;
+  };
+
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'pathological':
+        return <AlertTriangle className="w-5 h-5 text-red-600" />;
+      case 'special':
+        return <EyeIcon className="w-5 h-5 text-blue-600" />;
+      case 'measurements':
+        return <Ruler className="w-5 h-5 text-purple-600" />;
+      case 'localizations':
+        return <MapPin className="w-5 h-5 text-orange-600" />;
+      default:
+        return <Info className="w-5 h-5 text-green-600" />;
+    }
+  };
+
+  const highlightFindingInText = (text: string, finding: FindingItem): React.ReactNode => {
+    if (!finding) return text;
+    
+    // Simple highlighting - look for the finding text in the source
+    const findingText = finding.text.toLowerCase();
+    const lowerText = text.toLowerCase();
+    const index = lowerText.indexOf(findingText);
+    
+    if (index === -1) return text;
+    
+    const before = text.substring(0, index);
+    const highlighted = text.substring(index, index + finding.text.length);
+    const after = text.substring(index + finding.text.length);
+    
     return (
-      <div className={`bg-white border rounded-lg ${colorClasses}`}>
-        <button
-          onClick={() => toggleSection(sectionKey)}
-          className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
-        >
-          <div className="flex items-center space-x-3">
-            {icon}
-            <span className="font-semibold text-gray-900">{title}</span>
-            <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm">
-              {items.length}
-            </span>
-          </div>
-          {isExpanded ? 
-            <ChevronUp className="w-4 h-4 text-gray-500" /> : 
-            <ChevronDown className="w-4 h-4 text-gray-500" />
-          }
-        </button>
-        
-        {isExpanded && (
-          <div className="px-4 pb-4 border-t border-gray-100">
-            <ul className="space-y-2 mt-3">
-              {items.map((item, index) => (
-                <li key={index} className="flex items-start space-x-2">
-                  <span className="w-2 h-2 bg-gray-400 rounded-full mt-2 flex-shrink-0" />
-                  <span className="text-gray-700 leading-relaxed">{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
+      <>
+        {before}
+        <mark className="bg-blue-200 px-1 rounded font-medium">
+          {highlighted}
+        </mark>
+        {after}
+      </>
     );
   };
 
-  const totalFindings = (
-    (enhancedFindings.normalFindings?.length || 0) +
-    (enhancedFindings.pathologicalFindings?.length || 0) +
-    (enhancedFindings.specialObservations?.length || 0) +
-    (enhancedFindings.measurements?.length || 0) +
-    (enhancedFindings.localizations?.length || 0)
-  );
+
+  const totalFindings = allFindings.length;
+  const significanceCounts = {
+    critical: allFindings.filter(f => f.significance === 'critical').length,
+    significant: allFindings.filter(f => f.significance === 'significant').length,
+    general: allFindings.filter(f => f.significance === 'general').length
+  };
 
   return (
     <div className={`space-y-4 ${className}`}>
@@ -109,7 +178,7 @@ export default function EnhancedFindingsNew({
             Enhanced Findings Analysis
           </h4>
           <div className="text-sm text-blue-700">
-            {totalFindings} structured findings
+            {totalFindings} findings identified
           </div>
         </div>
         
@@ -126,53 +195,112 @@ export default function EnhancedFindingsNew({
             {new Date(enhancedFindings.timestamp).toLocaleString()}
           </div>
         </div>
+
+        {/* Significance Overview */}
+        <div className="flex flex-wrap gap-2 mt-3">
+          {significanceCounts.critical > 0 && (
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+              <AlertCircle className="w-3 h-3 mr-1" />
+              Critical ({significanceCounts.critical})
+            </span>
+          )}
+          {significanceCounts.significant > 0 && (
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+              <AlertTriangle className="w-3 h-3 mr-1" />
+              Significant ({significanceCounts.significant})
+            </span>
+          )}
+          {significanceCounts.general > 0 && (
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+              <Info className="w-3 h-3 mr-1" />
+              General ({significanceCounts.general})
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Findings Sections */}
-      <div className="space-y-3">
-        {/* Normal Findings */}
-        {renderSection(
-          'Normal Findings',
-          enhancedFindings.normalFindings,
-          'normal',
-          <Info className="w-5 h-5 text-green-600" />,
-          'border-green-200'
-        )}
+      {/* Main Content Area - Two Column Layout with Hover Interactions */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Structured Findings List */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h5 className="font-semibold text-gray-900">Structured Findings</h5>
+            <button
+              onClick={() => setShowSourceText(!showSourceText)}
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center"
+            >
+              {showSourceText ? 'Hide Source' : 'Show Source'}
+              <Eye className="w-4 h-4 ml-1" />
+            </button>
+          </div>
+          
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {allFindings.map((finding, index) => (
+              <div
+                key={index}
+                className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 ${getSignificanceColor(finding.significance)}`}
+                onMouseEnter={() => setHoveredFinding(finding)}
+                onMouseLeave={() => setHoveredFinding(null)}
+              >
+                <div className="flex items-start space-x-2">
+                  {getSignificanceIcon(finding.significance)}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-gray-600 bg-white px-2 py-1 rounded flex items-center">
+                        {getCategoryIcon(finding.category)}
+                        <span className="ml-1">{getCategoryLabel(finding.category)}</span>
+                      </span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        finding.significance === 'critical' ? 'bg-red-500 text-white' :
+                        finding.significance === 'significant' ? 'bg-yellow-500 text-white' :
+                        'bg-gray-400 text-white'
+                      }`}>
+                        {finding.significance.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium leading-relaxed">
+                      {finding.text}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {allFindings.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <Eye className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+              <p>No structured findings available</p>
+            </div>
+          )}
+        </div>
 
-        {/* Pathological Findings */}
-        {renderSection(
-          'Pathological Findings',
-          enhancedFindings.pathologicalFindings,
-          'pathological',
-          <AlertTriangle className="w-5 h-5 text-red-600" />,
-          'border-red-200'
-        )}
-
-        {/* Special Observations */}
-        {renderSection(
-          'Special Observations',
-          enhancedFindings.specialObservations,
-          'special',
-          <EyeIcon className="w-5 h-5 text-blue-600" />,
-          'border-blue-200'
-        )}
-
-        {/* Measurements */}
-        {renderSection(
-          'Measurements',
-          enhancedFindings.measurements,
-          'measurements',
-          <Ruler className="w-5 h-5 text-purple-600" />,
-          'border-purple-200'
-        )}
-
-        {/* Localizations */}
-        {renderSection(
-          'Localizations',
-          enhancedFindings.localizations,
-          'localizations',
-          <MapPin className="w-5 h-5 text-orange-600" />,
-          'border-orange-200'
+        {/* Source Text with Highlighting */}
+        {showSourceText && (
+          <div className="space-y-3">
+            <h5 className="font-semibold text-gray-900">Source Text</h5>
+            <div className="bg-gray-50 p-4 rounded-lg border max-h-96 overflow-y-auto">
+              {hoveredFinding ? (
+                <div className="space-y-3">
+                  <div className="bg-blue-100 p-2 rounded border-l-4 border-blue-500">
+                    <p className="text-sm font-medium text-blue-900">
+                      Highlighting: {getCategoryLabel(hoveredFinding.category)} - {hoveredFinding.significance}
+                    </p>
+                  </div>
+                  <div className="text-sm leading-relaxed">
+                    {highlightFindingInText(sourceText, hoveredFinding)}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-600 leading-relaxed">
+                  <p className="italic mb-2">Hover over findings to see source text highlighting</p>
+                  <div className="text-gray-800">
+                    {sourceText}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
