@@ -186,7 +186,7 @@ ${formatContentValue(report.technicalDetails)}
 
   const currentReport = isEditing ? editedReport : report;
 
-  // Debug logging for ICD predictions
+  // Debug logging for ICD predictions and metadata
   React.useEffect(() => {
     if (currentReport) {
       console.log('🔍 ReportViewer Debug:');
@@ -194,11 +194,15 @@ ${formatContentValue(report.technicalDetails)}
       console.log('  Has sections:', !!currentReport.sections);
       console.log('  Sections length:', currentReport.sections?.length || 0);
       console.log('  Using sections path:', !!(currentReport.sections && currentReport.sections.length > 0));
+      console.log('🔍 Metadata Debug:');
+      console.log('  Has metadata:', !!currentReport.metadata);
+      console.log('  Agent:', currentReport.metadata?.agent);
+      console.log('  Type:', currentReport.type);
+      console.log('  Full metadata:', currentReport.metadata);
+      console.log('  Available keys:', Object.keys(currentReport));
       if (currentReport.icdPredictions) {
         console.log('  ICD Structure:', currentReport.icdPredictions);
         console.log('  ICD Codes Count:', currentReport.icdPredictions.codes?.length || 0);
-      } else {
-        console.log('  Available keys:', Object.keys(currentReport));
       }
     }
   }, [currentReport]);
@@ -239,9 +243,20 @@ ${formatContentValue(report.technicalDetails)}
   }, [currentReport?.enhancedFindings, currentReport?.metadata]);
 
   const getAgentDisplayName = (agentName: string): string => {
+    console.log('🔍 getAgentDisplayName called with:', agentName);
     if (!agentName) return 'Unknown Agent';
     
     const agentDisplayNames: { [key: string]: string } = {
+      // API classification agents
+      'mammography_specialist': 'Mammography Specialist',
+      'spine_mri_specialist': 'Spine MRI Specialist', 
+      'oncology_specialist': 'Oncology Specialist',
+      'cardiac_imaging_specialist': 'Cardiac Imaging Specialist',
+      'pathology_specialist': 'Pathology Specialist',
+      'ct_scan_specialist': 'CT Scan Specialist',
+      'ultrasound_specialist': 'Ultrasound Specialist',
+      'general_radiology_specialist': 'General Radiology Specialist',
+      // Legacy agent names (backward compatibility)
       'mammography_agent': 'Mammography Specialist',
       'spine_mri_agent': 'Spine MRI Specialist', 
       'oncology_agent': 'Oncology Specialist',
@@ -250,10 +265,15 @@ ${formatContentValue(report.technicalDetails)}
       'ct_scan_agent': 'CT Scan Specialist',
       'ultrasound_agent': 'Ultrasound Specialist',
       'general_agent': 'General Radiology Agent',
-      'base_agent': 'Base Medical Agent'
+      'base_agent': 'Base Medical Agent',
+      // Fallback processing agents
+      'rule_based_processor': 'Rule-based Processor',
+      'unknown': 'General Medical Specialist'
     };
     
-    return agentDisplayNames[agentName] || `${agentName.replace(/_/g, ' ').replace(/agent/gi, '').trim()} Specialist`;
+    const result = agentDisplayNames[agentName] || `${agentName.replace(/_/g, ' ').replace(/agent/gi, '').trim()} Specialist`;
+    console.log('🔍 getAgentDisplayName result:', result);
+    return result;
   };
 
   return (
@@ -535,14 +555,14 @@ ${formatContentValue(report.technicalDetails)}
                 {/* Technical Details */}
                 <details className="medical-report">
                   <summary className="cursor-pointer font-semibold text-gray-700 hover:text-gray-900">
-                    Technical Details
+                    {language === 'de' ? 'Technische Details' : 'Technical Details'}
                   </summary>
                   {isEditing ? (
                     <textarea
                       value={currentReport.technicalDetails}
                       onChange={(e) => updateEditedField('technicalDetails', e.target.value)}
                       className="medical-input min-h-[80px] resize-vertical mt-2"
-                      placeholder="Enter technical details..."
+                      placeholder={language === 'de' ? 'Technische Details eingeben...' : 'Enter technical details...'}
                     />
                   ) : (
                     <div className="bg-gray-50 p-3 rounded mt-2">

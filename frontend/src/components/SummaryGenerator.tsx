@@ -10,18 +10,22 @@ import {
   AlertTriangle,
   Heart,
   Activity,
-  Stethoscope
+  Stethoscope,
+  Edit3,
+  Save,
+  X
 } from 'lucide-react';
 import { PatientSummary, Language, MedicalReport } from '@/types';
 import { getMedicalTerm, getLanguageName, getLanguageFlag, SUPPORTED_LANGUAGES } from '@/utils/languages';
 import { formatTimestamp, cn } from '@/utils';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface SummaryGeneratorProps {
   summary: PatientSummary | null;
   report: MedicalReport | null;
   isGenerating: boolean;
   language: Language;
-  onGenerate?: (reportId: string, language: Language) => void;
+  onGenerate?: (reportId: string, language: Language, complexity?: 'simple' | 'detailed' | 'technical') => void;
   onExport?: (summary: PatientSummary) => void;
   onLanguageChange?: (language: Language) => void;
   className?: string;
@@ -38,17 +42,56 @@ export default function SummaryGenerator({
   className,
 }: SummaryGeneratorProps) {
   const [selectedLanguage, setSelectedLanguage] = useState<Language>(language);
+  const [selectedComplexity, setSelectedComplexity] = useState<'simple' | 'detailed' | 'technical'>('detailed');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedSummary, setEditedSummary] = useState<PatientSummary | null>(null);
 
   const handleGenerate = () => {
-    console.log('🔍 DEBUG: Generating summary with language:', selectedLanguage);
+    console.log('🔍 DEBUG: Generating summary with language:', selectedLanguage, 'complexity:', selectedComplexity);
     if (report && onGenerate) {
-      onGenerate(report.id, selectedLanguage);
+      onGenerate(report.id, selectedLanguage, selectedComplexity);
     }
   };
 
   const handleLanguageChange = (newLanguage: Language) => {
     setSelectedLanguage(newLanguage);
     onLanguageChange?.(newLanguage);
+  };
+
+  const startEdit = () => {
+    if (summary) {
+      setEditedSummary({ ...summary });
+      setIsEditing(true);
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditedSummary(null);
+    setIsEditing(false);
+  };
+
+  const saveEdit = () => {
+    // Note: This is a simple client-side edit without API persistence
+    // For full implementation, you'd want to add an onSave prop and API endpoint
+    console.log('Summary edited locally:', editedSummary);
+    setIsEditing(false);
+    setEditedSummary(null);
+  };
+
+  const updateKeyFinding = (index: number, value: string) => {
+    if (editedSummary) {
+      const newKeyFindings = [...editedSummary.keyFindings];
+      newKeyFindings[index] = value;
+      setEditedSummary({ ...editedSummary, keyFindings: newKeyFindings });
+    }
+  };
+
+  const updateRecommendation = (index: number, value: string) => {
+    if (editedSummary) {
+      const newRecommendations = [...editedSummary.recommendations];
+      newRecommendations[index] = value;
+      setEditedSummary({ ...editedSummary, recommendations: newRecommendations });
+    }
   };
 
   const exportSummary = () => {
@@ -132,21 +175,51 @@ This summary has been generated automatically and should be reviewed with your h
             </div>
           )}
 
-          {/* Export Button */}
+          {/* Action Buttons */}
           {summary && !isGenerating && (
-            <button
-              onClick={exportSummary}
-              className="p-2 text-gray-500 hover:text-gray-700"
-              title="Export summary"
-            >
-              <Download className="w-4 h-4" />
-            </button>
+            <>
+              {isEditing ? (
+                <>
+                  <button
+                    onClick={saveEdit}
+                    className="p-2 text-success-600 hover:text-success-700"
+                    title="Save changes"
+                  >
+                    <Save className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={cancelEdit}
+                    className="p-2 text-gray-500 hover:text-gray-700"
+                    title="Cancel editing"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={startEdit}
+                    className="p-2 text-gray-500 hover:text-gray-700"
+                    title="Edit summary"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={exportSummary}
+                    className="p-2 text-gray-500 hover:text-gray-700"
+                    title="Export summary"
+                  >
+                    <Download className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </>
           )}
         </div>
       </div>
 
       {/* Language Selection */}
-      <div className="mb-6">
+      <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Summary Language
         </label>
@@ -169,6 +242,56 @@ This summary has been generated automatically and should be reviewed with your h
         </div>
       </div>
 
+      {/* Complexity Selection */}
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Summary Complexity
+        </label>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[
+            {
+              value: 'simple' as const,
+              title: 'Simple',
+              description: 'Patient-friendly, easy to understand',
+              icon: '👤'
+            },
+            {
+              value: 'detailed' as const,
+              title: 'Detailed',
+              description: 'Comprehensive medical summary',
+              icon: '📋'
+            },
+            {
+              value: 'technical' as const,
+              title: 'Technical',
+              description: 'Professional medical terminology',
+              icon: '🔬'
+            }
+          ].map((complexity) => (
+            <button
+              key={complexity.value}
+              onClick={() => setSelectedComplexity(complexity.value)}
+              className={cn(
+                'p-4 text-left rounded-lg border transition-colors',
+                selectedComplexity === complexity.value
+                  ? 'bg-medical-50 border-medical-300 text-medical-800'
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              )}
+            >
+              <div className="flex items-start space-x-3">
+                <span className="text-2xl">{complexity.icon}</span>
+                <div>
+                  <div className="font-semibold text-sm">{complexity.title}</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    {complexity.description}
+                  </div>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Generate Button */}
       {report && !summary && !isGenerating && (
         <div className="mb-6">
@@ -180,7 +303,23 @@ This summary has been generated automatically and should be reviewed with your h
             <span>Generate Patient Summary</span>
           </button>
           <p className="text-sm text-gray-500 mt-2">
-            Create a patient-friendly summary in {getLanguageName(selectedLanguage)}
+            Create a {selectedComplexity} summary in {getLanguageName(selectedLanguage)}
+          </p>
+        </div>
+      )}
+
+      {/* Regenerate Button */}
+      {report && summary && !isGenerating && (
+        <div className="mb-6">
+          <button
+            onClick={handleGenerate}
+            className="medical-button-secondary flex items-center space-x-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Regenerate Summary</span>
+          </button>
+          <p className="text-sm text-gray-500 mt-2">
+            Generate a new {selectedComplexity} summary in {getLanguageName(selectedLanguage)}
           </p>
         </div>
       )}
@@ -201,13 +340,25 @@ This summary has been generated automatically and should be reviewed with your h
           <>
             {/* Summary Metadata */}
             <div className="bg-medical-50 p-4 rounded-lg border border-medical-200">
-              <div className="flex items-center space-x-2 mb-3">
-                <Heart className="w-5 h-5 text-medical-600" />
-                <h4 className="font-semibold text-medical-800">
-                  Patient-Friendly Summary
-                </h4>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <Heart className="w-5 h-5 text-medical-600" />
+                  <h4 className="font-semibold text-medical-800">
+                    Patient-Friendly Summary
+                  </h4>
+                  {summary.complexity && (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {summary.complexity.charAt(0).toUpperCase() + summary.complexity.slice(1)}
+                    </span>
+                  )}
+                </div>
+                {summary.metadata?.aiProvider && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    AI-Enhanced ({summary.metadata.aiProvider})
+                  </span>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                 <div>
                   <span className="font-medium text-gray-600">Summary ID:</span>
                   <span className="ml-2 text-gray-900">{summary.id}</span>
@@ -218,6 +369,14 @@ This summary has been generated automatically and should be reviewed with your h
                     {formatTimestamp(summary.generatedAt)}
                   </span>
                 </div>
+                {summary.metadata?.confidence && (
+                  <div>
+                    <span className="font-medium text-gray-600">Confidence:</span>
+                    <span className="ml-2 text-gray-900">
+                      {Math.round(summary.metadata.confidence * 100)}%
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -226,51 +385,97 @@ This summary has been generated automatically and should be reviewed with your h
               <div className="flex items-center space-x-2 mb-4">
                 <Stethoscope className="w-5 h-5 text-gray-600" />
                 <h4 className="font-semibold text-gray-800">
-                  {getMedicalTerm('summary', summary.language)}
+                  {getMedicalTerm('summary', (isEditing ? editedSummary : summary)?.language || 'de')}
                 </h4>
               </div>
-              <div className="prose prose-sm max-w-none">
-                <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                  {summary.summary}
-                </p>
-              </div>
+              {isEditing ? (
+                <textarea
+                  value={editedSummary?.summary || ''}
+                  onChange={(e) => setEditedSummary(prev => prev ? { ...prev, summary: e.target.value } : null)}
+                  className="w-full h-40 px-4 py-3 border border-gray-300 rounded-lg resize-vertical focus:outline-none focus:ring-2 focus:ring-medical-500 focus:border-transparent"
+                  placeholder="Edit summary content..."
+                />
+              ) : (
+                <div className="prose prose-sm max-w-none">
+                  <MarkdownRenderer 
+                    content={summary.summary} 
+                    className="text-gray-700 leading-relaxed"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Key Findings */}
-            {summary.keyFindings && summary.keyFindings.length > 0 && (
+            {((isEditing ? editedSummary : summary)?.keyFindings && ((isEditing ? editedSummary : summary)?.keyFindings?.length || 0) > 0) && (
               <div className="bg-white border border-gray-200 rounded-lg p-6">
                 <div className="flex items-center space-x-2 mb-4">
                   <Activity className="w-5 h-5 text-gray-600" />
-                  <h4 className="font-semibold text-gray-800">{getMedicalTerm('keyFindings', summary.language)}</h4>
+                  <h4 className="font-semibold text-gray-800">
+                    {getMedicalTerm('keyFindings', (isEditing ? editedSummary : summary)?.language || 'de')}
+                  </h4>
                 </div>
-                <ul className="space-y-2">
-                  {summary.keyFindings.map((finding, index) => (
-                    <li key={index} className="flex items-start space-x-3">
-                      <div className="w-2 h-2 bg-medical-500 rounded-full mt-2 flex-shrink-0" />
-                      <span className="text-gray-700">{finding}</span>
-                    </li>
-                  ))}
-                </ul>
+                {isEditing ? (
+                  <div className="space-y-3">
+                    {editedSummary?.keyFindings.map((finding, index) => (
+                      <div key={index} className="flex items-start space-x-3">
+                        <div className="w-2 h-2 bg-medical-500 rounded-full mt-3 flex-shrink-0" />
+                        <input
+                          type="text"
+                          value={finding}
+                          onChange={(e) => updateKeyFinding(index, e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-medical-500 focus:border-transparent"
+                          placeholder="Key finding..."
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {summary.keyFindings.map((finding, index) => (
+                      <li key={index} className="flex items-start space-x-3">
+                        <div className="w-2 h-2 bg-medical-500 rounded-full mt-2 flex-shrink-0" />
+                        <span className="text-gray-700">{finding}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
 
             {/* Recommendations */}
-            {summary.recommendations && summary.recommendations.length > 0 && (
+            {((isEditing ? editedSummary : summary)?.recommendations && ((isEditing ? editedSummary : summary)?.recommendations?.length || 0) > 0) && (
               <div className="bg-white border border-gray-200 rounded-lg p-6">
                 <div className="flex items-center space-x-2 mb-4">
                   <CheckCircle className="w-5 h-5 text-gray-600" />
                   <h4 className="font-semibold text-gray-800">
-                    {getMedicalTerm('recommendations', summary.language)}
+                    {getMedicalTerm('recommendations', (isEditing ? editedSummary : summary)?.language || 'de')}
                   </h4>
                 </div>
-                <ul className="space-y-2">
-                  {summary.recommendations.map((recommendation, index) => (
-                    <li key={index} className="flex items-start space-x-3">
-                      <div className="w-2 h-2 bg-success-500 rounded-full mt-2 flex-shrink-0" />
-                      <span className="text-gray-700">{recommendation}</span>
-                    </li>
-                  ))}
-                </ul>
+                {isEditing ? (
+                  <div className="space-y-3">
+                    {editedSummary?.recommendations.map((recommendation, index) => (
+                      <div key={index} className="flex items-start space-x-3">
+                        <div className="w-2 h-2 bg-success-500 rounded-full mt-3 flex-shrink-0" />
+                        <input
+                          type="text"
+                          value={recommendation}
+                          onChange={(e) => updateRecommendation(index, e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-medical-500 focus:border-transparent"
+                          placeholder="Recommendation..."
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {summary.recommendations.map((recommendation, index) => (
+                      <li key={index} className="flex items-start space-x-3">
+                        <div className="w-2 h-2 bg-success-500 rounded-full mt-2 flex-shrink-0" />
+                        <span className="text-gray-700">{recommendation}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
 

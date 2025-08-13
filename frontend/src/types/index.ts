@@ -117,6 +117,12 @@ export interface PatientSummary {
   recommendations: string[];
   language: Language;
   generatedAt: number;
+  complexity?: 'simple' | 'detailed' | 'technical';
+  metadata?: {
+    aiProvider?: string;
+    processingAgent?: string;
+    confidence?: number;
+  };
 }
 
 export interface WebSocketMessage {

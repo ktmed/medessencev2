@@ -70,6 +70,14 @@ export class APIService {
   }
 
   /**
+   * Clear all cache - useful for debugging
+   */
+  clearCache(): void {
+    console.log('🗑️ Clearing API service cache');
+    this.cache.clear();
+  }
+
+  /**
    * Generate medical report using AI providers
    */
   async generateReport(
@@ -83,6 +91,10 @@ export class APIService {
     console.log('- Language:', language);
     console.log('- Text length:', transcriptionText.length);
     console.log('- Processing mode:', processingMode);
+    
+    // Always clear cache for report generation to ensure fresh data during debugging
+    console.log('🗑️ Clearing cache for fresh report generation');
+    this.clearCache();
 
     try {
       const response = await fetch(`${this.baseUrl}/api/generate-report`, {
@@ -117,6 +129,9 @@ export class APIService {
       console.log('- AI Provider:', report.metadata?.aiProvider);
       console.log('- AI Generated:', report.metadata?.aiGenerated);
       console.log('- Report Type:', report.type);
+      console.log('🔍 METADATA RECEIVED BY API SERVICE:');
+      console.log('- Agent:', report.metadata?.agent);
+      console.log('- Full metadata:', report.metadata);
       
       return report;
 

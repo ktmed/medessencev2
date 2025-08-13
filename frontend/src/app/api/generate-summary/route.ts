@@ -83,7 +83,7 @@ class ServerSummaryService {
         const aiResponse = await provider.handler(prompt);
         console.log(`✅ ${provider.name} succeeded for summary!`);
         
-        return this.parseSummaryResponse(aiResponse, language, provider.name);
+        return this.parseSummaryResponse(aiResponse, language, provider.name, complexity);
       } catch (error) {
         console.error(`❌ ${provider.name} failed for summary:`, error instanceof Error ? error.message : 'Unknown error');
         continue;
@@ -256,36 +256,99 @@ Use medical terminology and precise formulations:`
     return data.candidates[0].content.parts[0].text;
   }
 
-  private parseSummaryResponse(aiResponse: string, language: Language, provider: string): PatientSummary {
-    // Parse the AI response to extract structured summary data
-    const lines = aiResponse.split('\n').filter(line => line.trim());
+  private parseSummaryResponse(aiResponse: string, language: Language, provider: string, complexity: string = 'detailed'): PatientSummary {
+    console.log('🔍 Parsing summary response from', provider);
+    console.log('📝 AI Response length:', aiResponse.length);
+    console.log('📝 Response preview:', aiResponse.substring(0, 200) + '...');
     
-    // Extract key findings and recommendations
+    // Parse the AI response to extract structured summary data
+    const lines = aiResponse.split('\n');
+    
+    // Extract key findings and recommendations with more sophisticated parsing
     const keyFindings: string[] = [];
     const recommendations: string[] = [];
     
     let currentSection = '';
+    let summaryText = '';
     
+    // Section headers to look for (German and English)
+    const findingHeaders = [
+      'HAUPTBEFUNDE', 'KEY FINDINGS', 'SCHLÜSSELBEFUNDE', 'BEFUNDÜBERSICHT', 
+      'FINDINGS OVERVIEW', 'WICHTIGE BEFUNDE', 'IMPORTANT FINDINGS'
+    ];
+    const recommendationHeaders = [
+      'EMPFEHLUNG', 'RECOMMENDATION', 'NÄCHSTE SCHRITTE', 'NEXT STEPS',
+      'FACHEMPFEHLUNGEN', 'PROFESSIONAL RECOMMENDATIONS', 'VERLAUFSKONTROLLE',
+      'FOLLOW-UP', 'WEITERE MASSNAHMEN'
+    ];
+    const summaryHeaders = [
+      'ZUSAMMENFASSUNG', 'SUMMARY', 'BEDEUTUNG', 'MEANING', 'ÜBERSICHT', 'OVERVIEW'
+    ];
+
     for (const line of lines) {
       const trimmed = line.trim();
-      if (trimmed.includes('HAUPTBEFUNDE') || trimmed.includes('KEY FINDINGS') || trimmed.includes('SCHLÜSSELBEFUNDE')) {
+      const upperTrimmed = trimmed.toUpperCase();
+      
+      // Check for section headers
+      if (findingHeaders.some(header => upperTrimmed.includes(header))) {
         currentSection = 'findings';
-      } else if (trimmed.includes('EMPFEHLUNG') || trimmed.includes('RECOMMENDATION') || trimmed.includes('NÄCHSTE SCHRITTE')) {
+        continue;
+      } else if (recommendationHeaders.some(header => upperTrimmed.includes(header))) {
         currentSection = 'recommendations';
-      } else if (trimmed.startsWith('-') || trimmed.startsWith('•')) {
+        continue;
+      } else if (summaryHeaders.some(header => upperTrimmed.includes(header))) {
+        currentSection = 'summary';
+        continue;
+      }
+      
+      // Extract content based on current section
+      if (trimmed.startsWith('-') || trimmed.startsWith('•') || trimmed.startsWith('*')) {
         const item = trimmed.substring(1).trim();
         if (item && currentSection === 'findings') {
           keyFindings.push(item);
         } else if (item && currentSection === 'recommendations') {
           recommendations.push(item);
         }
+      } else if (trimmed.match(/^\d+\./)) {
+        // Handle numbered lists
+        const item = trimmed.replace(/^\d+\.\s*/, '').trim();
+        if (item && currentSection === 'findings') {
+          keyFindings.push(item);
+        } else if (item && currentSection === 'recommendations') {
+          recommendations.push(item);
+        }
+      } else if (currentSection === 'summary' && trimmed.length > 10) {
+        // Collect summary text
+        summaryText += (summaryText ? ' ' : '') + trimmed;
       }
     }
+
+    // If no structured summary was found, try to extract the first meaningful paragraph
+    if (!summaryText) {
+      const meaningfulLines = lines.filter(line => 
+        line.trim().length > 50 && 
+        !line.trim().toUpperCase().includes('BEFUND') && 
+        !line.trim().toUpperCase().includes('FINDING') &&
+        !line.trim().toUpperCase().includes('EMPFEHLUNG') &&
+        !line.trim().toUpperCase().includes('RECOMMENDATION')
+      );
+      if (meaningfulLines.length > 0) {
+        summaryText = meaningfulLines[0].trim();
+      }
+    }
+
+    // Fallback to full response if nothing structured was found
+    const finalSummary = summaryText || aiResponse;
+
+    console.log('✅ Summary parsing results:');
+    console.log('- Key findings extracted:', keyFindings.length);
+    console.log('- Recommendations extracted:', recommendations.length);
+    console.log('- Summary text length:', finalSummary.length);
 
     return {
       id: `summary-${Date.now()}`,
       reportId: `report-${Date.now()}`,
-      summary: aiResponse,
+      summary: finalSummary,
       keyFindings: keyFindings.length > 0 ? keyFindings : [
         language === 'de' ? 'Siehe detaillierte Zusammenfassung' : 'See detailed summary'
       ],
@@ -294,6 +357,12 @@ Use medical terminology and precise formulations:`
       ],
       language,
       generatedAt: Date.now(),
+      complexity: complexity as 'simple' | 'detailed' | 'technical',
+      metadata: {
+        aiProvider: provider,
+        processingAgent: `summary-${provider}`,
+        confidence: keyFindings.length > 0 && recommendations.length > 0 ? 0.9 : 0.7
+      }
     };
   }
 
@@ -314,6 +383,12 @@ Use medical terminology and precise formulations:`
       ],
       language,
       generatedAt: Date.now(),
+      complexity: 'detailed',
+      metadata: {
+        aiProvider: 'fallback',
+        processingAgent: 'rule-based-summary',
+        confidence: 0.5
+      }
     };
   }
 }
