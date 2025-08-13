@@ -121,18 +121,24 @@ Bericht: ${reportContent}
 
 Erstelle eine professionelle medizinische Zusammenfassung:`,
 
-        technical: `Erstelle eine technische Fachzusammenfassung des folgenden medizinischen Berichts für Kollegen:
+        technical: `Erstelle eine umfassende technische Fachzusammenfassung des folgenden medizinischen Berichts für Ärzte und Fachpersonal:
+
+ANFORDERUNGEN:
+- Verwende präzise medizinische Terminologie und ICD-10-Klassifikationen
+- Füge quantitative Messwerte, technische Parameter und spezifische anatomische Referenzen ein
+- Biete detaillierte Analyse für Fachkollegen und Spezialisten
+- Minimum 3-4 Sätze pro Abschnitt für gründliche Abdeckung
 
 Format:
-- BEFUNDÜBERSICHT: [Technische Details und Messwerte]
-- DIFFERENTIALDIAGNOSEN: [Mögliche Diagnosen basierend auf Befunden]
-- KORRELATION: [Zusammenhang zwischen verschiedenen Befunden]
-- FACHEMPFEHLUNGEN: [Spezifische medizinische Empfehlungen]
-- VERLAUFSKONTROLLE: [Empfohlene Follow-up-Untersuchungen]
+- TECHNISCHE BEFUNDE: [Detaillierte Messwerte, anatomische Lokalisationen, Bildgebungsparameter, Laborwerte, pathologische Beobachtungen]
+- DIFFERENTIALDIAGNOSEN: [Primäre und sekundäre diagnostische Überlegungen mit Belegen und Ausschlusskriterien]
+- KLINISCHE KORRELATION: [Zusammenhang zwischen Befunden, Progressionsmuster, Risikostratifizierung]
+- FACHÄRZTLICHE EMPFEHLUNGEN: [Evidenzbasierte Behandlungsprotokolle, Überweisungsindikationen, Überwachungsparameter]
+- VERLAUFSPROTOKOLL: [Spezifische Zeitrahmen, Bildgebungsintervalle, Laborüberwachung, klinische Reevaluationskriterien]
 
 Bericht: ${reportContent}
 
-Verwende medizinische Fachterminologie und präzise Formulierungen:`
+Erstelle eine detaillierte technische Analyse mit medizinischer Fachterminologie, Messwerten und professioneller klinischer Sprache:`
       },
       en: {
         simple: `Create a simple, understandable summary of the following medical report for patients:
@@ -159,18 +165,24 @@ Report: ${reportContent}
 
 Create a professional medical summary:`,
 
-        technical: `Create a technical professional summary of the following medical report for colleagues:
+        technical: `Create a comprehensive technical summary of the following medical report for medical professionals:
+
+REQUIREMENTS:
+- Use precise medical terminology and ICD-10 classifications where applicable
+- Include quantitative measurements, technical parameters, and specific anatomical references
+- Provide detailed analysis suitable for specialist consultation
+- Minimum 3-4 sentences per section for thorough coverage
 
 Format:
-- FINDINGS OVERVIEW: [Technical details and measurements]
-- DIFFERENTIAL DIAGNOSES: [Possible diagnoses based on findings]
-- CORRELATION: [Relationship between different findings]
-- PROFESSIONAL RECOMMENDATIONS: [Specific medical recommendations]
-- FOLLOW-UP: [Recommended follow-up examinations]
+- TECHNICAL FINDINGS: [Detailed measurements, anatomical locations, imaging parameters, laboratory values, pathological observations]
+- DIFFERENTIAL DIAGNOSES: [Primary and secondary diagnostic considerations with supporting evidence and exclusion criteria]
+- CLINICAL CORRELATION: [Relationship between findings, progression patterns, risk stratification]
+- SPECIALIST RECOMMENDATIONS: [Evidence-based treatment protocols, referral indications, monitoring parameters]
+- FOLLOW-UP PROTOCOL: [Specific timeframes, imaging intervals, laboratory monitoring, clinical reassessment criteria]
 
 Report: ${reportContent}
 
-Use medical terminology and precise formulations:`
+Create a detailed technical analysis using medical terminology, measurements, and professional clinical language:`
       },
       ar: {
         simple: `قم بإنشاء ملخص بسيط ومفهوم للتقرير الطبي التالي للمرضى:
@@ -502,9 +514,9 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
     // Section headers to look for (multilingual support)
     const findingHeaders = [
       // German
-      'HAUPTBEFUNDE', 'SCHLÜSSELBEFUNDE', 'BEFUNDÜBERSICHT', 'WICHTIGE BEFUNDE',
+      'HAUPTBEFUNDE', 'SCHLÜSSELBEFUNDE', 'BEFUNDÜBERSICHT', 'WICHTIGE BEFUNDE', 'TECHNISCHE BEFUNDE',
       // English  
-      'KEY FINDINGS', 'FINDINGS OVERVIEW', 'IMPORTANT FINDINGS', 'MAIN FINDINGS',
+      'KEY FINDINGS', 'FINDINGS OVERVIEW', 'IMPORTANT FINDINGS', 'MAIN FINDINGS', 'TECHNICAL FINDINGS',
       // Arabic
       'النتائج الرئيسية', 'نظرة عامة على النتائج',
       // Ukrainian
@@ -520,9 +532,9 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
     ];
     const recommendationHeaders = [
       // German
-      'EMPFEHLUNG', 'EMPFEHLUNGEN', 'NÄCHSTE SCHRITTE', 'FACHEMPFEHLUNGEN', 'VERLAUFSKONTROLLE', 'WEITERE MASSNAHMEN',
+      'EMPFEHLUNG', 'EMPFEHLUNGEN', 'NÄCHSTE SCHRITTE', 'FACHEMPFEHLUNGEN', 'FACHÄRZTLICHE EMPFEHLUNGEN', 'VERLAUFSKONTROLLE', 'VERLAUFSPROTOKOLL', 'WEITERE MASSNAHMEN',
       // English
-      'RECOMMENDATION', 'RECOMMENDATIONS', 'NEXT STEPS', 'PROFESSIONAL RECOMMENDATIONS', 'FOLLOW-UP',
+      'RECOMMENDATION', 'RECOMMENDATIONS', 'NEXT STEPS', 'PROFESSIONAL RECOMMENDATIONS', 'SPECIALIST RECOMMENDATIONS', 'FOLLOW-UP', 'FOLLOW-UP PROTOCOL',
       // Arabic
       'التوصيات', 'الخطوات التالية', 'التوصيات المهنية', 'المتابعة',
       // Ukrainian  
