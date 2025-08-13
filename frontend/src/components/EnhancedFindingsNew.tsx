@@ -152,6 +152,7 @@ export default function EnhancedFindingsNew({
     console.log('🔍 Highlighting attempt:', {
       findingText: finding.text,
       category: finding.category,
+      significance: finding.significance,
       sourceTextLength: text.length,
       sourcePreview: text.substring(0, 200) + '...'
     });
@@ -171,24 +172,112 @@ export default function EnhancedFindingsNew({
         matchType: 'exact'
       });
     }
-    
-    // Strategy 2: Try key words/phrases (for paraphrased content)
+
+    // Strategy 1.5: Try exact match without common prefixes/suffixes
     if (highlightResults.length === 0) {
-      // Extract meaningful words (filter out common words)
-      const stopWords = ['der', 'die', 'das', 'und', 'oder', 'in', 'an', 'auf', 'bei', 'mit', 'zu', 'von', 'für', 'durch', 'über', 'unter', 'vor', 'nach', 'zwischen', 'während', 'ohne', 'gegen', 'um', 'the', 'and', 'or', 'in', 'on', 'at', 'by', 'with', 'to', 'from', 'for', 'through', 'over', 'under', 'before', 'after', 'between', 'during', 'without', 'against', 'around', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'ist', 'sind', 'war', 'waren', 'haben', 'hat', 'hatte', 'werden', 'wird', 'wurde', 'wurden', 'sein', 'gewesen', 'worden'];
+      // Remove common medical report prefixes/suffixes that might differ
+      const cleanedFinding = findingText
+        .replace(/^(keine|kein|unauffällige|unauffälliger|normale|normaler|regelrechte|regelrechter)\s+/g, '')
+        .replace(/\s+(darstellbar|erkennbar|nachweisbar|vorliegend)$/g, '')
+        .trim();
+      
+      if (cleanedFinding && cleanedFinding !== findingText) {
+        const cleanIndex = lowerText.indexOf(cleanedFinding);
+        if (cleanIndex !== -1) {
+          highlightResults.push({
+            start: cleanIndex,
+            end: cleanIndex + cleanedFinding.length,
+            matchType: 'cleaned-exact'
+          });
+        }
+      }
+    }
+    
+    // Strategy 2: Category-specific matching strategies
+    if (highlightResults.length === 0) {
+      if (finding.category === 'normal') {
+        // For normal findings, try to match the core anatomical structure or finding
+        const normalKeywords = findingText
+          .replace(/^(keine|kein|unauffällige|unauffälliger|normale|normaler|regelrechte|regelrechter)\s+/g, '')
+          .replace(/\s+(darstellbar|erkennbar|nachweisbar|vorliegend|auffälligkeiten|pathologie)$/g, '')
+          .split(/[\s,.-]+/)
+          .filter(word => word.length > 3)
+          .slice(0, 2); // Take first 2 core terms
+
+        console.log('🔍 Normal finding core terms:', normalKeywords);
+        
+        for (const keyword of normalKeywords) {
+          const keywordIndex = lowerText.indexOf(keyword);
+          if (keywordIndex !== -1) {
+            // Extend to find the full sentence or phrase around this keyword
+            const sentenceStart = Math.max(0, text.lastIndexOf('.', keywordIndex) + 1);
+            const sentenceEnd = Math.min(text.length, text.indexOf('.', keywordIndex + keyword.length));
+            const actualEnd = sentenceEnd === -1 ? text.length : sentenceEnd;
+            
+            highlightResults.push({
+              start: sentenceStart,
+              end: actualEnd,
+              matchType: `normal-context-${keyword}`
+            });
+            break;
+          }
+        }
+      } else if (finding.category === 'measurements') {
+        // For measurements, look for numbers and units
+        const measurementPattern = /\d+[\.,]?\d*\s*(mm|cm|m|ml|l|grad|°|prozent|%)/i;
+        const match = text.match(measurementPattern);
+        
+        if (match && match.index !== undefined) {
+          const contextStart = Math.max(0, match.index - 30);
+          const contextEnd = Math.min(text.length, match.index + match[0].length + 30);
+          
+          highlightResults.push({
+            start: contextStart,
+            end: contextEnd,
+            matchType: 'measurement-context'
+          });
+        }
+      } else if (finding.category === 'localizations') {
+        // For localizations, look for anatomical terms
+        const anatomicalTerms = findingText
+          .split(/[\s,.-]+/)
+          .filter(word => word.length > 3 && !/^(links|rechts|beidseits|mittig|zentral|lateral|medial|anterior|posterior)$/i.test(word))
+          .slice(0, 2);
+
+        console.log('🔍 Anatomical terms for localization:', anatomicalTerms);
+        
+        for (const term of anatomicalTerms) {
+          const termIndex = lowerText.indexOf(term);
+          if (termIndex !== -1) {
+            const contextStart = Math.max(0, termIndex - 40);
+            const contextEnd = Math.min(text.length, termIndex + term.length + 40);
+            
+            highlightResults.push({
+              start: contextStart,
+              end: contextEnd,
+              matchType: `localization-${term}`
+            });
+            break;
+          }
+        }
+      }
+    }
+    
+    // Strategy 3: General fuzzy word matching (fallback)
+    if (highlightResults.length === 0) {
+      const stopWords = ['der', 'die', 'das', 'und', 'oder', 'in', 'an', 'auf', 'bei', 'mit', 'zu', 'von', 'für', 'durch', 'über', 'unter', 'vor', 'nach', 'zwischen', 'während', 'ohne', 'gegen', 'um', 'the', 'and', 'or', 'in', 'on', 'at', 'by', 'with', 'to', 'from', 'for', 'through', 'over', 'under', 'before', 'after', 'between', 'during', 'without', 'against', 'around', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'ist', 'sind', 'war', 'waren', 'haben', 'hat', 'hatte', 'werden', 'wird', 'wurde', 'wurden', 'sein', 'gewesen', 'worden', 'keine', 'kein', 'unauffällige', 'normale', 'regelrechte'];
       
       const meaningfulWords = findingText
         .split(/[\s,.-]+/)
-        .filter(word => word.length > 2 && !stopWords.includes(word.toLowerCase()))
-        .slice(0, 3); // Take first 3 meaningful words
+        .filter(word => word.length > 3 && !stopWords.includes(word.toLowerCase()))
+        .slice(0, 2); // Take first 2 meaningful words
       
-      console.log('🔍 Meaningful words for fuzzy matching:', meaningfulWords);
+      console.log('🔍 Meaningful words for general fuzzy matching:', meaningfulWords);
       
       for (const word of meaningfulWords) {
         const wordIndex = lowerText.indexOf(word);
         if (wordIndex !== -1) {
-          // Try to find a reasonable phrase around this word
-          const contextStart = Math.max(0, wordIndex - 50);
+          const contextStart = Math.max(0, wordIndex - 30);
           const contextEnd = Math.min(text.length, wordIndex + word.length + 50);
           
           highlightResults.push({
@@ -196,21 +285,24 @@ export default function EnhancedFindingsNew({
             end: contextEnd,
             matchType: `fuzzy-${word}`
           });
-          break; // Use the first match found
+          break;
         }
       }
     }
     
-    // Strategy 3: Medical term matching (for specific medical terms)
+    // Strategy 4: Medical term matching (final fallback)
     if (highlightResults.length === 0) {
-      // Look for specific medical terms that might be mentioned
-      const medicalTerms = findingText.match(/\b[a-zA-ZäöüÄÖÜß]{4,}\b/g) || [];
-      for (const term of medicalTerms) {
-        const termIndex = lowerText.indexOf(term);
+      // Look for any significant medical terms that might be mentioned
+      const medicalTerms = findingText.match(/\b[a-zA-ZäöüÄÖÜß]{5,}\b/g) || [];
+      for (const term of medicalTerms.slice(0, 2)) { // Only try first 2 longest terms
+        const termIndex = lowerText.indexOf(term.toLowerCase());
         if (termIndex !== -1) {
+          const contextStart = Math.max(0, termIndex - 20);
+          const contextEnd = Math.min(text.length, termIndex + term.length + 20);
+          
           highlightResults.push({
-            start: termIndex,
-            end: termIndex + term.length,
+            start: contextStart,
+            end: contextEnd,
             matchType: `medical-term-${term}`
           });
           break;
