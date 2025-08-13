@@ -448,13 +448,6 @@ ${formatContentValue(report.technicalDetails)}
               ))
             ) : null}
             
-            {/* ICD-10-GM Predictions Section - Always display if available */}
-            {currentReport.icdPredictions && (
-              <ICDPredictionsComponent 
-                predictions={currentReport.icdPredictions}
-                className="mb-6"
-              />
-            )}
             
             {!(currentReport.sections && currentReport.sections.length > 0) ? (
               // Fallback to legacy display
