@@ -21,7 +21,7 @@ class ServerSummaryService {
   }
 
   private initializeProviders() {
-    const providerPriority = (process.env.NEXT_PUBLIC_AI_PROVIDER_PRIORITY || 'claude,gemini,openai')
+    const providerPriority = (process.env.AI_PROVIDER_PRIORITY || 'claude,gemini,openai')
       .split(',')
       .map(p => p.trim());
     
@@ -30,19 +30,19 @@ class ServerSummaryService {
 
     const availableProviders: { [key: string]: () => LLMProvider | null } = {
       claude: () => {
-        if (process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY) {
+        if (process.env.ANTHROPIC_API_KEY) {
           return { name: 'claude', handler: this.callClaude.bind(this) };
         }
         return null;
       },
       openai: () => {
-        if (process.env.NEXT_PUBLIC_OPENAI_API_KEY) {
+        if (process.env.OPENAI_API_KEY) {
           return { name: 'openai', handler: this.callOpenAI.bind(this) };
         }
         return null;
       },
       gemini: () => {
-        if (process.env.NEXT_PUBLIC_GOOGLE_API_KEY) {
+        if (process.env.GOOGLE_API_KEY) {
           return { name: 'gemini', handler: this.callGemini.bind(this) };
         }
         return null;
@@ -179,7 +179,7 @@ Use medical terminology and precise formulations:`
   }
 
   private async callClaude(prompt: string): Promise<string> {
-    const apiKey = process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY;
+    const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) throw new Error('Claude API key not configured');
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -190,7 +190,7 @@ Use medical terminology and precise formulations:`
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: process.env.NEXT_PUBLIC_CLAUDE_MODEL || 'claude-3-haiku-20240307',
+        model: process.env.CLAUDE_MODEL || 'claude-3-haiku-20240307',
         max_tokens: 1500,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.3,
@@ -206,7 +206,7 @@ Use medical terminology and precise formulations:`
   }
 
   private async callOpenAI(prompt: string): Promise<string> {
-    const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OpenAI API key not configured');
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -216,7 +216,7 @@ Use medical terminology and precise formulations:`
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: process.env.NEXT_PUBLIC_OPENAI_MODEL || 'gpt-4o-mini',
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         messages: [
           { role: 'system', content: 'You are a medical AI assistant creating patient summaries from medical reports.' },
           { role: 'user', content: prompt }
@@ -235,10 +235,10 @@ Use medical terminology and precise formulations:`
   }
 
   private async callGemini(prompt: string): Promise<string> {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
+    const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) throw new Error('Gemini API key not configured');
 
-    const model = process.env.NEXT_PUBLIC_GEMINI_MODEL || 'gemini-2.5-flash';
+    const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp';
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -21,19 +21,19 @@ class ServerMultiLLMService {
   }
 
   private initializeProviders() {
-    const providerPriority = (process.env.NEXT_PUBLIC_AI_PROVIDER_PRIORITY || 'claude,gemini,openai')
+    const providerPriority = (process.env.AI_PROVIDER_PRIORITY || 'claude,gemini,openai')
       .split(',')
       .map(p => p.trim());
     
     console.log('🚀 SERVER API: Initializing AI providers');
     console.log('- Provider priority:', providerPriority);
-    console.log('- Claude API Key:', process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY ? 'SET' : 'NOT SET');
-    console.log('- OpenAI API Key:', process.env.NEXT_PUBLIC_OPENAI_API_KEY ? 'SET' : 'NOT SET');
-    console.log('- Google API Key:', process.env.NEXT_PUBLIC_GOOGLE_API_KEY ? 'SET' : 'NOT SET');
+    console.log('- Claude API Key:', process.env.ANTHROPIC_API_KEY ? 'SET' : 'NOT SET');
+    console.log('- OpenAI API Key:', process.env.OPENAI_API_KEY ? 'SET' : 'NOT SET');
+    console.log('- Google API Key:', process.env.GOOGLE_API_KEY ? 'SET' : 'NOT SET');
 
     const availableProviders: { [key: string]: () => LLMProvider | null } = {
       claude: () => {
-        if (process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY) {
+        if (process.env.ANTHROPIC_API_KEY) {
           return {
             name: 'claude',
             handler: this.callClaude.bind(this)
@@ -42,7 +42,7 @@ class ServerMultiLLMService {
         return null;
       },
       openai: () => {
-        if (process.env.NEXT_PUBLIC_OPENAI_API_KEY) {
+        if (process.env.OPENAI_API_KEY) {
           return {
             name: 'openai',
             handler: this.callOpenAI.bind(this)
@@ -51,7 +51,7 @@ class ServerMultiLLMService {
         return null;
       },
       gemini: () => {
-        if (process.env.NEXT_PUBLIC_GOOGLE_API_KEY) {
+        if (process.env.GOOGLE_API_KEY) {
           return {
             name: 'gemini',
             handler: this.callGemini.bind(this)
@@ -149,7 +149,7 @@ Create a professional, precise medical report:`;
   }
 
   private async callClaude(prompt: string): Promise<string> {
-    const apiKey = process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY;
+    const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) throw new Error('Claude API key not configured');
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -160,7 +160,7 @@ Create a professional, precise medical report:`;
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: process.env.NEXT_PUBLIC_CLAUDE_MODEL || 'claude-3-haiku-20240307',
+        model: process.env.CLAUDE_MODEL || 'claude-3-haiku-20240307',
         max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }],
       }),
@@ -175,7 +175,7 @@ Create a professional, precise medical report:`;
   }
 
   private async callOpenAI(prompt: string): Promise<string> {
-    const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OpenAI API key not configured');
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -185,7 +185,7 @@ Create a professional, precise medical report:`;
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: process.env.NEXT_PUBLIC_OPENAI_MODEL || 'gpt-4o-mini',
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         messages: [
           { role: 'system', content: 'You are a medical AI assistant creating structured medical reports.' },
           { role: 'user', content: prompt }
@@ -204,10 +204,10 @@ Create a professional, precise medical report:`;
   }
 
   private async callGemini(prompt: string): Promise<string> {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
+    const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) throw new Error('Gemini API key not configured');
 
-    const model = process.env.NEXT_PUBLIC_GEMINI_MODEL || 'gemini-2.5-flash';
+    const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp';
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -14,13 +14,13 @@ export async function GET() {
         url: process.env.VERCEL_URL
       },
       aiProviders: {
-        hasClaudeKey: !!process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY,
-        hasOpenAIKey: !!process.env.NEXT_PUBLIC_OPENAI_API_KEY,
-        hasGoogleKey: !!process.env.NEXT_PUBLIC_GOOGLE_API_KEY,
-        providerPriority: process.env.NEXT_PUBLIC_AI_PROVIDER_PRIORITY || 'claude,gemini,openai',
-        claudeModel: process.env.NEXT_PUBLIC_CLAUDE_MODEL || 'not-set',
-        openaiModel: process.env.NEXT_PUBLIC_OPENAI_MODEL || 'not-set',
-        geminiModel: process.env.NEXT_PUBLIC_GEMINI_MODEL || 'not-set'
+        hasClaudeKey: !!process.env.ANTHROPIC_API_KEY,
+        hasOpenAIKey: !!process.env.OPENAI_API_KEY,
+        hasGoogleKey: !!process.env.GOOGLE_API_KEY,
+        providerPriority: process.env.AI_PROVIDER_PRIORITY || 'claude,gemini,openai',
+        claudeModel: process.env.CLAUDE_MODEL || 'not-set',
+        openaiModel: process.env.OPENAI_MODEL || 'not-set',
+        geminiModel: process.env.GEMINI_MODEL || 'not-set'
       },
       apis: {
         generateReport: '/api/generate-report',
