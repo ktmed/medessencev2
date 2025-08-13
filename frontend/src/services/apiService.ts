@@ -98,15 +98,25 @@ export class APIService {
         } as GenerateReportRequest),
       });
 
+      console.log('📡 API Response Status:', response.status, response.statusText);
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('❌ API Error Response:', errorText);
+        try {
+          const errorData = JSON.parse(errorText);
+          throw new Error(errorData.error || errorData.details || `HTTP ${response.status}: ${response.statusText}`);
+        } catch (e) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+        }
       }
 
       const report = await response.json();
       console.log('✅ Report generated successfully');
       console.log('- Report ID:', report.id);
       console.log('- AI Provider:', report.metadata?.aiProvider);
+      console.log('- AI Generated:', report.metadata?.aiGenerated);
+      console.log('- Report Type:', report.type);
       
       return report;
 
