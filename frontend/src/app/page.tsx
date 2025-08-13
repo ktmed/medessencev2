@@ -9,6 +9,7 @@ import SummaryGenerator from '@/components/SummaryGenerator';
 import LanguageSelector, { CompactLanguageSelector } from '@/components/LanguageSelector';
 import { WebSocketClient } from '@/utils/websocket';
 import { multiLLMService } from '@/services/multiLLMService';
+import { apiService } from '@/services/apiService';
 import { 
   Language, 
   TranscriptionData, 
@@ -235,8 +236,8 @@ export default function Dashboard() {
 
 
 
-  // Generate medical report
-  const handleGenerateReport = useCallback(() => {
+  // Generate medical report using API service
+  const handleGenerateReport = useCallback(async () => {
     const finalTranscriptions = transcriptions.filter(t => t.isFinal);
     
     if (finalTranscriptions.length === 0 && !refinedTranscript) {
@@ -247,7 +248,7 @@ export default function Dashboard() {
       return;
     }
 
-    if (wsClient && isConnected) {
+    try {
       // Clear any existing report and summary first
       setCurrentReport(null);
       setCurrentSummary(null);
@@ -259,14 +260,38 @@ export default function Dashboard() {
       const textToUse = refinedTranscript || (finalTranscriptions.length > 0 ? finalTranscriptions[0].text : '');
       const transcriptionId = finalTranscriptions.length > 0 ? finalTranscriptions[0].id : `refined-${Date.now()}`;
       
-      wsClient.requestReport(transcriptionId, language, textToUse, reportProcessingMode);
-    } else {
+      console.log('🚀 Generating report via API service');
+      console.log('- Processing mode:', reportProcessingMode);
+      console.log('- Text length:', textToUse.length);
+      
+      const report = await apiService.generateReport(
+        transcriptionId,
+        language,
+        textToUse,
+        reportProcessingMode
+      );
+      
+      setCurrentReport(report);
+      setIsGeneratingReport(false);
       setUIState(prev => ({ 
         ...prev, 
-        error: 'Not connected to report generation service' 
+        success: `Medical report generated successfully using ${report.metadata?.aiProvider || 'AI'}` 
+      }));
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setUIState(prev => ({ ...prev, success: null }));
+      }, 3000);
+      
+    } catch (error) {
+      console.error('❌ Report generation failed:', error);
+      setIsGeneratingReport(false);
+      setUIState(prev => ({ 
+        ...prev, 
+        error: `Failed to generate report: ${error instanceof Error ? error.message : 'Unknown error'}` 
       }));
     }
-  }, [transcriptions, refinedTranscript, wsClient, isConnected, language, reportProcessingMode]);
+  }, [transcriptions, refinedTranscript, language, reportProcessingMode]);
 
   // Handle refined transcription from AI
   const handleRefinedTranscription = useCallback((refined: string) => {
@@ -283,8 +308,8 @@ export default function Dashboard() {
     }, 3000);
   }, []);
 
-  // Generate report from pasted text
-  const handleGenerateReportFromText = useCallback(() => {
+  // Generate report from pasted text using API service
+  const handleGenerateReportFromText = useCallback(async () => {
     if (!pastedText.trim()) {
       setUIState(prev => ({ 
         ...prev, 
@@ -293,13 +318,13 @@ export default function Dashboard() {
       return;
     }
 
-    if (wsClient && isConnected) {
+    try {
       // Clear any existing report and summary first
       setCurrentReport(null);
       setCurrentSummary(null);
       
-      // Create a fake transcription with the pasted text
-      const fakeTranscription: TranscriptionData = {
+      // Create a transcription record for display
+      const pastedTranscription: TranscriptionData = {
         id: `pasted-${Date.now()}`,
         text: pastedText,
         isFinal: true,
@@ -308,28 +333,48 @@ export default function Dashboard() {
         timestamp: Date.now()
       };
       
-      // Add to transcriptions so report generation can use it
-      setTranscriptions(prev => [...prev, fakeTranscription]);
+      // Add to transcriptions for display
+      setTranscriptions(prev => [...prev, pastedTranscription]);
       
       setIsGeneratingReport(true);
       setUIState(prev => ({ ...prev, error: null }));
       
-      // Request report generation with the actual text
-      console.log('Sending report generation request with processing mode:', reportProcessingMode);
-      console.log('DEBUG: Pasted text being sent:', pastedText.substring(0, 200) + '...');
-      console.log('DEBUG: Pasted text length:', pastedText.length);
-      wsClient.requestReport(fakeTranscription.id, language, pastedText, reportProcessingMode);
+      console.log('🚀 Generating report from pasted text via API service');
+      console.log('- Processing mode:', reportProcessingMode);
+      console.log('- Text length:', pastedText.length);
+      
+      const report = await apiService.generateReport(
+        pastedTranscription.id,
+        language,
+        pastedText,
+        reportProcessingMode
+      );
+      
+      setCurrentReport(report);
+      setIsGeneratingReport(false);
+      setUIState(prev => ({ 
+        ...prev, 
+        success: `Medical report generated successfully using ${report.metadata?.aiProvider || 'AI'}` 
+      }));
       
       // Clear the paste input
       setPastedText('');
       setShowPasteInput(false);
-    } else {
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setUIState(prev => ({ ...prev, success: null }));
+      }, 3000);
+      
+    } catch (error) {
+      console.error('❌ Report generation from pasted text failed:', error);
+      setIsGeneratingReport(false);
       setUIState(prev => ({ 
         ...prev, 
-        error: 'Not connected to report generation service' 
+        error: `Failed to generate report: ${error instanceof Error ? error.message : 'Unknown error'}` 
       }));
     }
-  }, [pastedText, wsClient, isConnected, language, reportProcessingMode]);
+  }, [pastedText, language, reportProcessingMode]);
 
   // Generate patient summary
   const handleGenerateSummary = useCallback((reportId: string, summaryLanguage: Language) => {
@@ -395,23 +440,13 @@ export default function Dashboard() {
               </div>
             </div>
             
-            {/* Connection Status */}
+            {/* API Status */}
             <div className="flex items-center space-x-2">
-              {isConnected ? (
-                <div className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-orange-100 to-orange-200 rounded-xl shadow-sm border border-orange-300">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                  <Wifi className="w-4 h-4 text-orange-600" />
-                  <span className="text-sm font-medium text-orange-700">Connected</span>
-                </div>
-              ) : (
-                <div className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-error-100 to-error-200 rounded-xl shadow-sm border border-error-300">
-                  <div className="w-2 h-2 bg-error-500 rounded-full animate-pulse"></div>
-                  <WifiOff className="w-4 h-4 text-error-600" />
-                  <span className="text-sm font-medium text-error-700">
-                    {connectionAttempts > 0 ? `Reconnecting... (${connectionAttempts}/5)` : 'Disconnected'}
-                  </span>
-                </div>
-              )}
+              <div className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-green-100 to-green-200 rounded-xl shadow-sm border border-green-300">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <Wifi className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-medium text-green-700">AI API Ready</span>
+              </div>
             </div>
           </div>
 
@@ -556,10 +591,13 @@ export default function Dashboard() {
                 <div className="flex gap-2">
                   <button
                     onClick={handleGenerateReportFromText}
-                    disabled={!isConnected || !pastedText.trim()}
+                    disabled={isGeneratingReport || !pastedText.trim()}
                     className="medical-button-primary flex-1"
                   >
-                    {language === 'de' ? 'Bericht generieren' : 'Generate Report'}
+                    {isGeneratingReport 
+                      ? (language === 'de' ? 'Generiere...' : 'Generating...') 
+                      : (language === 'de' ? 'Bericht generieren' : 'Generate Report')
+                    }
                   </button>
                   <button
                     onClick={() => setPastedText('')}
@@ -605,10 +643,10 @@ export default function Dashboard() {
                 )}
                 <button
                   onClick={handleGenerateReport}
-                  disabled={!isConnected}
+                  disabled={isGeneratingReport}
                   className="medical-button-primary"
                 >
-                  Generate Report
+                  {isGeneratingReport ? 'Generating...' : 'Generate Report'}
                 </button>
               </div>
             </div>
