@@ -451,7 +451,7 @@ ${formatContentValue(report.technicalDetails)}
             
             {!(currentReport.sections && currentReport.sections.length > 0) ? (
               // Fallback to legacy display
-              <>
+              <div className="space-y-6">
                 {/* Enhanced Findings Section */}
                 {hasValidEnhancedFindings ? (
                   <div className="medical-report">
@@ -489,11 +489,10 @@ ${formatContentValue(report.technicalDetails)}
                   </div>
                 )}
 
-                {/* ICD-10-GM Predictions Section */}
+                {/* ICD-10-GM Predictions Section - Separate card */}
                 {currentReport.icdPredictions && (
                   <ICDPredictionsComponent 
                     predictions={currentReport.icdPredictions}
-                    className="mb-6"
                   />
                 )}
 
@@ -558,7 +557,7 @@ ${formatContentValue(report.technicalDetails)}
                     </div>
                   )}
                 </details>
-              </>
+              </div>
             ) : null}
           </>
         ) : (
