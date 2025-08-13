@@ -148,14 +148,15 @@ export default function ReportViewer({
   };
 
   const formatReportForExport = (report: MedicalReport): string => {
+    const headerText = getMedicalTerm('medicalReport', report.language).toUpperCase();
     return `
-MEDICAL RADIOLOGY REPORT
-========================
+${headerText}
+${'='.repeat(headerText.length)}
 
-Report ID: ${report.id}
-Generated: ${formatTimestamp(report.generatedAt)}
-Language: ${getLanguageName(report.language)}
-${report.patientId ? `Patient ID: ${report.patientId}` : ''}
+${getMedicalTerm('reportId', report.language)}: ${report.id}
+${getMedicalTerm('generated', report.language)}: ${formatTimestamp(report.generatedAt)}
+${getMedicalTerm('language', report.language)}: ${getLanguageName(report.language)}
+${report.patientId ? `${getMedicalTerm('patientId', report.language)}: ${report.patientId}` : ''}
 
 ${getMedicalTerm('findings', report.language).toUpperCase()}
 ${'-'.repeat(getMedicalTerm('findings', report.language).length)}
@@ -169,8 +170,8 @@ ${getMedicalTerm('recommendations', report.language).toUpperCase()}
 ${'-'.repeat(getMedicalTerm('recommendations', report.language).length)}
 ${formatContentValue(report.recommendations)}
 
-TECHNICAL DETAILS
------------------
+${getMedicalTerm('technicalDetails', report.language).toUpperCase()}
+${'-'.repeat(getMedicalTerm('technicalDetails', report.language).length)}
 ${formatContentValue(report.technicalDetails)}
 `.trim();
   };

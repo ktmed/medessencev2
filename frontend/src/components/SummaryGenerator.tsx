@@ -113,14 +113,15 @@ export default function SummaryGenerator({
   };
 
   const formatSummaryForExport = (summary: PatientSummary): string => {
+    const headerText = getMedicalTerm('patientSummary', summary.language).toUpperCase();
     return `
-PATIENT-FRIENDLY MEDICAL SUMMARY
-================================
+${headerText}
+${'='.repeat(headerText.length)}
 
-Summary ID: ${summary.id}
-Report ID: ${summary.reportId}
-Generated: ${formatTimestamp(summary.generatedAt)}
-Language: ${getLanguageName(summary.language)}
+${getMedicalTerm('summaryId', summary.language)}: ${summary.id}
+${getMedicalTerm('reportId', summary.language)}: ${summary.reportId}
+${getMedicalTerm('generated', summary.language)}: ${formatTimestamp(summary.generatedAt)}
+${getMedicalTerm('language', summary.language)}: ${getLanguageName(summary.language)}
 
 ${getMedicalTerm('summary', summary.language).toUpperCase()}
 ${'-'.repeat(getMedicalTerm('summary', summary.language).length)}
@@ -130,16 +131,16 @@ ${getMedicalTerm('keyFindings', summary.language).toUpperCase()}
 ${'-'.repeat(getMedicalTerm('keyFindings', summary.language).length)}
 ${summary.keyFindings && summary.keyFindings.length > 0 
   ? summary.keyFindings.map(finding => `• ${finding}`).join('\n')
-  : 'No key findings available.'}
+  : getMedicalTerm('noDataAvailable', summary.language)}
 
 ${getMedicalTerm('recommendations', summary.language).toUpperCase()}
 ${'-'.repeat(getMedicalTerm('recommendations', summary.language).length)}
 ${summary.recommendations && summary.recommendations.length > 0 
   ? summary.recommendations.map(rec => `• ${rec}`).join('\n')
-  : 'No recommendations available.'}
+  : getMedicalTerm('noDataAvailable', summary.language)}
 
 ---
-This summary has been generated automatically and should be reviewed with your healthcare provider.
+${getMedicalTerm('reviewWithProvider', summary.language)}
 `.trim();
   };
 
