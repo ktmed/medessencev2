@@ -1,31 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList;
-  resultIndex: number;
-}
-
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  maxAlternatives: number;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: any) => void) | null;
-  onstart: ((event: Event) => void) | null;
-  onend: ((event: Event) => void) | null;
-  start(): void;
-  stop(): void;
-  abort(): void;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognition;
-    webkitSpeechRecognition: new () => SpeechRecognition;
-  }
-}
-
 interface MedicalValidation {
   corrections: Array<{
     original: string;
@@ -78,7 +52,7 @@ export const useEnhancedSpeechToText = ({
   const [validationEnabled, setValidationEnabled] = useState(medicalValidation);
   const [confidence, setConfidence] = useState(0);
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<any>(null);
   const finalTranscriptRef = useRef('');
 
   // Medical dictionary for real-time corrections
@@ -263,7 +237,7 @@ export const useEnhancedSpeechToText = ({
     recognitionRef.current.maxAlternatives = 3;
 
     // Event handlers
-    recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+    recognitionRef.current.onresult = (event: any) => {
       let interimTranscriptText = '';
       let newFinalText = '';
       let highestConfidence = 0;
