@@ -489,12 +489,6 @@ ${formatContentValue(report.technicalDetails)}
                   </div>
                 )}
 
-                {/* ICD-10-GM Predictions Section - Separate card */}
-                {currentReport.icdPredictions && (
-                  <ICDPredictionsComponent 
-                    predictions={currentReport.icdPredictions}
-                  />
-                )}
 
                 {/* Impression Section */}
                 <div className="medical-report">
@@ -559,6 +553,14 @@ ${formatContentValue(report.technicalDetails)}
                 </details>
               </div>
             ) : null}
+
+            {/* ICD-10-GM Predictions Section - Completely separate card after main report */}
+            {currentReport && currentReport.icdPredictions && (
+              <ICDPredictionsComponent 
+                predictions={currentReport.icdPredictions}
+                className="mt-6"
+              />
+            )}
           </>
         ) : (
           <div className="flex items-center justify-center h-64">
