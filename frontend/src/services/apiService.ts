@@ -43,11 +43,13 @@ export class APIService {
   }
 
   private cleanupCache(): void {
-    for (const [key, item] of this.cache.entries()) {
+    const keysToDelete: string[] = [];
+    this.cache.forEach((item, key) => {
       if (!this.isValidCache(item)) {
-        this.cache.delete(key);
+        keysToDelete.push(key);
       }
-    }
+    });
+    keysToDelete.forEach(key => this.cache.delete(key));
   }
 
   private getFromCache<T>(cacheKey: string): T | null {
