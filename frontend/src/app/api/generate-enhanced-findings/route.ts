@@ -129,7 +129,7 @@ ${reportContent}
 Create a structured analysis of the findings:`
     };
 
-    return templates[language] || templates.en;
+    return templates[language as keyof typeof templates] || templates.en;
   }
 
   private async callClaude(prompt: string): Promise<string> {

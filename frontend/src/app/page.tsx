@@ -285,9 +285,10 @@ export default function Dashboard() {
       
       if (report.metadata?.aiGenerated && report.findings && report.findings.trim().length > 0) {
         console.log('🏥 Auto-generating ICD codes for AI report...');
+        const reportContent = `${report.findings}\n\n${report.impression}\n\n${report.recommendations}`;
+        console.log('📋 ICD generation content length:', reportContent.length);
+        
         try {
-          const reportContent = `${report.findings}\n\n${report.impression}\n\n${report.recommendations}`;
-          console.log('📋 ICD generation content length:', reportContent.length);
           
           const icdCodes = await apiService.generateICDCodes(
             report.id,
@@ -418,9 +419,10 @@ export default function Dashboard() {
       
       if (report.metadata?.aiGenerated && report.findings && report.findings.trim().length > 0) {
         console.log('🏥 Auto-generating ICD codes for pasted text report...');
+        const reportContent = `${report.findings}\n\n${report.impression}\n\n${report.recommendations}`;
+        console.log('📋 Pasted text ICD generation content length:', reportContent.length);
+        
         try {
-          const reportContent = `${report.findings}\n\n${report.impression}\n\n${report.recommendations}`;
-          console.log('📋 Pasted text ICD generation content length:', reportContent.length);
           
           const icdCodes = await apiService.generateICDCodes(
             report.id,

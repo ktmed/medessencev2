@@ -6,7 +6,7 @@ import { MedicalReport, Language } from '@/types';
 import { getMedicalTerm, getLanguageName, getLanguageFlag } from '@/utils/languages';
 import { formatTimestamp, cn } from '@/utils';
 import MarkdownRenderer from './MarkdownRenderer';
-import EnhancedFindings from './EnhancedFindings';
+import EnhancedFindingsNew from './EnhancedFindingsNew';
 import ICDPredictionsComponent from './ICDPredictions';
 
 interface ReportViewerProps {
@@ -209,11 +209,11 @@ ${formatContentValue(report.technicalDetails)}
       return false;
     }
 
-    // Primary validation - strict check for complete enhanced findings structure
-    const strictValidation = !!(
-      currentReport.enhancedFindings.structuredFindings &&
-      Array.isArray(currentReport.enhancedFindings.structuredFindings) &&
-      currentReport.enhancedFindings.structuredFindings.length > 0
+    // Primary validation - check if enhanced findings have content
+    const hasContent = !!(
+      (currentReport.enhancedFindings.normalFindings && currentReport.enhancedFindings.normalFindings.length > 0) ||
+      (currentReport.enhancedFindings.pathologicalFindings && currentReport.enhancedFindings.pathologicalFindings.length > 0) ||
+      (currentReport.enhancedFindings.specialObservations && currentReport.enhancedFindings.specialObservations.length > 0)
     );
     
     // Fallback validation - check if metadata indicates enhanced findings exist
@@ -222,19 +222,14 @@ ${formatContentValue(report.technicalDetails)}
       currentReport.enhancedFindings
     );
     
-    // Alternative validation - check if enhanced findings object exists with content
-    const contentValidation = !!(
-      currentReport.enhancedFindings.content || 
-      currentReport.enhancedFindings.originalText
-    );
-    
-    const result = strictValidation || (metadataValidation && contentValidation);
+    const result = hasContent || metadataValidation;
     
     // Log only when enhanced findings are detected for debugging
     if (currentReport.enhancedFindings) {
       console.log('Enhanced Findings Validation:', {
-        structuredFindingsCount: currentReport.enhancedFindings.structuredFindings?.length || 0,
-        hasContent: !!currentReport.enhancedFindings.content,
+        normalFindingsCount: currentReport.enhancedFindings.normalFindings?.length || 0,
+        pathologicalFindingsCount: currentReport.enhancedFindings.pathologicalFindings?.length || 0,
+        specialObservationsCount: currentReport.enhancedFindings.specialObservations?.length || 0,
         metadataFlag: currentReport?.metadata?.hasEnhancedFindings,
         validationResult: result
       });
@@ -417,7 +412,7 @@ ${formatContentValue(report.technicalDetails)}
                           ENHANCED
                         </span>
                       </h3>
-                      <EnhancedFindings
+                      <EnhancedFindingsNew
                         enhancedFindings={currentReport.enhancedFindings!}
                         isEditing={isEditing}
                         onContentChange={(content) => updateEditedField('findings', content)}
@@ -464,7 +459,7 @@ ${formatContentValue(report.technicalDetails)}
                         ENHANCED
                       </span>
                     </h3>
-                    <EnhancedFindings
+                    <EnhancedFindingsNew
                       enhancedFindings={currentReport.enhancedFindings!}
                       isEditing={isEditing}
                       onContentChange={(content) => updateEditedField('findings', content)}
@@ -557,14 +552,6 @@ ${formatContentValue(report.technicalDetails)}
               </div>
             ) : null}
           </>
-
-          {/* ICD-10-GM Predictions Section - Always render after main report regardless of sections */}
-          {currentReport && currentReport.icdPredictions && (
-            <ICDPredictionsComponent 
-              predictions={currentReport.icdPredictions}
-              className="mt-6"
-            />
-          )}
         ) : (
           <div className="flex items-center justify-center h-64">
             <div className="text-center text-gray-500">
@@ -574,6 +561,15 @@ ${formatContentValue(report.technicalDetails)}
                 Complete a transcription to generate a medical report
               </p>
             </div>
+          </div>
+        )}
+
+        {/* ICD-10-GM Predictions Section - Always render after main report as separate card */}
+        {currentReport && currentReport.icdPredictions && (
+          <div className="mt-6">
+            <ICDPredictionsComponent 
+              predictions={currentReport.icdPredictions}
+            />
           </div>
         )}
       </div>

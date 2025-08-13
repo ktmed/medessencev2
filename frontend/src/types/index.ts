@@ -41,6 +41,17 @@ export interface EnhancedFindingsData {
   originalText: string;
 }
 
+export interface EnhancedFindings {
+  normalFindings: string[];
+  pathologicalFindings: string[];
+  specialObservations: string[];
+  measurements: string[];
+  localizations: string[];
+  confidence: number;
+  processingAgent: string;
+  timestamp: number;
+}
+
 export interface ICDCode {
   code: string;
   description: string;
@@ -85,7 +96,7 @@ export interface MedicalReport {
     scores?: Array<{ type: string; score: number }>;
   };
   // NEW: Enhanced findings with significance highlighting and grounding
-  enhancedFindings?: EnhancedFindingsData;
+  enhancedFindings?: EnhancedFindings;
   // NEW: ICD-10-GM code predictions
   icdPredictions?: ICDPredictions;
   metadata?: {
