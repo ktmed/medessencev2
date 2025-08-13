@@ -234,10 +234,10 @@ Create a professional, precise medical report:`;
     let impression = '';
     let recommendations = '';
     
-    // Try to match German or English section headers
-    const findingsMatch = aiResponse.match(/(?:BEFUND|FINDINGS):\s*(.*?)(?=(?:BEURTEILUNG|IMPRESSION|EMPFEHLUNG|RECOMMENDATIONS):|$)/is);
-    const impressionMatch = aiResponse.match(/(?:BEURTEILUNG|IMPRESSION):\s*(.*?)(?=(?:EMPFEHLUNG|RECOMMENDATIONS):|$)/is);
-    const recommendationsMatch = aiResponse.match(/(?:EMPFEHLUNG|RECOMMENDATIONS):\s*(.*?)$/is);
+    // Try to match German or English section headers using compatible regex
+    const findingsMatch = aiResponse.match(/(?:BEFUND|FINDINGS):\s*([\s\S]*?)(?=(?:BEURTEILUNG|IMPRESSION|EMPFEHLUNG|RECOMMENDATIONS):|$)/i);
+    const impressionMatch = aiResponse.match(/(?:BEURTEILUNG|IMPRESSION):\s*([\s\S]*?)(?=(?:EMPFEHLUNG|RECOMMENDATIONS):|$)/i);
+    const recommendationsMatch = aiResponse.match(/(?:EMPFEHLUNG|RECOMMENDATIONS):\s*([\s\S]*?)$/i);
     
     findings = findingsMatch?.[1]?.trim() || aiResponse;
     impression = impressionMatch?.[1]?.trim() || (language === 'de' ? 'Siehe Befund oben.' : 'See findings above.');
