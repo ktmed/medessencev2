@@ -86,27 +86,40 @@ class ServerMultiLLMService {
 
     if (this.providers.length === 0) {
       console.error('❌ No AI providers available');
-      return this.generateFallbackReport(transcriptionText, language);
+      return this.generateFallbackReport(transcriptionText, language, 'No AI providers initialized');
     }
 
     const prompt = this.createMedicalReportPrompt(transcriptionText, language);
+    console.log('📋 Created prompt, length:', prompt.length);
     
     // Try each provider
     for (const provider of this.providers) {
       try {
         console.log(`🤖 Trying ${provider.name}...`);
-        const aiResponse = await provider.handler(prompt);
-        console.log(`✅ ${provider.name} succeeded`);
+        console.log(`- About to call ${provider.name} handler`);
         
-        return this.parseReportResponse(aiResponse, transcriptionText, language, provider.name);
+        const aiResponse = await provider.handler(prompt);
+        console.log(`✅ ${provider.name} succeeded!`);
+        console.log(`- Response length:`, aiResponse?.length || 0);
+        console.log(`- Response preview:`, aiResponse?.substring(0, 100) + '...');
+        
+        const parsedReport = this.parseReportResponse(aiResponse, transcriptionText, language, provider.name);
+        console.log(`🎯 Successfully parsed report from ${provider.name}`);
+        return parsedReport;
+        
       } catch (error) {
-        console.error(`❌ ${provider.name} failed:`, error);
+        console.error(`❌ ${provider.name} failed with detailed error:`);
+        console.error(`- Error type:`, error?.constructor?.name);
+        console.error(`- Error message:`, error instanceof Error ? error.message : 'Unknown error');
+        console.error(`- Full error:`, error);
+        
+        // Continue to next provider
         continue;
       }
     }
 
-    console.log('⚠️ All AI providers failed, using fallback');
-    return this.generateFallbackReport(transcriptionText, language);
+    console.error('❌ ALL AI PROVIDERS FAILED - falling back to rule-based');
+    return this.generateFallbackReport(transcriptionText, language, 'All AI providers failed');
   }
 
   private createMedicalReportPrompt(text: string, language: string): string {
@@ -234,8 +247,9 @@ Create a professional, precise medical report:`;
     };
   }
 
-  private generateFallbackReport(text: string, language: string) {
+  private generateFallbackReport(text: string, language: string, reason: string = 'Unknown') {
     console.log('📋 Generating rule-based fallback report');
+    console.log('- Fallback reason:', reason);
     
     return {
       id: `report-${Date.now()}`,
@@ -243,14 +257,14 @@ Create a professional, precise medical report:`;
       findings: text,
       impression: language === 'de' ? 'Siehe Befund.' : 'See findings above.',
       recommendations: language === 'de' ? 'Weitere Abklärung nach klinischer Einschätzung.' : 'Further workup per clinical assessment.',
-      technicalDetails: 'Rule-based processing (AI providers unavailable)',
+      technicalDetails: `Rule-based processing (Reason: ${reason})`,
       generatedAt: Date.now(),
       language: language,
       type: 'rule_based',
       metadata: {
         aiProvider: 'rule-based',
         aiGenerated: false,
-        fallbackReason: 'No AI providers available'
+        fallbackReason: reason
       }
     };
   }
