@@ -50,7 +50,7 @@ export default function WebSpeechRecorder({
     interimResults: true,
     medicalValidation: true,
     confidenceThreshold: 0.6,
-    onTranscriptChange: useCallback((transcriptData) => {
+    onTranscriptChange: useCallback((transcriptData: { text: string; isFinal: boolean; confidence: number; validation?: any }) => {
       // The hook handles accumulation, we just need to pass through final transcripts
       if (transcriptData.isFinal && onTranscription) {
         const transcriptionObj: TranscriptionData = {
