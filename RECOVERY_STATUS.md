@@ -76,10 +76,10 @@ NEXT_PUBLIC_WEBSOCKET_URL=http://localhost:8080
 USE_WEB_SPEECH_API=true
 USE_VOSK=false
 
-# API KEYS (Working - Set by user)
+# API KEYS (Set by user in .env file - not shown for security)
 OPENAI_API_KEY=your_openai_api_key_here
-ANTHROPIC_API_KEY=sk-ant-api03-higvJVndnhh9vyOuA7rg7klQ5uuynelEmqQzXD-JHAZtk-zB...
-GOOGLE_API_KEY=AIzaSyABtkl4tsBt5lToVShpIW4NPmsZGIIuKWQ
+ANTHROPIC_API_KEY=your_anthropic_api_key_here  
+GOOGLE_API_KEY=your_google_api_key_here
 ```
 
 ### WebSocket CORS Fix ✅
