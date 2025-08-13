@@ -278,6 +278,28 @@ export default function Dashboard() {
         success: `Medical report generated successfully using ${report.metadata?.aiProvider || 'AI'}` 
       }));
       
+      // Auto-generate ICD codes if AI was used successfully
+      if (report.metadata?.aiGenerated && report.findings) {
+        console.log('🏥 Auto-generating ICD codes for AI report...');
+        try {
+          const icdCodes = await apiService.generateICDCodes(
+            report.id,
+            `${report.findings}\n\n${report.impression}\n\n${report.recommendations}`,
+            language
+          );
+          
+          // Update the report with ICD codes
+          setCurrentReport(prev => prev ? {
+            ...prev,
+            icdPredictions: icdCodes
+          } : prev);
+          
+          console.log('✅ ICD codes added to report');
+        } catch (error) {
+          console.warn('⚠️ ICD code generation failed:', error);
+        }
+      }
+      
       // Clear success message after 3 seconds
       setTimeout(() => {
         setUIState(prev => ({ ...prev, success: null }));
@@ -357,6 +379,28 @@ export default function Dashboard() {
         success: `Medical report generated successfully using ${report.metadata?.aiProvider || 'AI'}` 
       }));
       
+      // Auto-generate ICD codes if AI was used successfully
+      if (report.metadata?.aiGenerated && report.findings) {
+        console.log('🏥 Auto-generating ICD codes for pasted text report...');
+        try {
+          const icdCodes = await apiService.generateICDCodes(
+            report.id,
+            `${report.findings}\n\n${report.impression}\n\n${report.recommendations}`,
+            language
+          );
+          
+          // Update the report with ICD codes
+          setCurrentReport(prev => prev ? {
+            ...prev,
+            icdPredictions: icdCodes
+          } : prev);
+          
+          console.log('✅ ICD codes added to pasted text report');
+        } catch (error) {
+          console.warn('⚠️ ICD code generation failed for pasted text:', error);
+        }
+      }
+      
       // Clear the paste input
       setPastedText('');
       setShowPasteInput(false);
@@ -376,19 +420,55 @@ export default function Dashboard() {
     }
   }, [pastedText, language, reportProcessingMode]);
 
-  // Generate patient summary
-  const handleGenerateSummary = useCallback((reportId: string, summaryLanguage: Language) => {
-    if (wsClient && isConnected) {
-      setIsGeneratingSummary(true);
-      setUIState(prev => ({ ...prev, error: null }));
-      wsClient.requestSummary(reportId, summaryLanguage);
-    } else {
+  // Generate patient summary using API service
+  const handleGenerateSummary = useCallback(async (reportId: string, summaryLanguage: Language, complexity: 'simple' | 'detailed' | 'technical' = 'detailed') => {
+    if (!currentReport) {
       setUIState(prev => ({ 
         ...prev, 
-        error: 'Not connected to summary generation service' 
+        error: 'No report available for summary generation' 
+      }));
+      return;
+    }
+
+    try {
+      setIsGeneratingSummary(true);
+      setUIState(prev => ({ ...prev, error: null }));
+      
+      console.log('📋 Generating summary via API service');
+      console.log('- Report ID:', reportId);
+      console.log('- Language:', summaryLanguage);
+      console.log('- Complexity:', complexity);
+      
+      const reportContent = `${currentReport.findings}\n\n${currentReport.impression}\n\n${currentReport.recommendations}`;
+      
+      const summary = await apiService.generateSummary(
+        reportId,
+        reportContent,
+        summaryLanguage,
+        complexity
+      );
+      
+      setCurrentSummary(summary);
+      setIsGeneratingSummary(false);
+      setUIState(prev => ({ 
+        ...prev, 
+        success: `Patient summary generated successfully in ${summaryLanguage}` 
+      }));
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setUIState(prev => ({ ...prev, success: null }));
+      }, 3000);
+      
+    } catch (error) {
+      console.error('❌ Summary generation failed:', error);
+      setIsGeneratingSummary(false);
+      setUIState(prev => ({ 
+        ...prev, 
+        error: `Failed to generate summary: ${error instanceof Error ? error.message : 'Unknown error'}` 
       }));
     }
-  }, [wsClient, isConnected]);
+  }, [currentReport]);
 
   // Handle language change
   const handleLanguageChange = useCallback((newLanguage: Language) => {
