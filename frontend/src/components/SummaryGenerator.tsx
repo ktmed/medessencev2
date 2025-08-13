@@ -275,15 +275,15 @@ This summary has been generated automatically and should be reviewed with your h
               key={complexity.value}
               onClick={() => setSelectedComplexity(complexity.value)}
               className={cn(
-                'p-4 text-left rounded-xl border-2 transition-all duration-200 transform hover:scale-105',
+                'p-3 text-left rounded-xl border-2 transition-all duration-200 transform hover:scale-105 min-h-[80px]',
                 selectedComplexity === complexity.value
                   ? 'med-orange-gradient text-white border-transparent shadow-lg'
                   : `bg-white border-gray-200 text-gray-700 hover:shadow-md ${complexity.color}`
               )}
             >
-              <div className="flex items-start space-x-3">
+              <div className="flex items-center space-x-2">
                 <div className={cn(
-                  'text-2xl p-2 rounded-lg',
+                  'text-xl p-1.5 rounded-lg flex-shrink-0',
                   selectedComplexity === complexity.value
                     ? 'bg-white/20'
                     : 'bg-gray-100'
@@ -292,13 +292,13 @@ This summary has been generated automatically and should be reviewed with your h
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className={cn(
-                    'font-semibold text-base mb-1',
+                    'font-semibold text-sm mb-0.5 truncate',
                     selectedComplexity === complexity.value ? 'text-white' : 'text-gray-900'
                   )}>
                     {complexity.title}
                   </div>
                   <div className={cn(
-                    'text-sm leading-relaxed',
+                    'text-xs leading-tight line-clamp-2',
                     selectedComplexity === complexity.value ? 'text-white/90' : 'text-gray-600'
                   )}>
                     {complexity.description}
