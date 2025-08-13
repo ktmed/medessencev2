@@ -279,12 +279,20 @@ export default function Dashboard() {
       }));
       
       // Auto-generate ICD codes if AI was used successfully
-      if (report.metadata?.aiGenerated && report.findings) {
+      console.log('🔍 Report metadata check:');
+      console.log('- aiGenerated:', report.metadata?.aiGenerated);
+      console.log('- findings length:', report.findings?.length || 0);
+      console.log('- findings content:', report.findings?.substring(0, 100) + '...');
+      
+      if (report.metadata?.aiGenerated && report.findings && report.findings.trim().length > 0) {
         console.log('🏥 Auto-generating ICD codes for AI report...');
         try {
+          const reportContent = `${report.findings}\n\n${report.impression}\n\n${report.recommendations}`;
+          console.log('📋 ICD generation content length:', reportContent.length);
+          
           const icdCodes = await apiService.generateICDCodes(
             report.id,
-            `${report.findings}\n\n${report.impression}\n\n${report.recommendations}`,
+            reportContent,
             language
           );
           
@@ -298,6 +306,11 @@ export default function Dashboard() {
         } catch (error) {
           console.warn('⚠️ ICD code generation failed:', error);
         }
+      } else {
+        console.log('❌ Skipping ICD generation - conditions not met');
+        console.log('- AI Generated:', !!report.metadata?.aiGenerated);
+        console.log('- Has findings:', !!report.findings);
+        console.log('- Findings not empty:', report.findings ? report.findings.trim().length > 0 : false);
       }
       
       // Clear success message after 3 seconds
@@ -380,12 +393,19 @@ export default function Dashboard() {
       }));
       
       // Auto-generate ICD codes if AI was used successfully
-      if (report.metadata?.aiGenerated && report.findings) {
+      console.log('🔍 Pasted text report metadata check:');
+      console.log('- aiGenerated:', report.metadata?.aiGenerated);
+      console.log('- findings length:', report.findings?.length || 0);
+      
+      if (report.metadata?.aiGenerated && report.findings && report.findings.trim().length > 0) {
         console.log('🏥 Auto-generating ICD codes for pasted text report...');
         try {
+          const reportContent = `${report.findings}\n\n${report.impression}\n\n${report.recommendations}`;
+          console.log('📋 Pasted text ICD generation content length:', reportContent.length);
+          
           const icdCodes = await apiService.generateICDCodes(
             report.id,
-            `${report.findings}\n\n${report.impression}\n\n${report.recommendations}`,
+            reportContent,
             language
           );
           
@@ -399,6 +419,8 @@ export default function Dashboard() {
         } catch (error) {
           console.warn('⚠️ ICD code generation failed for pasted text:', error);
         }
+      } else {
+        console.log('❌ Skipping pasted text ICD generation - conditions not met');
       }
       
       // Clear the paste input

@@ -226,15 +226,40 @@ Create a professional, precise medical report:`;
   }
 
   private parseReportResponse(aiResponse: string, originalText: string, language: string, provider: string) {
-    // Simple parsing - in production you'd want more sophisticated parsing
-    const sections = aiResponse.split(/(?:BEFUND|FINDINGS|BEURTEILUNG|IMPRESSION|EMPFEHLUNG|RECOMMENDATIONS):/i);
+    console.log('🔍 Parsing AI response, length:', aiResponse.length);
+    console.log('🔍 Response preview:', aiResponse.substring(0, 200) + '...');
+    
+    // Extract sections using more robust regex patterns
+    let findings = '';
+    let impression = '';
+    let recommendations = '';
+    
+    // Try to match German or English section headers
+    const findingsMatch = aiResponse.match(/(?:BEFUND|FINDINGS):\s*(.*?)(?=(?:BEURTEILUNG|IMPRESSION|EMPFEHLUNG|RECOMMENDATIONS):|$)/is);
+    const impressionMatch = aiResponse.match(/(?:BEURTEILUNG|IMPRESSION):\s*(.*?)(?=(?:EMPFEHLUNG|RECOMMENDATIONS):|$)/is);
+    const recommendationsMatch = aiResponse.match(/(?:EMPFEHLUNG|RECOMMENDATIONS):\s*(.*?)$/is);
+    
+    findings = findingsMatch?.[1]?.trim() || aiResponse;
+    impression = impressionMatch?.[1]?.trim() || (language === 'de' ? 'Siehe Befund oben.' : 'See findings above.');
+    recommendations = recommendationsMatch?.[1]?.trim() || (language === 'de' ? 'Weitere Abklärung nach klinischer Einschätzung.' : 'Further workup per clinical assessment.');
+    
+    // If no clear sections found, use the entire response as findings
+    if (!findingsMatch && !impressionMatch && !recommendationsMatch) {
+      console.log('⚠️ No clear sections found, using entire response as findings');
+      findings = aiResponse;
+    }
+    
+    console.log('✅ Parsed sections:');
+    console.log('- Findings length:', findings.length);
+    console.log('- Impression length:', impression.length);
+    console.log('- Recommendations length:', recommendations.length);
     
     return {
       id: `report-${Date.now()}`,
       transcriptionId: `transcription-${Date.now()}`,
-      findings: sections[1]?.trim() || aiResponse,
-      impression: sections[2]?.trim() || 'See findings above.',
-      recommendations: sections[3]?.trim() || 'No specific recommendations.',
+      findings: findings,
+      impression: impression,
+      recommendations: recommendations,
       technicalDetails: `Generated using ${provider} AI`,
       generatedAt: Date.now(),
       language: language,
