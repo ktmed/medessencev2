@@ -219,24 +219,24 @@ This summary has been generated automatically and should be reviewed with your h
       </div>
 
       {/* Language Selection */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+      <div className="mb-6">
+        <label className="block text-sm font-medium med-text-navy mb-3">
           Summary Language
         </label>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {SUPPORTED_LANGUAGES.map((lang) => (
             <button
               key={lang.code}
               onClick={() => handleLanguageChange(lang.code)}
               className={cn(
-                'px-3 py-2 rounded-md text-sm font-medium border transition-colors',
+                'px-3 py-2.5 rounded-lg text-sm font-medium border transition-all duration-200 flex items-center justify-center space-x-2',
                 selectedLanguage === lang.code
-                  ? 'bg-medical-100 border-medical-300 text-medical-800'
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  ? 'med-navy-gradient text-white border-transparent shadow-md'
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm'
               )}
             >
-              <span className="mr-2">{lang.flag}</span>
-              {lang.name}
+              <span className="text-base">{lang.flag}</span>
+              <span className="truncate">{lang.name}</span>
             </button>
           ))}
         </div>
@@ -244,7 +244,7 @@ This summary has been generated automatically and should be reviewed with your h
 
       {/* Complexity Selection */}
       <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium med-text-navy mb-3">
           Summary Complexity
         </label>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -253,36 +253,54 @@ This summary has been generated automatically and should be reviewed with your h
               value: 'simple' as const,
               title: 'Simple',
               description: 'Patient-friendly, easy to understand',
-              icon: '👤'
+              icon: '👤',
+              color: 'bg-green-50 border-green-200 hover:bg-green-100'
             },
             {
               value: 'detailed' as const,
               title: 'Detailed',
               description: 'Comprehensive medical summary',
-              icon: '📋'
+              icon: '📋',
+              color: 'bg-blue-50 border-blue-200 hover:bg-blue-100'
             },
             {
               value: 'technical' as const,
               title: 'Technical',
               description: 'Professional medical terminology',
-              icon: '🔬'
+              icon: '🔬',
+              color: 'bg-purple-50 border-purple-200 hover:bg-purple-100'
             }
           ].map((complexity) => (
             <button
               key={complexity.value}
               onClick={() => setSelectedComplexity(complexity.value)}
               className={cn(
-                'p-4 text-left rounded-lg border transition-colors',
+                'p-4 text-left rounded-xl border-2 transition-all duration-200 transform hover:scale-105',
                 selectedComplexity === complexity.value
-                  ? 'bg-medical-50 border-medical-300 text-medical-800'
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  ? 'med-orange-gradient text-white border-transparent shadow-lg'
+                  : `bg-white border-gray-200 text-gray-700 hover:shadow-md ${complexity.color}`
               )}
             >
               <div className="flex items-start space-x-3">
-                <span className="text-2xl">{complexity.icon}</span>
-                <div>
-                  <div className="font-semibold text-sm">{complexity.title}</div>
-                  <div className="text-xs text-gray-600 mt-1">
+                <div className={cn(
+                  'text-2xl p-2 rounded-lg',
+                  selectedComplexity === complexity.value
+                    ? 'bg-white/20'
+                    : 'bg-gray-100'
+                )}>
+                  {complexity.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className={cn(
+                    'font-semibold text-base mb-1',
+                    selectedComplexity === complexity.value ? 'text-white' : 'text-gray-900'
+                  )}>
+                    {complexity.title}
+                  </div>
+                  <div className={cn(
+                    'text-sm leading-relaxed',
+                    selectedComplexity === complexity.value ? 'text-white/90' : 'text-gray-600'
+                  )}>
                     {complexity.description}
                   </div>
                 </div>
@@ -294,33 +312,37 @@ This summary has been generated automatically and should be reviewed with your h
 
       {/* Generate Button */}
       {report && !summary && !isGenerating && (
-        <div className="mb-6">
+        <div className="mb-8 text-center">
           <button
             onClick={handleGenerate}
-            className="medical-button-primary flex items-center space-x-2"
+            className="medical-button-primary flex items-center justify-center space-x-2 w-full py-3 text-base font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-5 h-5" />
             <span>Generate Patient Summary</span>
           </button>
-          <p className="text-sm text-gray-500 mt-2">
-            Create a {selectedComplexity} summary in {getLanguageName(selectedLanguage)}
-          </p>
+          <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+            <p className="text-sm text-gray-700 font-medium">
+              📋 Creating <span className="text-medical-600">{selectedComplexity}</span> summary in <span className="font-semibold">{getLanguageName(selectedLanguage)}</span>
+            </p>
+          </div>
         </div>
       )}
 
       {/* Regenerate Button */}
       {report && summary && !isGenerating && (
-        <div className="mb-6">
+        <div className="mb-8 text-center">
           <button
             onClick={handleGenerate}
-            className="medical-button-secondary flex items-center space-x-2"
+            className="medical-button-secondary flex items-center justify-center space-x-2 w-full py-3 text-base font-semibold rounded-xl shadow-md hover:shadow-lg transition-all duration-200"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-5 h-5" />
             <span>Regenerate Summary</span>
           </button>
-          <p className="text-sm text-gray-500 mt-2">
-            Generate a new {selectedComplexity} summary in {getLanguageName(selectedLanguage)}
-          </p>
+          <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-sm text-blue-700 font-medium">
+              🔄 Generate new <span className="text-blue-800">{selectedComplexity}</span> summary in <span className="font-semibold">{getLanguageName(selectedLanguage)}</span>
+            </p>
+          </div>
         </div>
       )}
 
@@ -329,77 +351,107 @@ This summary has been generated automatically and should be reviewed with your h
         {isGenerating ? (
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <div className="animate-spin w-8 h-8 border-4 border-medical-200 border-t-medical-600 rounded-full mx-auto mb-4" />
-              <p className="text-gray-600">Generating patient-friendly summary...</p>
-              <p className="text-sm text-gray-500 mt-2">
-                Converting medical terminology to easy-to-understand language
-              </p>
+              <div className="relative mb-6">
+                <div className="animate-spin w-12 h-12 border-4 border-medical-200 border-t-medical-600 rounded-full mx-auto" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Heart className="w-5 h-5 text-medical-600 animate-pulse" />
+                </div>
+              </div>
+              <div className="bg-white rounded-xl p-6 shadow-lg max-w-md mx-auto">
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">Generating Patient Summary</h3>
+                <p className="text-gray-600 mb-3">
+                  Converting medical terminology to easy-to-understand language
+                </p>
+                <div className="flex items-center justify-center space-x-2 text-sm text-blue-600">
+                  <span className="animate-bounce">🤖</span>
+                  <span>AI Processing</span>
+                  <span className="animate-bounce animation-delay-100">✨</span>
+                </div>
+              </div>
             </div>
           </div>
         ) : summary ? (
           <>
             {/* Summary Metadata */}
-            <div className="bg-medical-50 p-4 rounded-lg border border-medical-200">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-2">
-                  <Heart className="w-5 h-5 text-medical-600" />
-                  <h4 className="font-semibold text-medical-800">
-                    Patient-Friendly Summary
-                  </h4>
+            <div className="bg-gradient-to-r from-medical-50 to-blue-50 p-5 rounded-xl border-2 border-medical-200 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-medical-600 rounded-lg">
+                    <Heart className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-lg text-medical-800">
+                      Patient-Friendly Summary
+                    </h4>
+                    <p className="text-sm text-gray-600 mt-0.5">Generated with AI assistance</p>
+                  </div>
                   {summary.complexity && (
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-sm">
                       {summary.complexity.charAt(0).toUpperCase() + summary.complexity.slice(1)}
                     </span>
                   )}
                 </div>
                 {summary.metadata?.aiProvider && (
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    AI-Enhanced ({summary.metadata.aiProvider})
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-green-500 to-green-600 text-white shadow-sm">
+                    ✨ {summary.metadata.aiProvider.toUpperCase()}
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="font-medium text-gray-600">Summary ID:</span>
-                  <span className="ml-2 text-gray-900">{summary.id}</span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm bg-white/60 rounded-lg p-3 backdrop-blur-sm">
+                <div className="flex flex-col space-y-1">
+                  <span className="font-semibold text-gray-700">Summary ID</span>
+                  <span className="text-gray-900 font-mono text-xs bg-gray-100 px-2 py-1 rounded">{summary.id.slice(-8)}</span>
                 </div>
-                <div>
-                  <span className="font-medium text-gray-600">Generated:</span>
-                  <span className="ml-2 text-gray-900">
+                <div className="flex flex-col space-y-1">
+                  <span className="font-semibold text-gray-700">Generated</span>
+                  <span className="text-gray-900 text-xs">
                     {formatTimestamp(summary.generatedAt)}
                   </span>
                 </div>
                 {summary.metadata?.confidence && (
-                  <div>
-                    <span className="font-medium text-gray-600">Confidence:</span>
-                    <span className="ml-2 text-gray-900">
-                      {Math.round(summary.metadata.confidence * 100)}%
-                    </span>
+                  <div className="flex flex-col space-y-1">
+                    <span className="font-semibold text-gray-700">Accuracy</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="flex-1 bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-gradient-to-r from-green-400 to-green-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${Math.round(summary.metadata.confidence * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-semibold text-green-600">
+                        {Math.round(summary.metadata.confidence * 100)}%
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
             {/* Main Summary */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <Stethoscope className="w-5 h-5 text-gray-600" />
-                <h4 className="font-semibold text-gray-800">
-                  {getMedicalTerm('summary', (isEditing ? editedSummary : summary)?.language || 'de')}
-                </h4>
+            <div className="bg-white border-2 border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all duration-200">
+              <div className="flex items-center space-x-3 mb-5">
+                <div className="p-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg">
+                  <Stethoscope className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-lg text-gray-800">
+                    {getMedicalTerm('summary', (isEditing ? editedSummary : summary)?.language || 'de')}
+                  </h4>
+                  <p className="text-sm text-gray-600">Main medical findings overview</p>
+                </div>
               </div>
               {isEditing ? (
                 <textarea
                   value={editedSummary?.summary || ''}
                   onChange={(e) => setEditedSummary(prev => prev ? { ...prev, summary: e.target.value } : null)}
-                  className="w-full h-40 px-4 py-3 border border-gray-300 rounded-lg resize-vertical focus:outline-none focus:ring-2 focus:ring-medical-500 focus:border-transparent"
+                  className="w-full h-40 px-4 py-3 border-2 border-gray-300 rounded-xl resize-vertical focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                   placeholder="Edit summary content..."
                 />
               ) : (
-                <div className="prose prose-sm max-w-none">
+                <div className="prose prose-sm max-w-none bg-gray-50 rounded-xl p-4">
                   <MarkdownRenderer 
                     content={summary.summary} 
-                    className="text-gray-700 leading-relaxed"
+                    className="text-gray-800 leading-relaxed text-base"
                   />
                 </div>
               )}
@@ -407,111 +459,147 @@ This summary has been generated automatically and should be reviewed with your h
 
             {/* Key Findings */}
             {((isEditing ? editedSummary : summary)?.keyFindings && ((isEditing ? editedSummary : summary)?.keyFindings?.length || 0) > 0) && (
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Activity className="w-5 h-5 text-gray-600" />
-                  <h4 className="font-semibold text-gray-800">
-                    {getMedicalTerm('keyFindings', (isEditing ? editedSummary : summary)?.language || 'de')}
-                  </h4>
+              <div className="bg-white border-2 border-orange-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all duration-200">
+                <div className="flex items-center space-x-3 mb-5">
+                  <div className="p-2 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg">
+                    <Activity className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-lg text-gray-800">
+                      {getMedicalTerm('keyFindings', (isEditing ? editedSummary : summary)?.language || 'de')}
+                    </h4>
+                    <p className="text-sm text-gray-600">Important observations and results</p>
+                  </div>
                 </div>
                 {isEditing ? (
                   <div className="space-y-3">
                     {editedSummary?.keyFindings.map((finding, index) => (
                       <div key={index} className="flex items-start space-x-3">
-                        <div className="w-2 h-2 bg-medical-500 rounded-full mt-3 flex-shrink-0" />
+                        <div className="w-3 h-3 bg-orange-500 rounded-full mt-3 flex-shrink-0 shadow-sm" />
                         <input
                           type="text"
                           value={finding}
                           onChange={(e) => updateKeyFinding(index, e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-medical-500 focus:border-transparent"
+                          className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200"
                           placeholder="Key finding..."
                         />
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <ul className="space-y-2">
-                    {summary.keyFindings.map((finding, index) => (
-                      <li key={index} className="flex items-start space-x-3">
-                        <div className="w-2 h-2 bg-medical-500 rounded-full mt-2 flex-shrink-0" />
-                        <span className="text-gray-700">{finding}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl p-4">
+                    <ul className="space-y-3">
+                      {summary.keyFindings.map((finding, index) => (
+                        <li key={index} className="flex items-start space-x-3">
+                          <div className="w-2.5 h-2.5 bg-gradient-to-r from-orange-500 to-orange-600 rounded-full mt-2 flex-shrink-0 shadow-sm" />
+                          <span className="text-gray-800 font-medium leading-relaxed">{finding}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
             )}
 
             {/* Recommendations */}
             {((isEditing ? editedSummary : summary)?.recommendations && ((isEditing ? editedSummary : summary)?.recommendations?.length || 0) > 0) && (
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <div className="flex items-center space-x-2 mb-4">
-                  <CheckCircle className="w-5 h-5 text-gray-600" />
-                  <h4 className="font-semibold text-gray-800">
-                    {getMedicalTerm('recommendations', (isEditing ? editedSummary : summary)?.language || 'de')}
-                  </h4>
+              <div className="bg-white border-2 border-green-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all duration-200">
+                <div className="flex items-center space-x-3 mb-5">
+                  <div className="p-2 bg-gradient-to-r from-green-500 to-green-600 rounded-lg">
+                    <CheckCircle className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-lg text-gray-800">
+                      {getMedicalTerm('recommendations', (isEditing ? editedSummary : summary)?.language || 'de')}
+                    </h4>
+                    <p className="text-sm text-gray-600">Next steps and care recommendations</p>
+                  </div>
                 </div>
                 {isEditing ? (
                   <div className="space-y-3">
                     {editedSummary?.recommendations.map((recommendation, index) => (
                       <div key={index} className="flex items-start space-x-3">
-                        <div className="w-2 h-2 bg-success-500 rounded-full mt-3 flex-shrink-0" />
+                        <div className="w-3 h-3 bg-green-500 rounded-full mt-3 flex-shrink-0 shadow-sm" />
                         <input
                           type="text"
                           value={recommendation}
                           onChange={(e) => updateRecommendation(index, e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-medical-500 focus:border-transparent"
+                          className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200"
                           placeholder="Recommendation..."
                         />
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <ul className="space-y-2">
-                    {summary.recommendations.map((recommendation, index) => (
-                      <li key={index} className="flex items-start space-x-3">
-                        <div className="w-2 h-2 bg-success-500 rounded-full mt-2 flex-shrink-0" />
-                        <span className="text-gray-700">{recommendation}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4">
+                    <ul className="space-y-3">
+                      {summary.recommendations.map((recommendation, index) => (
+                        <li key={index} className="flex items-start space-x-3">
+                          <div className="w-2.5 h-2.5 bg-gradient-to-r from-green-500 to-green-600 rounded-full mt-2 flex-shrink-0 shadow-sm" />
+                          <span className="text-gray-800 font-medium leading-relaxed">{recommendation}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
             )}
 
             {/* Disclaimer */}
-            <div className="bg-warning-50 border border-warning-200 rounded-lg p-4">
-              <div className="flex items-start space-x-2">
-                <AlertTriangle className="w-5 h-5 text-warning-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-warning-800">
-                  <p className="font-medium mb-1">Important Notice</p>
-                  <p>
-                    This summary has been automatically generated and is intended for patient education only. 
-                    Please discuss these findings with your healthcare provider for proper medical interpretation 
-                    and treatment recommendations.
-                  </p>
+            <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border-2 border-amber-200 rounded-xl p-5 shadow-sm">
+              <div className="flex items-start space-x-3">
+                <div className="p-2 bg-gradient-to-r from-amber-500 to-amber-600 rounded-lg flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h5 className="font-bold text-amber-800 text-base mb-2">⚠️ Important Medical Notice</h5>
+                  <div className="text-sm text-amber-800 leading-relaxed space-y-2">
+                    <p className="font-medium">
+                      This summary has been automatically generated using AI and is intended for patient education purposes only.
+                    </p>
+                    <p>
+                      📋 <strong>Always consult your healthcare provider</strong> for proper medical interpretation, diagnosis, and treatment recommendations.
+                    </p>
+                    <p>
+                      🩺 This summary does not replace professional medical advice or clinical judgment.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
           </>
         ) : !report ? (
           <div className="flex items-center justify-center h-64">
-            <div className="text-center text-gray-500">
-              <Users className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg font-medium mb-2">No Report Available</p>
-              <p className="text-sm">
-                Generate a medical report first to create a patient summary
-              </p>
+            <div className="text-center">
+              <div className="bg-white rounded-xl p-8 shadow-lg max-w-md mx-auto">
+                <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                  <Users className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">No Report Available</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Generate a medical report first to create a patient summary
+                </p>
+                <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
+                  💡 Complete a transcription and generate a report to get started
+                </div>
+              </div>
             </div>
           </div>
         ) : (
           <div className="flex items-center justify-center h-64">
-            <div className="text-center text-gray-500">
-              <Users className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg font-medium mb-2">Ready to Generate Summary</p>
-              <p className="text-sm">
-                Click the generate button above to create a patient-friendly summary
-              </p>
+            <div className="text-center">
+              <div className="bg-gradient-to-r from-blue-50 to-medical-50 rounded-xl p-8 shadow-lg max-w-md mx-auto border-2 border-blue-200">
+                <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-blue-500 to-medical-600 rounded-full flex items-center justify-center">
+                  <Users className="w-8 h-8 text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">Ready to Generate Summary</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Click the generate button above to create a patient-friendly summary
+                </p>
+                <div className="text-xs text-blue-700 bg-blue-100 rounded-lg p-3">
+                  ✨ AI will convert medical terminology into easy-to-understand language
+                </div>
+              </div>
             </div>
           </div>
         )}
