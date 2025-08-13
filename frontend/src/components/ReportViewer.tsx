@@ -191,6 +191,9 @@ ${formatContentValue(report.technicalDetails)}
     if (currentReport) {
       console.log('🔍 ReportViewer Debug:');
       console.log('  Has icdPredictions:', !!currentReport.icdPredictions);
+      console.log('  Has sections:', !!currentReport.sections);
+      console.log('  Sections length:', currentReport.sections?.length || 0);
+      console.log('  Using sections path:', !!(currentReport.sections && currentReport.sections.length > 0));
       if (currentReport.icdPredictions) {
         console.log('  ICD Structure:', currentReport.icdPredictions);
         console.log('  ICD Codes Count:', currentReport.icdPredictions.codes?.length || 0);
@@ -553,15 +556,15 @@ ${formatContentValue(report.technicalDetails)}
                 </details>
               </div>
             ) : null}
-
-            {/* ICD-10-GM Predictions Section - Completely separate card after main report */}
-            {currentReport && currentReport.icdPredictions && (
-              <ICDPredictionsComponent 
-                predictions={currentReport.icdPredictions}
-                className="mt-6"
-              />
-            )}
           </>
+
+          {/* ICD-10-GM Predictions Section - Always render after main report regardless of sections */}
+          {currentReport && currentReport.icdPredictions && (
+            <ICDPredictionsComponent 
+              predictions={currentReport.icdPredictions}
+              className="mt-6"
+            />
+          )}
         ) : (
           <div className="flex items-center justify-center h-64">
             <div className="text-center text-gray-500">
