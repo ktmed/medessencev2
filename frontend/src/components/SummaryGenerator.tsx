@@ -47,6 +47,12 @@ export default function SummaryGenerator({
   const [isEditing, setIsEditing] = useState(false);
   const [editedSummary, setEditedSummary] = useState<PatientSummary | null>(null);
 
+  // Sync selectedLanguage with parent language prop changes
+  React.useEffect(() => {
+    console.log('🔄 SummaryGenerator: Parent language changed to:', language);
+    setSelectedLanguage(language);
+  }, [language]);
+
   const handleGenerate = () => {
     console.log('🔍 DEBUG: Generating summary with language:', selectedLanguage, 'complexity:', selectedComplexity);
     if (report && onGenerate) {

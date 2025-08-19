@@ -166,20 +166,14 @@ export default function Dashboard() {
           console.log('- Is fallback processing:', processingAgent === 'fallback');
         }
 
-        // More strict validation - check for meaningful content, not just existence
-        const hasValidEnhancedFindings = report.enhancedFindings && 
-          report.enhancedFindings.processingAgent !== 'fallback' && 
-          !report.enhancedFindings.normalFindings?.some(finding => 
-            finding.includes('Strukturierte Befunde nicht verfügbar') || 
-            finding.includes('Structured findings not available') ||
-            finding.includes('Siehe Originalbefund')
-          ) && (
-            (report.enhancedFindings.normalFindings && report.enhancedFindings.normalFindings.length > 0) ||
-            (report.enhancedFindings.pathologicalFindings && report.enhancedFindings.pathologicalFindings.length > 0) ||
-            (report.enhancedFindings.specialObservations && report.enhancedFindings.specialObservations.length > 0)
-          );
+        // Enhanced findings validation - check for any meaningful content
+        const hasValidEnhancedFindings = report.enhancedFindings && (
+          (report.enhancedFindings.normalFindings && report.enhancedFindings.normalFindings.length > 0) ||
+          (report.enhancedFindings.pathologicalFindings && report.enhancedFindings.pathologicalFindings.length > 0) ||
+          (report.enhancedFindings.specialObservations && report.enhancedFindings.specialObservations.length > 0)
+        );
 
-        console.log('🔍 hasValidEnhancedFindings result (v3.0):', hasValidEnhancedFindings);
+        console.log('🔍 hasValidEnhancedFindings result (simplified):', hasValidEnhancedFindings);
 
         if (hasValidEnhancedFindings) {
           console.log('✅ Enhanced findings already provided by report API - skipping secondary call');
@@ -416,7 +410,9 @@ export default function Dashboard() {
       console.log('📋 Generating summary via API service');
       console.log('- Report ID:', reportId);
       console.log('- Language:', summaryLanguage);
+      console.log('- Main app language:', language);
       console.log('- Complexity:', complexity);
+      console.log('- Languages match:', summaryLanguage === language);
       
       const reportContent = `${currentReport.findings}\n\n${currentReport.impression}\n\n${currentReport.recommendations}`;
       
