@@ -35,48 +35,67 @@ class ServerSummaryService {
     
     console.log('🚀 SUMMARY API: Initializing AI providers');
     console.log('- Provider priority:', providerPriority);
+    console.log('- ANTHROPIC_API_KEY present:', !!process.env.ANTHROPIC_API_KEY);
+    console.log('- OPENAI_API_KEY present:', !!process.env.OPENAI_API_KEY);
+    console.log('- GOOGLE_API_KEY present:', !!process.env.GOOGLE_API_KEY);
 
     const availableProviders: { [key: string]: () => LLMProvider | null } = {
       claude: () => {
         if (process.env.ANTHROPIC_API_KEY) {
+          console.log('✅ Claude API key found, adding Claude provider');
           return { name: 'claude', handler: this.callClaude.bind(this) };
         }
+        console.log('❌ Claude API key not found');
         return null;
       },
       openai: () => {
         if (process.env.OPENAI_API_KEY) {
+          console.log('✅ OpenAI API key found, adding OpenAI provider');
           return { name: 'openai', handler: this.callOpenAI.bind(this) };
         }
+        console.log('❌ OpenAI API key not found');
         return null;
       },
       gemini: () => {
         if (process.env.GOOGLE_API_KEY) {
+          console.log('✅ Gemini API key found, adding Gemini provider');
           return { name: 'gemini', handler: this.callGemini.bind(this) };
         }
+        console.log('❌ Gemini API key not found');
         return null;
       }
     };
 
     for (const providerName of providerPriority) {
+      console.log(`🔍 Checking provider: ${providerName}`);
       const providerFactory = availableProviders[providerName];
       if (providerFactory) {
         const provider = providerFactory();
         if (provider) {
           this.providers.push(provider);
           console.log(`✅ Added ${providerName} provider for summaries`);
+        } else {
+          console.log(`❌ Failed to create ${providerName} provider - likely missing API key`);
         }
+      } else {
+        console.log(`❌ Unknown provider: ${providerName}`);
       }
     }
 
     console.log(`🎯 Summary service initialized with ${this.providers.length} providers`);
+    if (this.providers.length === 0) {
+      console.error('🚨 No AI providers available! Summary will fall back to rule-based generation');
+    }
   }
 
   async generateSummary(reportContent: string, language: Language, complexity: string = 'detailed'): Promise<PatientSummary> {
+    console.log('📋 DEBUG: Generating summary with language:', language, 'complexity:', complexity);
     console.log('📋 Generating patient summary...');
     console.log('- Report content length:', reportContent.length);
     console.log('- Language:', language);
     console.log('- Complexity:', complexity);
     console.log('- Available providers:', this.providers.map(p => p.name));
+    console.log('- Provider count:', this.providers.length);
 
     if (this.providers.length === 0) {
       console.error('❌ No AI providers available for summary');
@@ -88,12 +107,18 @@ class ServerSummaryService {
     for (const provider of this.providers) {
       try {
         console.log(`🤖 Trying ${provider.name} for summary...`);
+        console.log('🔍 Summary prompt length:', prompt.length);
+        console.log('🔍 Summary prompt preview:', prompt.substring(0, 200) + '...');
+        
         const aiResponse = await provider.handler(prompt);
         console.log(`✅ ${provider.name} succeeded for summary!`);
+        console.log('🔍 AI Response length:', aiResponse.length);
+        console.log('🔍 AI Response preview:', aiResponse.substring(0, 200) + '...');
         
         return this.parseSummaryResponse(aiResponse, language, provider.name, complexity, reportContent);
       } catch (error) {
         console.error(`❌ ${provider.name} failed for summary:`, error instanceof Error ? error.message : 'Unknown error');
+        console.error(`🔍 Full error details for ${provider.name}:`, error);
         continue;
       }
     }
@@ -724,16 +749,17 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
   }
 
   private generateFallbackSummary(reportContent: string, language: Language): PatientSummary {
-    console.log('📋 Generating fallback summary');
+    console.log('📋 Generating fallback summary for language:', language);
+    console.log('📋 Report content length:', reportContent.length);
     
     const fallbackTexts = {
       de: {
-        summary: `Automatische Zusammenfassung des Berichts:\n\n${reportContent.substring(0, 500)}...`,
+        summary: this.createIntelligentSummary(reportContent, 'de'),
         findings: 'Siehe ursprünglichen Bericht',
         recommendations: 'Rücksprache mit behandelndem Arzt empfohlen'
       },
       en: {
-        summary: `Automatic summary of report:\n\n${reportContent.substring(0, 500)}...`,
+        summary: this.createIntelligentSummary(reportContent, 'en'),
         findings: 'See original report',
         recommendations: 'Consultation with attending physician recommended'
       },
@@ -786,6 +812,141 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
         confidence: 0.5
       }
     };
+  }
+
+  private createIntelligentSummary(reportContent: string, language: 'de' | 'en'): string {
+    console.log('🧠 Creating intelligent fallback summary for language:', language);
+    
+    // Parse the report content to extract key sections
+    const sections = this.parseReportSections(reportContent);
+    
+    // Create a concise summary by extracting key sentences and simplifying
+    const keyPoints = this.extractKeySentences(reportContent, language);
+    const simplifiedFindings = this.simplifyMedicalText(sections.findings || '', language);
+    const simplifiedImpression = this.simplifyMedicalText(sections.impression || '', language);
+    
+    if (language === 'de') {
+      return `PATIENTENFREUNDLICHE ZUSAMMENFASSUNG
+
+WICHTIGSTE ERGEBNISSE:
+${simplifiedFindings || 'Die Untersuchung wurde durchgeführt und dokumentiert.'}
+
+BEWERTUNG:
+${simplifiedImpression || 'Die Ergebnisse wurden fachärztlich beurteilt.'}
+
+EMPFOHLENE SCHRITTE:
+${sections.recommendations || 'Weitere Betreuung durch Ihren Arzt wird empfohlen.'}
+
+Diese vereinfachte Zusammenfassung soll Ihnen helfen, Ihre medizinischen Ergebnisse besser zu verstehen.`;
+    } else {
+      return `PATIENT-FRIENDLY SUMMARY
+
+KEY RESULTS:
+${simplifiedFindings || 'The examination was completed and documented.'}
+
+ASSESSMENT:
+${simplifiedImpression || 'The results have been professionally evaluated.'}
+
+RECOMMENDED NEXT STEPS:
+${sections.recommendations || 'Continued care with your physician is recommended.'}
+
+This simplified summary is designed to help you better understand your medical results.`;
+    }
+  }
+
+  private extractKeySentences(text: string, language: 'de' | 'en'): string[] {
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
+    
+    // Keywords that indicate important medical information
+    const importantKeywords = language === 'de' 
+      ? ['befund', 'diagnose', 'pathologisch', 'auffällig', 'normal', 'empfehlung', 'therapie', 'behandlung']
+      : ['finding', 'diagnosis', 'pathological', 'abnormal', 'normal', 'recommendation', 'therapy', 'treatment'];
+    
+    const keySentences = sentences.filter(sentence => 
+      importantKeywords.some(keyword => 
+        sentence.toLowerCase().includes(keyword.toLowerCase())
+      )
+    ).slice(0, 3); // Limit to most important sentences
+    
+    return keySentences.map(s => s.trim());
+  }
+
+  private simplifyMedicalText(text: string, language: 'de' | 'en'): string {
+    if (!text || text.trim().length === 0) return '';
+    
+    // Remove complex medical jargon and make more patient-friendly
+    let simplified = text.trim();
+    
+    if (language === 'de') {
+      // German simplifications
+      simplified = simplified
+        .replace(/Radiologisch/gi, 'In der Bildgebung')
+        .replace(/pathologisch/gi, 'auffällig')
+        .replace(/unauffällig/gi, 'normal')
+        .replace(/Befund/gi, 'Ergebnis')
+        .replace(/Kategorie/gi, 'Bewertung');
+    } else {
+      // English simplifications  
+      simplified = simplified
+        .replace(/Radiologically/gi, 'In the imaging')
+        .replace(/pathological/gi, 'abnormal')
+        .replace(/unremarkable/gi, 'normal')
+        .replace(/findings/gi, 'results')
+        .replace(/category/gi, 'classification');
+    }
+    
+    // Limit length and ensure readability
+    const sentences = simplified.split(/[.!?]+/).filter(s => s.trim().length > 10);
+    return sentences.slice(0, 2).map(s => s.trim()).join('. ') + (sentences.length > 0 ? '.' : '');
+  }
+
+  private parseReportSections(reportContent: string): { findings?: string; impression?: string; recommendations?: string } {
+    const sections: { findings?: string; impression?: string; recommendations?: string } = {};
+    
+    // Try to extract sections based on common medical report patterns
+    const findingsPatterns = [
+      /(?:BEFUND|FINDINGS?):\s*([^]*?)(?=(?:BEURTEILUNG|IMPRESSION|EMPFEHLUNG|RECOMMENDATION)|$)/i,
+      /(?:Befunde?|Findings?)[:\s]*([^]*?)(?=(?:Beurteilung|Impression|Empfehlung|Recommendation)|$)/i
+    ];
+    
+    const impressionPatterns = [
+      /(?:BEURTEILUNG|IMPRESSION):\s*([^]*?)(?=(?:EMPFEHLUNG|RECOMMENDATION)|$)/i,
+      /(?:Beurteilung|Impression)[:\s]*([^]*?)(?=(?:Empfehlung|Recommendation)|$)/i
+    ];
+    
+    const recommendationPatterns = [
+      /(?:EMPFEHLUNG|RECOMMENDATION)S?:\s*([^]*?)$/i,
+      /(?:Empfehlung|Recommendation)s?[:\s]*([^]*?)$/i
+    ];
+    
+    // Extract findings
+    for (const pattern of findingsPatterns) {
+      const match = reportContent.match(pattern);
+      if (match && match[1]?.trim()) {
+        sections.findings = match[1].trim().substring(0, 200);
+        break;
+      }
+    }
+    
+    // Extract impression
+    for (const pattern of impressionPatterns) {
+      const match = reportContent.match(pattern);
+      if (match && match[1]?.trim()) {
+        sections.impression = match[1].trim().substring(0, 200);
+        break;
+      }
+    }
+    
+    // Extract recommendations
+    for (const pattern of recommendationPatterns) {
+      const match = reportContent.match(pattern);
+      if (match && match[1]?.trim()) {
+        sections.recommendations = match[1].trim().substring(0, 200);
+        break;
+      }
+    }
+    
+    return sections;
   }
 }
 
