@@ -752,16 +752,20 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
     console.log('📋 Generating fallback summary for language:', language);
     console.log('📋 Report content length:', reportContent.length);
     
+    // Parse sections and generate intelligent content based on analysis  
+    const sections = this.parseReportSections(reportContent);
+    const summaryData = this.analyzeMedicalContent(reportContent, sections);
+    
     const fallbackTexts = {
       de: {
         summary: this.createIntelligentSummary(reportContent, 'de'),
-        findings: 'Siehe ursprünglichen Bericht',
-        recommendations: 'Rücksprache mit behandelndem Arzt empfohlen'
+        findings: this.createGermanFindings(summaryData),
+        recommendations: this.createGermanRecommendations(summaryData)
       },
       en: {
         summary: this.createIntelligentSummary(reportContent, 'en'),
-        findings: 'See original report',
-        recommendations: 'Consultation with attending physician recommended'
+        findings: this.createEnglishFindings(summaryData),
+        recommendations: this.createEnglishRecommendations(summaryData)
       },
       ar: {
         summary: `ملخص تلقائي للتقرير:\n\n${reportContent.substring(0, 500)}...`,
@@ -828,36 +832,15 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
     // Create language-appropriate summaries based on content analysis
     const summaryData = this.analyzeMedicalContent(reportContent, sections);
     
+    // Return clean summary text without headers for UI display
     if (language === 'de') {
-      return `PATIENTENFREUNDLICHE ZUSAMMENFASSUNG
-
-WICHTIGSTE ERGEBNISSE:
-${this.createGermanSummary(summaryData)}
-
-BEWERTUNG:
-${summaryData.hasNormalFindings ? 'Die meisten Untersuchungsergebnisse liegen im normalen Bereich.' : 
-  summaryData.hasAbnormalFindings ? 'Es wurden einige Auffälligkeiten festgestellt, die weitere Aufmerksamkeit erfordern.' :
-  'Die Ergebnisse wurden fachärztlich beurteilt.'}
-
-EMPFOHLENE SCHRITTE:
-${summaryData.hasRecommendations ? 'Weitere Schritte wurden mit Ihrem Arzt besprochen.' : 'Weitere Betreuung durch Ihren Arzt wird empfohlen.'}
-
-Diese vereinfachte Zusammenfassung soll Ihnen helfen, Ihre medizinischen Ergebnisse besser zu verstehen.`;
+      return `${this.createGermanSummary(summaryData)} ${summaryData.hasNormalFindings ? 'Die meisten Untersuchungsergebnisse liegen im normalen Bereich.' : 
+        summaryData.hasAbnormalFindings ? 'Es wurden einige Auffälligkeiten festgestellt, die weitere Aufmerksamkeit erfordern.' :
+        'Die Ergebnisse wurden fachärztlich beurteilt.'} Diese vereinfachte Zusammenfassung soll Ihnen helfen, Ihre medizinischen Ergebnisse besser zu verstehen.`;
     } else {
-      return `PATIENT-FRIENDLY SUMMARY
-
-KEY RESULTS:
-${this.createEnglishSummary(summaryData)}
-
-ASSESSMENT:
-${summaryData.hasNormalFindings ? 'Most examination results are within normal ranges.' : 
-  summaryData.hasAbnormalFindings ? 'Some findings require further attention and follow-up.' :
-  'The results have been professionally evaluated.'}
-
-RECOMMENDED NEXT STEPS:
-${summaryData.hasRecommendations ? 'Next steps have been discussed with your physician.' : 'Continued care with your physician is recommended.'}
-
-This simplified summary is designed to help you better understand your medical results.`;
+      return `${this.createEnglishSummary(summaryData)} ${summaryData.hasNormalFindings ? 'Most examination results are within normal ranges.' : 
+        summaryData.hasAbnormalFindings ? 'Some findings require further attention and follow-up.' :
+        'The results have been professionally evaluated.'} This simplified summary is designed to help you better understand your medical results.`;
     }
   }
 
@@ -940,6 +923,48 @@ This simplified summary is designed to help you better understand your medical r
       data.hasAbnormalFindings ?
       'Some abnormalities were identified during the examination.' :
       'The medical examination has been completed.';
+  }
+
+  private createGermanFindings(data: any): string[] {
+    if (data.hasNormalFindings && data.hasAbnormalFindings) {
+      return ['Normale und auffällige Befunde wurden festgestellt'];
+    } else if (data.hasNormalFindings) {
+      return ['Die Untersuchung zeigt normale Ergebnisse'];
+    } else if (data.hasAbnormalFindings) {
+      return ['Es wurden einige Auffälligkeiten festgestellt'];
+    }
+    return ['Medizinische Untersuchung wurde durchgeführt'];
+  }
+
+  private createEnglishFindings(data: any): string[] {
+    if (data.hasNormalFindings && data.hasAbnormalFindings) {
+      return ['Both normal and abnormal findings were identified'];
+    } else if (data.hasNormalFindings) {
+      return ['The examination shows normal results'];
+    } else if (data.hasAbnormalFindings) {
+      return ['Some abnormalities were identified'];
+    }
+    return ['Medical examination was completed'];
+  }
+
+  private createGermanRecommendations(data: any): string[] {
+    if (data.hasRecommendations) {
+      return ['Weitere Schritte wurden mit Ihrem Arzt besprochen'];
+    }
+    if (data.hasAbnormalFindings) {
+      return ['Weitere Untersuchung oder Beobachtung empfohlen'];
+    }
+    return ['Regelmäßige Kontrolluntersuchungen empfohlen'];
+  }
+
+  private createEnglishRecommendations(data: any): string[] {
+    if (data.hasRecommendations) {
+      return ['Next steps have been discussed with your physician'];
+    }
+    if (data.hasAbnormalFindings) {
+      return ['Further investigation or monitoring recommended'];
+    }
+    return ['Regular follow-up examinations recommended'];
   }
 
   private extractKeySentences(text: string, language: 'de' | 'en'): string[] {
