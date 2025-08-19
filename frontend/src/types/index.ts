@@ -69,12 +69,14 @@ export interface ICDPredictions {
   summary: {
     totalCodes: number;
     primaryDiagnoses: number;
-    secondaryDiagnoses: number;
-    averageConfidence: number;
+    secondaryConditions: number;
   };
+  confidence: number;
+  provider: string;
+  generatedAt: number;
+  language: Language;
+  // Optional legacy/compatibility fields
   agentType?: string;
-  language?: string;
-  provider?: string;
   timestamp?: string;
   cached?: boolean;
   fallback?: boolean;

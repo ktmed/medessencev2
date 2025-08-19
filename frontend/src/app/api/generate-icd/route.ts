@@ -280,13 +280,14 @@ Analyze systematically and return only the most probable and relevant ${codeSyst
       summary: {
         totalCodes: codes.length,
         primaryDiagnoses: primaryCodes,
-        secondaryDiagnoses: secondaryCodes,
-        averageConfidence: Math.round(avgConfidence * 100) / 100
+        secondaryConditions: secondaryCodes
       },
-      agentType: 'icd-coding',
-      language: language,
+      confidence: avgConfidence,
       provider: provider,
       generatedAt: Date.now(),
+      language: language,
+      // Optional legacy fields
+      agentType: 'icd-coding',
       cached: false,
       fallback: false
     };
@@ -353,13 +354,14 @@ Analyze systematically and return only the most probable and relevant ${codeSyst
       summary: {
         totalCodes: fallbackCodes.length,
         primaryDiagnoses: 0,
-        secondaryDiagnoses: fallbackCodes.length,
-        averageConfidence: 0.6
+        secondaryConditions: fallbackCodes.length
       },
-      agentType: 'rule-based-icd',
-      language: language,
+      confidence: 0.6,
       provider: 'rule-based',
       generatedAt: Date.now(),
+      language: language,
+      // Optional legacy fields
+      agentType: 'rule-based-icd',
       cached: false,
       fallback: true
     };
@@ -545,12 +547,13 @@ Analysiere systematisch und gebe nur die wahrscheinlichsten ${codeSystem}-Codes 
       summary: {
         totalCodes: 1,
         primaryDiagnoses: 0,
-        secondaryDiagnoses: 1,
-        averageConfidence: 0.5
+        secondaryConditions: 1
       },
-      agentType: 'icd-coding',
-      language: body.language || 'de',
+      confidence: 0.5,
       provider: 'local-failed',
+      language: body.language || 'de',
+      // Optional legacy fields
+      agentType: 'icd-coding',
       generatedAt: Date.now(),
       cached: false,
       fallback: true
@@ -606,12 +609,13 @@ function parseOllamaICDResponse(responseText: string, body: { reportId: string; 
     summary: {
       totalCodes: codes.length,
       primaryDiagnoses: primaryCodes,
-      secondaryDiagnoses: secondaryCodes,
-      averageConfidence: Math.round(avgConfidence * 100) / 100
+      secondaryConditions: secondaryCodes
     },
-    agentType: 'icd-coding',
-    language: body.language || 'de',
+    confidence: Math.round(avgConfidence * 100) / 100,
     provider: 'ollama-local',
+    language: body.language || 'de',
+    // Optional legacy fields
+    agentType: 'icd-coding',
     generatedAt: Date.now(),
     cached: false,
     fallback: false,
