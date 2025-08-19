@@ -749,8 +749,9 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
   }
 
   private generateFallbackSummary(reportContent: string, language: Language): PatientSummary {
-    console.log('📋 Generating fallback summary for language:', language);
+    console.log('📋 Generating ENHANCED fallback summary for language:', language);
     console.log('📋 Report content length:', reportContent.length);
+    console.log('🔧 Using NEW formatting system v2.0');
     
     // Parse sections and generate intelligent content based on analysis  
     const sections = this.parseReportSections(reportContent);
@@ -805,8 +806,8 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
       id: `summary-${Date.now()}`,
       reportId: `report-${Date.now()}`, 
       summary: texts.summary,
-      keyFindings: [texts.findings],
-      recommendations: [texts.recommendations],
+      keyFindings: Array.isArray(texts.findings) ? texts.findings : [texts.findings],
+      recommendations: Array.isArray(texts.recommendations) ? texts.recommendations : [texts.recommendations],
       language,
       generatedAt: Date.now(),
       complexity: 'detailed',
