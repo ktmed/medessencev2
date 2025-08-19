@@ -355,8 +355,13 @@ Write professionally but without markdown formatting.`;
       codes.push({
         code: 'Z12.31',
         description: isGerman ? 'Spezielle Vorsorgeuntersuchung auf Brustkrebs' : 'Screening mammography',
-        priority: 'primary',
-        confidence: 0.95
+        confidence: 0.95,
+        radiologyRelevance: 0.95,
+        priority: 'primary' as const,
+        category: isGerman ? 'Vorsorgeuntersuchung' : 'Screening',
+        reasoning: isGerman 
+          ? 'Mammographie-Untersuchung erkannt' 
+          : 'Mammography examination detected'
       });
     }
     
@@ -364,20 +369,19 @@ Write professionally but without markdown formatting.`;
       codes: codes,
       summary: {
         primaryDiagnoses: codes.filter(c => c.priority === 'primary').length,
-        secondaryDiagnoses: 0,
+        secondaryConditions: 0,
         totalCodes: codes.length
       },
+      confidence: codes.length > 0 ? 0.95 : 0.5,
       provider: 'simplified',
-      generatedAt: Date.now()
+      generatedAt: Date.now(),
+      language: isGerman ? 'de' as const : 'en' as const
     };
   }
 
-  private classifyReportType(text: string): string {
-    const textLower = text.toLowerCase();
-    if (textLower.includes('mammogr')) return 'Mammography';
-    if (textLower.includes('mri') || textLower.includes('wirbel')) return 'MRI';
-    if (textLower.includes('ct') || textLower.includes('computer')) return 'CT';
-    return 'General Medical Report';
+  private classifyReportType(text: string): 'transcription' | 'manual' | 'imported' {
+    // Always return 'transcription' for AI-generated reports from text input
+    return 'transcription';
   }
 
   private generateFallbackReport(text: string, language: string) {
@@ -392,7 +396,7 @@ Write professionally but without markdown formatting.`;
       technicalDetails: isGerman ? 'Regelbasierte Verarbeitung' : 'Rule-based processing',
       generatedAt: Date.now(),
       language: language,
-      type: 'Fallback Report',
+      type: 'transcription' as const,
       metadata: {
         agent: 'fallback_processor',
         aiProvider: 'rule-based',
