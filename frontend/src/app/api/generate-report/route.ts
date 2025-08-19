@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { 
+  GenerateReportRequestSchema,
+  MedicalReportSchema,
+  normalizeTimestamp,
+  validateApiResponse
+} from '@/lib/validation';
+import { 
+  withRequestValidation,
+  withResponseValidation,
+  withErrorHandling,
+  createApiResponse,
+  createErrorResponse,
+  logApiMetrics
+} from '@/lib/api-middleware';
 
-interface ReportRequest {
-  transcriptionId: string;
-  language: string;
-  transcriptionText: string;
-  processingMode?: 'cloud' | 'local';
-}
+const validateRequest = withRequestValidation(GenerateReportRequestSchema);
+const validateResponse = withResponseValidation(MedicalReportSchema, 'Medical Report');
 
 class SimpleMultiLLMService {
   private providers: Array<{name: string, handler: (prompt: string) => Promise<string>}> = [];
@@ -392,40 +402,45 @@ Write professionally but without markdown formatting.`;
   }
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const body: ReportRequest = await request.json();
-    
-    console.log('🌐 Simple API Route: Generate Report Request');
-    console.log('- Text length:', body.transcriptionText?.length || 0);
-    console.log('- Language:', body.language);
-
-    if (!body.transcriptionText) {
-      return NextResponse.json(
-        { error: 'No transcription text provided' },
-        { status: 400 }
-      );
-    }
-
-    const llmService = new SimpleMultiLLMService();
-    const report = await llmService.generateReport(
-      body.transcriptionText,
-      body.language || 'de'
-    );
-
-    console.log('✅ Simple report generated successfully');
-    
-    return NextResponse.json(report);
-
-  } catch (error) {
-    console.error('❌ Simple API Route Error:', error);
-    
-    return NextResponse.json(
-      { 
-        error: 'Failed to generate report',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+async function handleGenerateReport(request: NextRequest): Promise<NextResponse> {
+  const startTime = Date.now();
+  
+  // Validate request
+  const validation = await validateRequest(request);
+  if (validation.error) {
+    logApiMetrics('/api/generate-report', 'POST', Date.now() - startTime, 400, 'Validation error');
+    return validation.error;
   }
+  
+  const { transcriptionId, language, transcriptionText, processingMode } = validation.data;
+  
+  console.log('🌐 Validated API Route: Generate Report Request');
+  console.log('- Transcription ID:', transcriptionId);
+  console.log('- Language:', language);
+  console.log('- Text length:', transcriptionText.length);
+  console.log('- Processing mode:', processingMode);
+
+  const llmService = new SimpleMultiLLMService();
+  const rawReport = await llmService.generateReport(transcriptionText, language);
+
+  // Standardize timestamps and validate response
+  const report = {
+    ...rawReport,
+    generatedAt: normalizeTimestamp(rawReport.generatedAt),
+    enhancedFindings: rawReport.enhancedFindings ? {
+      ...rawReport.enhancedFindings,
+      timestamp: normalizeTimestamp(rawReport.enhancedFindings.timestamp || rawReport.enhancedFindings.generatedAt)
+    } : undefined
+  };
+
+  // Validate the response before sending
+  const validatedReport = validateResponse(report);
+  
+  console.log('✅ Validated report generated successfully');
+  logApiMetrics('/api/generate-report', 'POST', Date.now() - startTime, 200);
+  
+  return createApiResponse(validatedReport);
 }
+
+// Export the handler wrapped with comprehensive error handling
+export const POST = withErrorHandling(handleGenerateReport);
