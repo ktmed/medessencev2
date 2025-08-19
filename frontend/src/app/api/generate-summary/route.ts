@@ -22,7 +22,7 @@ class ServerSummaryService {
   }
 
   private initializeProviders() {
-    const providerPriority = (process.env.AI_PROVIDER_PRIORITY || 'claude,gemini,openai')
+    const providerPriority = (process.env.AI_PROVIDER_PRIORITY || 'gemini,openai,claude')
       .split(',')
       .map(p => p.trim());
     
