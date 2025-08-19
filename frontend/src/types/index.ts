@@ -90,7 +90,7 @@ export interface MedicalReport {
   findings: string;
   impression: string;
   recommendations: string;
-  technicalDetails: string;
+  technicalDetails?: string;
   generatedAt: number;
   language: Language;
   type?: string;

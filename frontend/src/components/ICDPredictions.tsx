@@ -108,7 +108,7 @@ const ICDPredictionsComponent: React.FC<ICDPredictionsProps> = ({
         <div className="flex items-center space-x-2">
           {/* Summary stats */}
           <div className="hidden sm:flex items-center space-x-3 text-sm text-navy-600">
-            <span>Ø {(predictions.summary.averageConfidence * 100).toFixed(0)}%</span>
+            <span>Ø {(predictions.confidence * 100).toFixed(0)}%</span>
             <div className="flex space-x-1">
               {priorityCounts.primary > 0 && (
                 <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs">
@@ -180,12 +180,12 @@ const ICDPredictionsComponent: React.FC<ICDPredictionsProps> = ({
               </div>
               <div className="bg-yellow-50 p-3 rounded">
                 <div className="font-medium text-yellow-900">Sekundär</div>
-                <div className="text-yellow-600">{predictions.summary.secondaryDiagnoses}</div>
+                <div className="text-yellow-600">{predictions.summary.secondaryConditions}</div>
               </div>
               <div className="bg-orange-50 p-3 rounded">
                 <div className="font-medium text-orange-900">Konfidenz</div>
                 <div className="text-orange-600">
-                  {(predictions.summary.averageConfidence * 100).toFixed(1)}%
+                  {(predictions.confidence * 100).toFixed(1)}%
                 </div>
               </div>
             </div>

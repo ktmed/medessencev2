@@ -85,7 +85,10 @@ export const ICDCodeSchema = z.object({
   code: z.string().min(1, 'ICD code is required'),
   description: z.string().min(1, 'ICD description is required'),
   confidence: z.number().min(0).max(1),
-  category: z.enum(['primary', 'secondary', 'related']).default('primary')
+  radiologyRelevance: z.number().min(0).max(1),
+  priority: z.enum(['primary', 'secondary', 'differential']),
+  category: z.string(),
+  reasoning: z.string()
 });
 
 export const ICDPredictionsSchema = z.object({
@@ -151,8 +154,8 @@ export function validateApiRequest<T>(
     return { success: true, data: validated };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const errorMessage = error.errors
-        .map(err => `${err.path.join('.')}: ${err.message}`)
+      const errorMessage = error.issues
+        .map((err: any) => `${err.path.join('.')}: ${err.message}`)
         .join('; ');
       return { success: false, error: errorMessage };
     }
@@ -172,12 +175,12 @@ export function validateApiResponse<T>(
     return schema.parse(data);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const errorMessage = error.errors
-        .map(err => `${err.path.join('.')}: ${err.message}`)
+      const errorMessage = error.issues
+        .map((err: any) => `${err.path.join('.')}: ${err.message}`)
         .join('; ');
       
       console.error(`🚨 ${context} validation failed:`, {
-        errors: error.errors,
+        errors: error.issues,
         data,
         timestamp: new Date().toISOString()
       });
