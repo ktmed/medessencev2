@@ -545,8 +545,7 @@ export default function Dashboard() {
         reportId,
         reportContent,
         summaryLanguage,
-        complexity,
-        reportProcessingMode
+        complexity
       );
       
       setCurrentSummary(summary);
