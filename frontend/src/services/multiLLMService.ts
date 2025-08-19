@@ -25,48 +25,45 @@ export class MultiLLMService {
   }
 
   private initializeProviders() {
+    // SECURITY NOTE: This service should NOT use API keys directly in the browser.
+    // Instead, it should make requests to API routes that handle the actual LLM calls.
+    // For now, maintaining compatibility but logging the security issue.
+    
+    console.log('⚠️  SECURITY WARNING: multiLLMService should not handle API keys in browser');
+    console.log('⚠️  This service should delegate to API routes instead');
+    
     // Get provider priority from environment variable
-    const providerPriority = (process.env.NEXT_PUBLIC_AI_PROVIDER_PRIORITY || 'claude,gemini,openai')
+    const providerPriority = (process.env.AI_PROVIDER_PRIORITY || 'claude,gemini,openai')
       .split(',')
       .map(p => p.trim());
     
     console.log('🚀 INITIALIZING FRONTEND PROVIDERS:');
     console.log('- Provider priority order:', providerPriority);
-    console.log('- Claude API Key:', process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY ? 'SET' : 'NOT SET');
-    console.log('- OpenAI API Key:', process.env.NEXT_PUBLIC_OPENAI_API_KEY ? 'SET' : 'NOT SET');
-    console.log('- Google API Key:', process.env.NEXT_PUBLIC_GOOGLE_API_KEY ? 'SET' : 'NOT SET');
+    console.log('- This should delegate to /api routes instead of direct API calls');
 
     // Initialize available providers
     const availableProviders: { [key: string]: () => LLMProvider | null } = {
+      // SECURITY FIX: Instead of using API keys directly, delegate to API routes
       claude: () => {
-        if (process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY) {
-          return {
-            name: 'claude',
-            handler: this.callClaude.bind(this)
-          };
-        }
-        return null;
+        // Always return the provider - the actual API call will be made server-side
+        return {
+          name: 'claude',
+          handler: this.callClaudeViaAPI.bind(this)
+        };
       },
       openai: () => {
-        if (process.env.NEXT_PUBLIC_OPENAI_API_KEY) {
-          return {
-            name: 'openai',
-            handler: this.callOpenAI.bind(this)
-          };
-        }
-        return null;
+        // Always return the provider - the actual API call will be made server-side
+        return {
+          name: 'openai', 
+          handler: this.callOpenAIViaAPI.bind(this)
+        };
       },
       gemini: () => {
-        if (process.env.NEXT_PUBLIC_GOOGLE_API_KEY || process.env.API_KEY) {
-          this.geminiClient = new GoogleGenAI({ 
-            apiKey: process.env.NEXT_PUBLIC_GOOGLE_API_KEY || process.env.API_KEY || "" 
-          });
-          return {
-            name: 'gemini',
-            handler: this.callGemini.bind(this)
-          };
-        }
-        return null;
+        // Always return the provider - the actual API call will be made server-side
+        return {
+          name: 'gemini',
+          handler: this.callGeminiViaAPI.bind(this)
+        };
       }
     };
 
@@ -157,140 +154,104 @@ ${rawText}`;
   }
 
   /**
-   * Call Claude API
+   * Call Claude via API route (secure server-side)
    */
-  private async callClaude(prompt: string): Promise<string> {
-    const apiKey = process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      throw new Error('ANTHROPIC_API_KEY is not configured');
-    }
-
+  private async callClaudeViaAPI(prompt: string): Promise<string> {
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch('/api/llm/claude', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: process.env.NEXT_PUBLIC_CLAUDE_MODEL || 'claude-3-haiku-20240307',
-          max_tokens: 4000,
-          temperature: 0.2,
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ]
+          prompt: prompt,
+          maxTokens: 4000,
+          temperature: 0.2
         })
       });
 
       if (!response.ok) {
         const error = await response.text();
-        console.error('Claude API error response:', error);
-        throw new Error(`Claude API error: ${response.status} - ${error}`);
+        console.error('Claude API route error:', error);
+        throw new Error(`Claude API route error: ${response.status} - ${error}`);
       }
 
       const data = await response.json();
-      const content = data.content[0].text;
+      const content = data.text || data.content;
       
-      console.log('Claude response received:', content.substring(0, 100) + '...');
+      console.log('Claude response received via API route:', content.substring(0, 100) + '...');
       return content;
       
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('429')) {
-          throw new Error('Claude rate limit exceeded');
-        } else if (error.message.includes('401') || error.message.includes('authentication')) {
-          throw new Error('Claude API key invalid');
-        }
-      }
-      throw new Error(`Claude API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Claude API route error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
-   * Call OpenAI API
+   * Call OpenAI via API route (secure server-side)
    */
-  private async callOpenAI(prompt: string): Promise<string> {
-    const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error('OPENAI_API_KEY is not configured');
-    }
-
+  private async callOpenAIViaAPI(prompt: string): Promise<string> {
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await fetch('/api/llm/openai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: process.env.NEXT_PUBLIC_OPENAI_MODEL || 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a medical transcriptionist specializing in German medical terminology. Correct and format the provided text while maintaining all original medical information.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.2,
-          max_tokens: 4000
+          prompt: prompt,
+          maxTokens: 4000,
+          temperature: 0.2
         })
       });
 
       if (!response.ok) {
         const error = await response.text();
-        console.error('OpenAI API error response:', error);
-        throw new Error(`OpenAI API error: ${response.status} - ${error}`);
+        console.error('OpenAI API route error:', error);
+        throw new Error(`OpenAI API route error: ${response.status} - ${error}`);
       }
 
       const data = await response.json();
-      const content = data.choices[0].message.content;
+      const content = data.text || data.content;
       
-      console.log('OpenAI response received:', content.substring(0, 100) + '...');
+      console.log('OpenAI response received via API route:', content.substring(0, 100) + '...');
       return content;
       
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('429')) {
-          throw new Error('OpenAI rate limit exceeded');
-        } else if (error.message.includes('401')) {
-          throw new Error('OpenAI API key invalid');
-        }
-      }
-      throw new Error(`OpenAI API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`OpenAI API route error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
-   * Call Gemini API (fallback)
+   * Call Gemini via API route (secure server-side)
    */
-  private async callGemini(prompt: string): Promise<string> {
-    if (!this.geminiClient) {
-      throw new Error('Gemini client not initialized');
-    }
-
+  private async callGeminiViaAPI(prompt: string): Promise<string> {
     try {
-      const response: GenerateContentResponse = await this.geminiClient.models.generateContent({
-        model: process.env.NEXT_PUBLIC_GEMINI_MODEL || "gemini-2.5-flash",
-        contents: prompt,
-        config: {
-          temperature: 0.2,
-        }
+      const response = await fetch('/api/llm/gemini', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          maxTokens: 4000,
+          temperature: 0.2
+        })
       });
 
-      const content = response.text || "";
-      console.log('Gemini response received:', content.substring(0, 100) + '...');
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('Gemini API route error:', error);
+        throw new Error(`Gemini API route error: ${response.status} - ${error}`);
+      }
+
+      const data = await response.json();
+      const content = data.text || data.content;
+      
+      console.log('Gemini response received via API route:', content.substring(0, 100) + '...');
       return content;
       
     } catch (error) {
-      console.error("Error calling Gemini API:", error);
-      throw new Error("Gemini API request failed.");
+      throw new Error(`Gemini API route error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -309,10 +270,10 @@ ${rawText}`;
   }
 
   /**
-   * Get the intended provider priority order (even when no API keys are configured)
+   * Get the intended provider priority order (from server-side config)
    */
   getProviderPriority(): string[] {
-    const providerPriority = (process.env.NEXT_PUBLIC_AI_PROVIDER_PRIORITY || 'claude,gemini,openai')
+    const providerPriority = (process.env.AI_PROVIDER_PRIORITY || 'claude,gemini,openai')
       .split(',')
       .map(p => p.trim());
     return providerPriority;
