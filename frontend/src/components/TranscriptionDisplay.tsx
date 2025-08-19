@@ -9,7 +9,6 @@ import { formatTimestamp, getConfidenceColor, cn } from '@/utils';
 interface TranscriptionDisplayProps {
   transcriptions: TranscriptionData[];
   currentLanguage: Language;
-  isConnected: boolean;
   onExport?: (transcriptions: TranscriptionData[]) => void;
   onClear?: () => void;
   onGenerateReport?: () => void;
@@ -20,7 +19,6 @@ interface TranscriptionDisplayProps {
 export default function TranscriptionDisplay({
   transcriptions,
   currentLanguage,
-  isConnected,
   onExport,
   onClear,
   onGenerateReport,
@@ -127,14 +125,11 @@ export default function TranscriptionDisplay({
           </span>
         </div>
         
-        {/* Connection Status */}
+        {/* Status - Using Web Speech API */}
         <div className="flex items-center space-x-1">
-          <div className={cn(
-            'w-2 h-2 rounded-full',
-            isConnected ? 'bg-success-500' : 'bg-error-500'
-          )} />
+          <div className="w-2 h-2 rounded-full bg-success-500" />
           <span className="text-xs text-navy-500">
-            {isConnected ? 'Connected' : 'Disconnected'}
+            Web Speech API Ready
           </span>
         </div>
       </div>
@@ -217,7 +212,7 @@ export default function TranscriptionDisplay({
                 <>
                   <button
                     onClick={saveEdit}
-                    disabled={!editedText.trim() || !isConnected}
+                    disabled={!editedText.trim()}
                     className="px-3 py-1.5 bg-success-600 text-white rounded-md hover:bg-success-700 disabled:opacity-50 text-sm font-medium flex items-center space-x-1"
                     title={currentLanguage === 'de' ? 'Speichern und Bericht generieren' : 'Save and generate report'}
                   >
@@ -252,7 +247,7 @@ export default function TranscriptionDisplay({
                 {onGenerateReportFromText && (
                   <button
                     onClick={onGenerateReport || (() => {})}
-                    disabled={!isConnected}
+                    disabled={false}
                     className="px-3 py-1.5 bg-navy-600 text-white rounded-md hover:bg-navy-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                     title={currentLanguage === 'de' ? 'Original-Bericht generieren' : 'Generate Original Report'}
                   >
@@ -262,7 +257,7 @@ export default function TranscriptionDisplay({
                 {onGenerateReport && !onGenerateReportFromText && (
                   <button
                     onClick={onGenerateReport}
-                    disabled={!isConnected}
+                    disabled={false}
                     className="px-3 py-1.5 bg-navy-600 text-white rounded-md hover:bg-navy-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                     title={currentLanguage === 'de' ? 'Bericht generieren' : 'Generate Report'}
                   >
@@ -322,10 +317,7 @@ export default function TranscriptionDisplay({
             <div className="text-center">
               <FileText className="w-12 h-12 mx-auto mb-4 text-navy-300" />
               <p className="text-sm">
-                {isConnected 
-                  ? 'Start recording to see live transcription...'
-                  : 'Connecting to transcription service...'
-                }
+                Start recording to see live transcription...
               </p>
             </div>
           </div>
@@ -420,16 +412,7 @@ export default function TranscriptionDisplay({
       )}
 
       {/* Error State */}
-      {!isConnected && (
-        <div className="mt-4 p-3 bg-error-50 border border-error-200 rounded-md">
-          <div className="flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 text-error-600" />
-            <p className="text-sm text-error-600">
-              Connection to transcription service lost. Attempting to reconnect...
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Connection errors no longer needed - using Web Speech API */}
     </div>
   );
 }

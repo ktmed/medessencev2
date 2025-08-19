@@ -7,7 +7,7 @@ import TranscriptionDisplay from '@/components/TranscriptionDisplay';
 import ReportViewer from '@/components/ReportViewer';
 import SummaryGenerator from '@/components/SummaryGenerator';
 import LanguageSelector, { CompactLanguageSelector } from '@/components/LanguageSelector';
-import { WebSocketClient } from '@/utils/websocket';
+// WebSocket removed - using Web Speech API directly
 import { apiService } from '@/services/apiService';
 import { 
   Language, 
@@ -41,183 +41,15 @@ export default function Dashboard() {
     success: null,
   });
   
-  // WebSocket connection for reports and summaries
-  const [wsClient, setWsClient] = useState<WebSocketClient | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [connectionAttempts, setConnectionAttempts] = useState(0);
+  // UI state for paste functionality
   const [pastedText, setPastedText] = useState('');
   const [showPasteInput, setShowPasteInput] = useState(false);
 
-  // Initialize WebSocket connection
-  useEffect(() => {
-    if (wsClient) {
-      console.log('WebSocket already initialized, skipping');
-      return;
-    }
-    
-    const initializeWebSocket = async () => {
-      try {
-        setUIState(prev => ({ ...prev, loading: true, error: null }));
-        
-        const client = new WebSocketClient();
-        await client.connect();
-        
-        // Set the client immediately
-        setWsClient(client);
-        
-        // Check connection status after a short delay to ensure socket.io has fully connected
-        setTimeout(() => {
-          const connected = client.isConnected();
-          console.log('Connection status check after delay:', connected);
-          setIsConnected(connected);
-        }, 500);
-        
-        setConnectionAttempts(0);
-        
-        // Also listen for connection events to update status
-        if (client.socket) {
-          client.socket.on('connect', () => {
-            console.log('Socket.io connect event received');
-            setIsConnected(true);
-          });
-          
-          client.socket.on('disconnect', () => {
-            console.log('Socket.io disconnect event received');
-            setIsConnected(false);
-          });
-        }
-        
-        // Set up event listeners
-        client.onTranscription((data: TranscriptionData) => {
-          setTranscriptions(prev => {
-            // If this is a final transcription, mark it as final and add it
-            if (data.text && data.text.trim() !== '') {
-              const newTranscription = { ...data, isFinal: true };
-              return [...prev, newTranscription];
-            }
-            return prev;
-          });
-        });
-        
-        // Listen for partial transcriptions
-        if (client.socket) {
-          client.socket.on('partial_transcription', (data: any) => {
-            console.log('Partial transcription:', data.text);
-            setTranscriptions(prev => {
-              // Update the last transcription if it's not final
-              if (prev.length > 0 && !prev[prev.length - 1].isFinal) {
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  ...updated[updated.length - 1],
-                  text: data.text,
-                  timestamp: Date.now()
-                };
-                return updated;
-              } else {
-                // Add a new partial transcription
-                return [...prev, {
-                  id: `partial-${Date.now()}`,
-                  text: data.text,
-                  isFinal: false,
-                  confidence: 0,
-                  language: data.language || language,
-                  timestamp: Date.now()
-                }];
-              }
-            });
-          });
-        }
-
-        client.onReport((data: MedicalReport) => {
-          console.log('Report received in frontend:', data);
-          console.log('🔍 ICD Debug - Raw data has icdPredictions:', !!data.icdPredictions);
-          if (data.icdPredictions) {
-            console.log('🔍 ICD Debug - ICD codes count:', data.icdPredictions.codes?.length || 0);
-            console.log('🔍 ICD Debug - ICD structure:', data.icdPredictions);
-          } else {
-            console.log('🔍 ICD Debug - Available keys in data:', Object.keys(data));
-          }
-          setCurrentReport(data);
-          setIsGeneratingReport(false);
-          setUIState(prev => ({ 
-            ...prev, 
-            success: 'Medical report generated successfully' 
-          }));
-          
-          // Clear success message after 3 seconds
-          setTimeout(() => {
-            setUIState(prev => ({ ...prev, success: null }));
-          }, 3000);
-        });
-
-        client.onSummary((data: PatientSummary) => {
-          setCurrentSummary(data);
-          setIsGeneratingSummary(false);
-          setUIState(prev => ({ 
-            ...prev, 
-            success: 'Patient summary generated successfully' 
-          }));
-          
-          // Clear success message after 3 seconds
-          setTimeout(() => {
-            setUIState(prev => ({ ...prev, success: null }));
-          }, 3000);
-        });
-
-        client.onError((error: any) => {
-          console.error('WebSocket error:', error);
-          setUIState(prev => ({ 
-            ...prev, 
-            error: `Connection error: ${error.message || 'Unknown error'}` 
-          }));
-        });
-
-        setUIState(prev => ({ ...prev, loading: false }));
-        
-      } catch (error) {
-        console.error('Failed to initialize WebSocket:', error);
-        setIsConnected(false);
-        setConnectionAttempts(prev => prev + 1);
-        setUIState(prev => ({ 
-          ...prev, 
-          loading: false,
-          error: 'Failed to connect to transcription service. Retrying...' 
-        }));
-        
-        // Retry connection after delay
-        if (connectionAttempts < 5) {
-          setTimeout(() => {
-            initializeWebSocket();
-          }, 2000 * Math.pow(2, connectionAttempts)); // Exponential backoff
-        }
-      }
-    };
-
-    initializeWebSocket();
-
-    // Cleanup on unmount
-    return () => {
-      // Capture the current client to avoid closure issues
-      const currentClient = wsClient;
-      if (currentClient) {
-        // @ts-ignore - TypeScript inference issue with removeAllListeners
-        currentClient.removeAllListeners();
-        // @ts-ignore - TypeScript inference issue with disconnect
-        currentClient.disconnect();
-      }
-    };
-  }, []);
+  // No WebSocket initialization needed - using Web Speech API and direct API calls
 
   // Handle transcription from Web Speech API
   const handleTranscription = useCallback((transcription: TranscriptionData) => {
     console.log('New transcription received:', transcription);
-    
-    // Send transcription to websocket if it's final
-    if (transcription.isFinal && transcription.text.trim() && wsClient && isConnected) {
-      console.log('Sending final transcription to backend:', transcription.text.substring(0, 100) + '...');
-      // Send transcription to backend for history tracking
-      wsClient.socket?.emit('transcription_data', transcription);
-    }
     
     setTranscriptions(prev => {
       // Replace or add the transcription
@@ -230,7 +62,7 @@ export default function Dashboard() {
         return [...prev, transcription];
       }
     });
-  }, [wsClient, isConnected]);
+  }, []);
 
 
 
@@ -743,17 +575,16 @@ export default function Dashboard() {
           <TranscriptionDisplay
             transcriptions={transcriptions}
             currentLanguage={language}
-            isConnected={isConnected}
             onClear={() => setTranscriptions([])}
             onGenerateReport={handleGenerateReport}
-            onGenerateReportFromText={(text) => {
-              // Generate report from edited transcription text
-              if (wsClient && isConnected) {
+            onGenerateReportFromText={async (text) => {
+              // Generate report from edited transcription text using API service
+              try {
                 // Clear any existing report and summary first
                 setCurrentReport(null);
                 setCurrentSummary(null);
                 
-                // Create a fake transcription with the edited text
+                // Create a transcription with the edited text
                 const editedTranscription: TranscriptionData = {
                   id: `edited-${Date.now()}`,
                   text: text,
@@ -763,18 +594,99 @@ export default function Dashboard() {
                   timestamp: Date.now()
                 };
                 
-                // Add to transcriptions so report generation can use it
+                // Add to transcriptions for display
                 setTranscriptions(prev => [...prev, editedTranscription]);
                 
                 setIsGeneratingReport(true);
                 setUIState(prev => ({ ...prev, error: null }));
                 
-                // Request report generation with the edited text
-                wsClient.requestReport(editedTranscription.id, language, text, reportProcessingMode);
-              } else {
-                setUIState(prev => ({
-                  ...prev,
-                  error: 'Not connected to report generation service'
+                console.log('🚀 Generating report from edited text via API service');
+                console.log('- Processing mode:', reportProcessingMode);
+                console.log('- Text length:', text.length);
+                
+                const report = await apiService.generateReport(
+                  editedTranscription.id,
+                  language,
+                  text,
+                  reportProcessingMode
+                );
+                
+                setCurrentReport(report);
+                setIsGeneratingReport(false);
+                setUIState(prev => ({ 
+                  ...prev, 
+                  success: `Medical report generated successfully using ${report.metadata?.aiProvider || 'AI'}` 
+                }));
+                
+                // Auto-generate ICD codes if AI was used successfully
+                if (report.metadata?.aiGenerated && report.findings && report.findings.trim().length > 0) {
+                  console.log('🏥 Auto-generating ICD codes for edited text report...');
+                  const reportContent = `${report.findings}\n\n${report.impression}\n\n${report.recommendations}`;
+                  
+                  try {
+                    const icdCodes = await apiService.generateICDCodes(
+                      report.id,
+                      reportContent,
+                      language,
+                      'ICD-10-GM' as const
+                    );
+                    
+                    setCurrentReport(prev => prev ? {
+                      ...prev,
+                      icdPredictions: icdCodes
+                    } : prev);
+                    
+                    console.log('✅ ICD codes added to edited text report');
+                  } catch (error) {
+                    console.warn('⚠️ ICD code generation failed for edited text:', error);
+                  }
+                  
+                  // Auto-generate Enhanced Findings (same logic as main report generation)
+                  // The primary API should already include enhanced findings, but check validation logic
+                  console.log('🔍 Enhanced findings validation for edited text...');
+                  const hasValidEnhancedFindings = report.enhancedFindings && 
+                    report.enhancedFindings.processingAgent !== 'fallback' && 
+                    !report.enhancedFindings.normalFindings?.some(finding => 
+                      finding.includes('Strukturierte Befunde nicht verfügbar') || 
+                      finding.includes('Structured findings not available')
+                    ) && (
+                      (report.enhancedFindings.normalFindings && report.enhancedFindings.normalFindings.length > 0) ||
+                      (report.enhancedFindings.pathologicalFindings && report.enhancedFindings.pathologicalFindings.length > 0) ||
+                      (report.enhancedFindings.specialObservations && report.enhancedFindings.specialObservations.length > 0)
+                    );
+                  
+                  if (!hasValidEnhancedFindings) {
+                    try {
+                      console.log('🔍 Auto-generating enhanced findings for edited text...');
+                      const enhancedFindings = await apiService.generateEnhancedFindings(
+                        report.id,
+                        reportContent,
+                        language
+                      );
+                      
+                      setCurrentReport(prev => prev ? {
+                        ...prev,
+                        enhancedFindings: enhancedFindings
+                      } : prev);
+                      
+                      console.log('✅ Enhanced findings added to edited text report via secondary API');
+                    } catch (error) {
+                      console.warn('⚠️ Enhanced findings generation failed for edited text:', error);
+                    }
+                  }
+                }
+                
+                // Clear success message after 3 seconds
+                setTimeout(() => {
+                  setUIState(prev => ({ ...prev, success: null }));
+                }, 3000);
+                
+              } catch (error) {
+                console.error('❌ Report generation from edited text failed:', error);
+                setIsGeneratingReport(false);
+                setUIState(prev => ({ 
+                  ...prev, 
+                  error: `Failed to generate report: ${error instanceof Error ? error.message : 'Unknown error'}` 
                 }));
               }
             }}
