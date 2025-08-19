@@ -15,9 +15,12 @@ class SimpleMultiLLMService {
   }
 
   private initializeProviders() {
-    const providerPriority = ['claude', 'openai', 'gemini'];
+    const providerPriority = (process.env.AI_PROVIDER_PRIORITY || 'gemini,openai,claude')
+      .split(',')
+      .map(p => p.trim());
     
     console.log('🚀 Initializing AI providers');
+    console.log('- Provider priority:', providerPriority);
     
     for (const providerName of providerPriority) {
       if (providerName === 'claude' && process.env.ANTHROPIC_API_KEY) {
