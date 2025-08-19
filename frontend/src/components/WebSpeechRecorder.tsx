@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { Mic, MicOff, AlertCircle, Activity, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Mic, MicOff, AlertCircle, CheckCircle, AlertTriangle, Activity, RefreshCw, Wifi, WifiOff, ChevronDown, ChevronRight } from 'lucide-react';
 import { useEnhancedSpeechToText } from '@/hooks/useEnhancedSpeechToText';
 import { Language, TranscriptionData } from '@/types';
 import { getMedicalTerm } from '@/utils/languages';
@@ -10,7 +10,6 @@ import { generateId } from '@/utils';
 interface WebSpeechRecorderProps {
   language: Language;
   onTranscription?: (transcription: TranscriptionData) => void;
-  onRefinedTranscription?: (refined: string) => void;
   processingMode?: 'cloud' | 'local';
   onProcessingModeChange?: (mode: 'cloud' | 'local') => void;
   className?: string;
@@ -19,16 +18,14 @@ interface WebSpeechRecorderProps {
 export default function WebSpeechRecorder({
   language,
   onTranscription,
-  onRefinedTranscription,
   processingMode = 'cloud',
   onProcessingModeChange,
   className = ''
 }: WebSpeechRecorderProps) {
   const [error, setError] = useState<string | null>(null);
-  const [refinedText, setRefinedText] = useState<string>('');
-  const [isRefining, setIsRefining] = useState<boolean>(false);
   // Remove duplicate finalTranscript state - use speechFinalTranscript from hook
   const [mounted, setMounted] = useState<boolean>(false);
+  const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
 
   const {
     isListening,
@@ -42,7 +39,11 @@ export default function WebSpeechRecorder({
     validationEnabled,
     toggleValidation,
     getQualityAssessment,
-    confidence
+    confidence,
+    connectionStatus,
+    manualRetry,
+    retryCount,
+    diagnostics
   } = useEnhancedSpeechToText({
     lang: language === 'de' ? 'de-DE' : 'en-US',
     continuous: true,
@@ -85,16 +86,6 @@ export default function WebSpeechRecorder({
     }
   }, [transcript, onTranscription, language]);
 
-  const handleRefineTranscript = useCallback(async () => {
-    if (!speechFinalTranscript || isRefining) return;
-    
-    // Transcription refinement disabled - now handled server-side in report generation
-    console.log('📝 Transcription refinement disabled - using raw transcription for server-side processing');
-    setRefinedText(speechFinalTranscript); // Use original text
-    if (onRefinedTranscription) {
-      onRefinedTranscription(speechFinalTranscript);
-    }
-  }, [speechFinalTranscript, isRefining, onRefinedTranscription]);
 
   const handleToggleRecording = useCallback(() => {
     if (!hasRecognitionSupport) {
@@ -107,8 +98,6 @@ export default function WebSpeechRecorder({
     if (isListening) {
       stopListening();
     } else {
-      // Reset on new recording
-      setRefinedText('');
       startListening();
     }
   }, [isListening, startListening, stopListening, hasRecognitionSupport]);
@@ -127,7 +116,23 @@ export default function WebSpeechRecorder({
             <h3 className="text-lg font-semibold med-text-navy">
               {getMedicalTerm('audioRecording', language)}
             </h3>
-            <p className="text-sm text-navy-600">Web Speech API (Browser-based)</p>
+            <div className="flex items-center space-x-2">
+              <p className="text-sm text-navy-600">Web Speech API (Browser-based)</p>
+              {mounted && (
+                <div className="flex items-center space-x-1">
+                  {connectionStatus === 'connected' && <Wifi className="w-4 h-4 text-green-500" />}
+                  {connectionStatus === 'disconnected' && <WifiOff className="w-4 h-4 text-red-500" />}
+                  {connectionStatus === 'reconnecting' && <RefreshCw className="w-4 h-4 text-yellow-500 animate-spin" />}
+                  <span className={`text-xs ${
+                    connectionStatus === 'connected' ? 'text-green-600' :
+                    connectionStatus === 'disconnected' ? 'text-red-600' : 'text-yellow-600'
+                  }`}>
+                    {connectionStatus === 'connected' ? 'Connected' : 
+                     connectionStatus === 'disconnected' ? 'Disconnected' : 'Reconnecting...'}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -147,10 +152,25 @@ export default function WebSpeechRecorder({
       {/* Error Display */}
       {displayError && (
         <div className="mb-4 p-3 bg-error-50 border border-error-200 rounded-md">
-          <div className="flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 text-error-600" />
-            <p className="text-sm text-error-600">{displayError}</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 text-error-600" />
+              <p className="text-sm text-error-600">{displayError}</p>
+            </div>
+            {mounted && connectionStatus === 'disconnected' && !isListening && (
+              <button
+                onClick={manualRetry}
+                className="flex items-center space-x-1 px-2 py-1 bg-error-600 text-white text-xs rounded hover:bg-error-700 transition-colors"
+                title="Retry connection"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Retry</span>
+              </button>
+            )}
           </div>
+          {retryCount > 0 && (
+            <p className="text-xs text-error-500 mt-1">Retry attempt: {retryCount}/3</p>
+          )}
         </div>
       )}
 
@@ -355,43 +375,103 @@ export default function WebSpeechRecorder({
           </div>
         </div>
 
-        {/* AI Refinement */}
-        <div className="flex items-center justify-between pt-4">
-          <div className="text-sm">
-            {!speechFinalTranscript && (
-              <p className="text-navy-500 text-xs mt-1">Record audio to enable refinement</p>
-            )}
-          </div>
+      </div>
+
+      {/* Diagnostics Panel */}
+      {mounted && (
+        <div className="mt-4 border-t border-navy-200 pt-4">
+          <button
+            onClick={() => setShowDiagnostics(!showDiagnostics)}
+            className="flex items-center space-x-2 text-sm text-navy-600 hover:text-navy-800 transition-colors"
+          >
+            {showDiagnostics ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            <span>Connection Diagnostics</span>
+            <div className={`w-2 h-2 rounded-full ${
+              connectionStatus === 'connected' ? 'bg-green-500' :
+              connectionStatus === 'reconnecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+            }`}></div>
+          </button>
           
-          {speechFinalTranscript && (
-            <button
-              onClick={handleRefineTranscript}
-              disabled={!mounted || isRefining || !speechFinalTranscript || isListening}
-              className="medical-button-success flex items-center space-x-2 disabled:opacity-50"
-            >
-              {isRefining ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Refining...</span>
-                </>
-              ) : (
-                <>
-                  <Activity className="w-4 h-4" />
-                  <span>Refine with AI</span>
-                </>
+          {showDiagnostics && (
+            <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Connection Status */}
+                <div>
+                  <h5 className="text-xs font-medium text-navy-700 mb-2">Status</h5>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span>Connection:</span>
+                      <span className={`font-medium ${
+                        connectionStatus === 'connected' ? 'text-green-600' :
+                        connectionStatus === 'reconnecting' ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                        {connectionStatus}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span>Retry Count:</span>
+                      <span className="font-medium text-navy-600">{retryCount}/5</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span>Confidence:</span>
+                      <span className="font-medium text-navy-600">{Math.round(confidence * 100)}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Diagnostic Log */}
+                <div>
+                  <h5 className="text-xs font-medium text-navy-700 mb-2">Recent Activity</h5>
+                  <div className="max-h-20 overflow-y-auto space-y-1">
+                    {diagnostics.length > 0 ? (
+                      diagnostics.slice(-5).map((diagnostic, index) => (
+                        <div key={index} className="text-xs font-mono text-navy-600 bg-white px-2 py-1 rounded text-ellipsis overflow-hidden">
+                          {diagnostic}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-xs text-navy-400 italic">No diagnostic messages yet</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Troubleshooting Tips */}
+              {(connectionStatus === 'disconnected' || retryCount > 2) && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                  <h6 className="text-xs font-medium text-blue-800 mb-2">🛠️ Troubleshooting Tips</h6>
+                  <ul className="text-xs text-blue-700 space-y-1">
+                    <li>• Check microphone permissions in browser settings</li>
+                    <li>• Ensure you're using Chrome or Edge (best support)</li>
+                    <li>• Make sure you have a stable internet connection</li>
+                    <li>• Try speaking closer to your microphone</li>
+                    <li>• Close other tabs using microphone access</li>
+                    <li>• Refresh the page if issues persist</li>
+                  </ul>
+                </div>
               )}
-            </button>
+
+              {/* Manual Actions */}
+              <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+                <div className="text-xs text-navy-500">
+                  {retryCount > 0 ? 
+                    `Retrying connection... (${retryCount}/5)` : 
+                    'WebSpeech API has 60-second session limits - automatic restarts every 55s'}
+                </div>
+                {connectionStatus === 'disconnected' && (
+                  <button
+                    onClick={manualRetry}
+                    className="flex items-center space-x-1 px-3 py-1 bg-navy-600 text-white text-xs rounded hover:bg-navy-700 transition-colors"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Retry Now</span>
+                  </button>
+                )}
+              </div>
+            </div>
           )}
         </div>
-
-        {/* Refined Output */}
-        {refinedText && (
-          <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
-            <h4 className="text-sm font-medium text-orange-700 mb-2">AI-Refined Medical Notes:</h4>
-            <div className="text-sm text-orange-800 whitespace-pre-wrap">{refinedText}</div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

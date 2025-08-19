@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FileText, Download, Edit3, Save, X, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 import { MedicalReport, Language } from '@/types';
 import { getMedicalTerm, getLanguageName, getLanguageFlag } from '@/utils/languages';
@@ -28,6 +28,35 @@ export default function ReportViewer({
 }: ReportViewerProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedReport, setEditedReport] = useState<MedicalReport | null>(null);
+
+  // Debug report changes
+  useEffect(() => {
+    if (report) {
+      console.log('📊 ReportViewer: Report prop updated');
+      console.log('- Report ID:', report.id);
+      console.log('- Enhanced findings exists:', !!report.enhancedFindings);
+      
+      if (report.enhancedFindings) {
+        console.log('- Enhanced findings agent:', report.enhancedFindings.processingAgent);
+        console.log('- Enhanced findings source:', (report.enhancedFindings as any).updateSource);
+        console.log('- Enhanced findings timestamp:', (report.enhancedFindings as any).updateTimestamp);
+        console.log('- Normal findings count:', report.enhancedFindings.normalFindings?.length || 0);
+        console.log('- Pathological findings count:', report.enhancedFindings.pathologicalFindings?.length || 0);
+        
+        // Check if this looks like fallback content
+        const hasRuleBasedContent = report.enhancedFindings.normalFindings?.some(finding => 
+          finding.includes('Strukturierte Befunde nicht verfügbar') || 
+          finding.includes('Structured findings not available') ||
+          finding.includes('Siehe Originalbefund')
+        );
+        console.log('- Contains rule-based fallback content:', hasRuleBasedContent);
+      }
+      
+      console.log('- AI metadata:', report.metadata);
+    } else {
+      console.log('📊 ReportViewer: Report prop cleared/null');
+    }
+  }, [report]);
 
   const startEdit = () => {
     if (report) {
@@ -149,6 +178,146 @@ export default function ReportViewer({
 
   const formatReportForExport = (report: MedicalReport): string => {
     const headerText = getMedicalTerm('medicalReport', report.language).toUpperCase();
+    const isGerman = report.language === 'de';
+    
+    // Format enhanced findings for export
+    const formatEnhancedFindings = (enhancedFindings: any): string => {
+      if (!enhancedFindings) return '';
+      
+      const sections: string[] = [];
+      
+      // Normal findings (Green/Unauffällig)
+      if (enhancedFindings.normalFindings?.length > 0) {
+        sections.push(isGerman 
+          ? `\n🟢 NORMALE BEFUNDE (${enhancedFindings.normalFindings.length}):\n${enhancedFindings.normalFindings.map((finding: string, i: number) => `  ${i + 1}. ${finding}`).join('\n')}`
+          : `\n🟢 NORMAL FINDINGS (${enhancedFindings.normalFindings.length}):\n${enhancedFindings.normalFindings.map((finding: string, i: number) => `  ${i + 1}. ${finding}`).join('\n')}`
+        );
+      }
+      
+      // Pathological findings (Red/Pathologisch)
+      if (enhancedFindings.pathologicalFindings?.length > 0) {
+        sections.push(isGerman
+          ? `\n🔴 PATHOLOGISCHE BEFUNDE (${enhancedFindings.pathologicalFindings.length}):\n${enhancedFindings.pathologicalFindings.map((finding: string, i: number) => `  ${i + 1}. ${finding}`).join('\n')}`
+          : `\n🔴 PATHOLOGICAL FINDINGS (${enhancedFindings.pathologicalFindings.length}):\n${enhancedFindings.pathologicalFindings.map((finding: string, i: number) => `  ${i + 1}. ${finding}`).join('\n')}`
+        );
+      }
+      
+      // Special observations (Yellow/Besondere Beobachtungen)
+      if (enhancedFindings.specialObservations?.length > 0) {
+        sections.push(isGerman
+          ? `\n🟡 BESONDERE BEOBACHTUNGEN (${enhancedFindings.specialObservations.length}):\n${enhancedFindings.specialObservations.map((finding: string, i: number) => `  ${i + 1}. ${finding}`).join('\n')}`
+          : `\n🟡 SPECIAL OBSERVATIONS (${enhancedFindings.specialObservations.length}):\n${enhancedFindings.specialObservations.map((finding: string, i: number) => `  ${i + 1}. ${finding}`).join('\n')}`
+        );
+      }
+      
+      // Measurements (Purple/Messungen)
+      if (enhancedFindings.measurements?.length > 0) {
+        sections.push(isGerman
+          ? `\n🟣 MESSUNGEN (${enhancedFindings.measurements.length}):\n${enhancedFindings.measurements.map((finding: string, i: number) => `  ${i + 1}. ${finding}`).join('\n')}`
+          : `\n🟣 MEASUREMENTS (${enhancedFindings.measurements.length}):\n${enhancedFindings.measurements.map((finding: string, i: number) => `  ${i + 1}. ${finding}`).join('\n')}`
+        );
+      }
+      
+      // Localizations (Orange/Lokalisationen)
+      if (enhancedFindings.localizations?.length > 0) {
+        sections.push(isGerman
+          ? `\n🟠 LOKALISATIONEN (${enhancedFindings.localizations.length}):\n${enhancedFindings.localizations.map((finding: string, i: number) => `  ${i + 1}. ${finding}`).join('\n')}`
+          : `\n🟠 LOCALIZATIONS (${enhancedFindings.localizations.length}):\n${enhancedFindings.localizations.map((finding: string, i: number) => `  ${i + 1}. ${finding}`).join('\n')}`
+        );
+      }
+      
+      if (sections.length > 0) {
+        const confidence = Math.round((enhancedFindings.confidence || 0) * 100);
+        const agent = enhancedFindings.processingAgent || 'AI';
+        const timestamp = new Date(enhancedFindings.timestamp || Date.now()).toLocaleString();
+        
+        return sections.join('\n') + 
+               `\n\n${isGerman ? 'Verarbeitungsagent' : 'Processing Agent'}: ${agent} | ${isGerman ? 'Konfidenz' : 'Confidence'}: ${confidence}% | ${isGerman ? 'Generiert' : 'Generated'}: ${timestamp}`;
+      }
+      
+      return '';
+    };
+    
+    // Format ICD codes for export
+    const formatICDCodes = (icdPredictions: any): string => {
+      if (!icdPredictions?.codes?.length) return '';
+      
+      const priorityGroups = {
+        primary: icdPredictions.codes.filter((code: any) => code.priority === 'primary'),
+        secondary: icdPredictions.codes.filter((code: any) => code.priority === 'secondary'),
+        differential: icdPredictions.codes.filter((code: any) => code.priority === 'differential')
+      };
+      
+      const sections: string[] = [];
+      
+      if (priorityGroups.primary.length > 0) {
+        sections.push(isGerman
+          ? `\n🔴 PRIMÄRDIAGNOSEN (${priorityGroups.primary.length}):`
+          : `\n🔴 PRIMARY DIAGNOSES (${priorityGroups.primary.length}):`
+        );
+        priorityGroups.primary.forEach((code: any, i: number) => {
+          const confidence = Math.round(code.confidence * 100);
+          const relevance = Math.round(code.radiologyRelevance * 100);
+          sections.push(`  ${i + 1}. ${code.code} - ${code.description}`);
+          sections.push(`     ${isGerman ? 'Konfidenz' : 'Confidence'}: ${confidence}% | ${isGerman ? 'Relevanz' : 'Relevance'}: ${relevance}% | ${isGerman ? 'Kategorie' : 'Category'}: ${code.category}`);
+          if (code.reasoning) {
+            sections.push(`     ${isGerman ? 'Begründung' : 'Reasoning'}: ${code.reasoning}`);
+          }
+          sections.push('');
+        });
+      }
+      
+      if (priorityGroups.secondary.length > 0) {
+        sections.push(isGerman
+          ? `\n🟡 SEKUNDÄRDIAGNOSEN (${priorityGroups.secondary.length}):`
+          : `\n🟡 SECONDARY DIAGNOSES (${priorityGroups.secondary.length}):`
+        );
+        priorityGroups.secondary.forEach((code: any, i: number) => {
+          const confidence = Math.round(code.confidence * 100);
+          const relevance = Math.round(code.radiologyRelevance * 100);
+          sections.push(`  ${i + 1}. ${code.code} - ${code.description}`);
+          sections.push(`     ${isGerman ? 'Konfidenz' : 'Confidence'}: ${confidence}% | ${isGerman ? 'Relevanz' : 'Relevance'}: ${relevance}% | ${isGerman ? 'Kategorie' : 'Category'}: ${code.category}`);
+          if (code.reasoning) {
+            sections.push(`     ${isGerman ? 'Begründung' : 'Reasoning'}: ${code.reasoning}`);
+          }
+          sections.push('');
+        });
+      }
+      
+      if (priorityGroups.differential.length > 0) {
+        sections.push(isGerman
+          ? `\n🔵 DIFFERENTIALDIAGNOSEN (${priorityGroups.differential.length}):`
+          : `\n🔵 DIFFERENTIAL DIAGNOSES (${priorityGroups.differential.length}):`
+        );
+        priorityGroups.differential.forEach((code: any, i: number) => {
+          const confidence = Math.round(code.confidence * 100);
+          const relevance = Math.round(code.radiologyRelevance * 100);
+          sections.push(`  ${i + 1}. ${code.code} - ${code.description}`);
+          sections.push(`     ${isGerman ? 'Konfidenz' : 'Confidence'}: ${confidence}% | ${isGerman ? 'Relevanz' : 'Relevance'}: ${relevance}% | ${isGerman ? 'Kategorie' : 'Category'}: ${code.category}`);
+          if (code.reasoning) {
+            sections.push(`     ${isGerman ? 'Begründung' : 'Reasoning'}: ${code.reasoning}`);
+          }
+          sections.push('');
+        });
+      }
+      
+      if (sections.length > 0) {
+        const totalCodes = icdPredictions.summary?.totalCodes || icdPredictions.codes.length;
+        const avgConfidence = Math.round((icdPredictions.summary?.averageConfidence || 0) * 100);
+        const provider = icdPredictions.provider || 'AI';
+        const timestamp = icdPredictions.timestamp ? new Date(icdPredictions.timestamp).toLocaleString() : new Date().toLocaleString();
+        
+        return sections.join('\n') + 
+               `\n${isGerman ? 'Zusammenfassung' : 'Summary'}: ${totalCodes} ${isGerman ? 'Codes' : 'codes'} | ${isGerman ? 'Durchschnittliche Konfidenz' : 'Average Confidence'}: ${avgConfidence}% | ${isGerman ? 'Anbieter' : 'Provider'}: ${provider} | ${isGerman ? 'Generiert' : 'Generated'}: ${timestamp}`;
+      }
+      
+      return '';
+    };
+    
+    // Build the complete report
+    const enhancedFindingsSection = formatEnhancedFindings(report.enhancedFindings);
+    const icdCodesSection = formatICDCodes(report.icdPredictions);
+    
     return `
 ${headerText}
 ${'='.repeat(headerText.length)}
@@ -157,6 +326,7 @@ ${getMedicalTerm('reportId', report.language)}: ${report.id}
 ${getMedicalTerm('generated', report.language)}: ${formatTimestamp(report.generatedAt)}
 ${getMedicalTerm('language', report.language)}: ${getLanguageName(report.language)}
 ${report.patientId ? `${getMedicalTerm('patientId', report.language)}: ${report.patientId}` : ''}
+${report.metadata?.aiProvider ? `${isGerman ? 'KI-Anbieter' : 'AI Provider'}: ${report.metadata.aiProvider}` : ''}
 
 ${getMedicalTerm('findings', report.language).toUpperCase()}
 ${'-'.repeat(getMedicalTerm('findings', report.language).length)}
@@ -172,7 +342,13 @@ ${formatContentValue(report.recommendations)}
 
 ${getMedicalTerm('technicalDetails', report.language).toUpperCase()}
 ${'-'.repeat(getMedicalTerm('technicalDetails', report.language).length)}
-${formatContentValue(report.technicalDetails)}
+${formatContentValue(report.technicalDetails)}${enhancedFindingsSection ? `
+
+${isGerman ? 'STRUKTURIERTE BEFUNDE (KI-ANALYSIERT)' : 'STRUCTURED FINDINGS (AI-ANALYZED)'}
+${'-'.repeat(isGerman ? 'STRUKTURIERTE BEFUNDE (KI-ANALYSIERT)'.length : 'STRUCTURED FINDINGS (AI-ANALYZED)'.length)}${enhancedFindingsSection}` : ''}${icdCodesSection ? `
+
+${isGerman ? 'ICD-10-GM KODIERUNG' : 'ICD-10-GM CODING'}
+${'-'.repeat(isGerman ? 'ICD-10-GM KODIERUNG'.length : 'ICD-10-GM CODING'.length)}${icdCodesSection}` : ''}
 `.trim();
   };
 

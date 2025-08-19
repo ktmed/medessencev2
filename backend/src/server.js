@@ -26,6 +26,7 @@ const proxyRoutes = require('./routes/proxy');
 const healthRoutes = require('./routes/health');
 const metricsRoutes = require('./routes/metrics');
 const auditRoutes = require('./routes/audit');
+const reportsRoutes = require('./routes/reports');
 
 // Import WebSocket handlers
 const { setupWebSocketProxy } = require('./websocket/proxy');
@@ -141,6 +142,9 @@ class RadiologyAIGateway {
     this.app.use('/api/v1/health', healthRoutes);
     this.app.use('/api/v1/metrics', metricsRoutes);
     this.app.use('/api/v1/audit', auditRoutes);
+
+    // Direct report generation routes (local processing)
+    this.app.use('/api', reportsRoutes);
 
     // Service proxy routes (protected)
     this.app.use('/api/v1/transcription', proxyRoutes.transcription);

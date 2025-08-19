@@ -148,16 +148,18 @@ export class APIService {
     reportId: string,
     reportContent: string,
     language: Language,
-    complexity: 'simple' | 'detailed' | 'technical' = 'detailed'
+    complexity: 'simple' | 'detailed' | 'technical' = 'detailed',
+    processingMode: 'cloud' | 'local' = 'cloud'
   ): Promise<PatientSummary> {
     console.log('🌐 API Service: Generating summary');
     console.log('- Report ID:', reportId);
     console.log('- Language:', language);
     console.log('- Content length:', reportContent.length);
     console.log('- Complexity:', complexity);
+    console.log('- Processing mode:', processingMode);
 
     // Check cache first (shorter content gets longer cache)
-    const cacheKey = this.getCacheKey('summary', { reportContent: reportContent.substring(0, 100), language, complexity });
+    const cacheKey = this.getCacheKey('summary', { reportContent: reportContent.substring(0, 100), language, complexity, processingMode });
     const cached = this.getFromCache<PatientSummary>(cacheKey);
     if (cached) return cached;
 
@@ -172,6 +174,7 @@ export class APIService {
           reportContent,
           language,
           complexity,
+          processingMode,
         }),
       });
 
@@ -203,16 +206,18 @@ export class APIService {
     reportId: string,
     reportContent: string,
     language: Language,
-    codeSystem: 'ICD-10-GM' | 'ICD-10' | 'ICD-11' = 'ICD-10-GM'
+    codeSystem: 'ICD-10-GM' | 'ICD-10' | 'ICD-11' = 'ICD-10-GM',
+    processingMode: 'cloud' | 'local' = 'cloud'
   ): Promise<import('@/types').ICDPredictions> {
     console.log('🌐 API Service: Generating ICD codes');
     console.log('- Report ID:', reportId);
     console.log('- Language:', language);
     console.log('- Content length:', reportContent.length);
     console.log('- Code system:', codeSystem);
+    console.log('- Processing mode:', processingMode);
 
     // Check cache first
-    const cacheKey = this.getCacheKey('icd', { reportContent: reportContent.substring(0, 150), language, codeSystem });
+    const cacheKey = this.getCacheKey('icd', { reportContent: reportContent.substring(0, 150), language, codeSystem, processingMode });
     const cached = this.getFromCache<import('@/types').ICDPredictions>(cacheKey);
     if (cached) return cached;
 
@@ -227,6 +232,7 @@ export class APIService {
           reportContent,
           language,
           codeSystem,
+          processingMode,
         }),
       });
 

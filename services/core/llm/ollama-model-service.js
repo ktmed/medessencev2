@@ -21,6 +21,44 @@ class OllamaModelService {
     
     // Model configurations optimized for medical text processing
     this.modelConfigs = {
+      // New Gemma-3 4B Medical Models (Highest Priority)
+      'gemma3-medical-fp16': {
+        displayName: 'Gemma-3 Medical FP16 (Ultra High Quality)',
+        modelFile: 'gemma3-medical-fp16:latest',
+        ramRequirement: 8000, // MB - 4B model with FP16 precision
+        contextLength: 4096,
+        quality: 'ultra_high',
+        speed: 'slow',
+        recommended: true, // Best quality for medical analysis
+        gemma3: true,
+        medicalSpecialized: true,
+        description: 'Gemma-3 4B fine-tuned for German medical reports (ultra-high quality, FP16)'
+      },
+      'gemma3-medical-q8': {
+        displayName: 'Gemma-3 Medical Q8 (Excellent Quality)',
+        modelFile: 'gemma3-medical-q8:latest',
+        ramRequirement: 5000, // MB - 4B model with Q8 quantization
+        contextLength: 4096,
+        quality: 'excellent',
+        speed: 'medium',
+        recommended: true, // Excellent balance
+        gemma3: true,
+        medicalSpecialized: true,
+        description: 'Gemma-3 4B German medical (Q8 - excellent quality/speed balance)'
+      },
+      'gemma3-medical-q5': {
+        displayName: 'Gemma-3 Medical Q5 (High Quality)',
+        modelFile: 'gemma3-medical-q5:latest',
+        ramRequirement: 3500, // MB - 4B model with Q5 quantization
+        contextLength: 4096,
+        quality: 'high',
+        speed: 'fast',
+        gemma3: true,
+        medicalSpecialized: true,
+        description: 'Gemma-3 4B German medical (Q5 - high quality, faster inference)'
+      },
+      
+      // GPT-OSS Models
       'gpt-oss': {
         displayName: 'GPT-OSS-20B (Premium)',
         modelFile: 'gpt-oss:latest',
@@ -28,37 +66,43 @@ class OllamaModelService {
         contextLength: 4096,
         quality: 'exceptional',
         speed: 'medium',
-        recommended: true,
+        recommended: false, // Gemma-3 medical models are now preferred
         description: 'GPT-OSS 20B reasoning model - highest quality for medical reports'
       },
+      
+      // Legacy Medical Gemma 2B Models
       'medical-gemma-2b': {
-        displayName: 'Medical Gemma 2B (Default)',
+        displayName: 'Medical Gemma 2B (Legacy)',
         modelFile: 'medical-gemma-2b:latest',
         ramRequirement: 4000, // MB
         contextLength: 2048,
-        quality: 'highest',
+        quality: 'high',
         speed: 'medium',
-        recommended: false, // GPT-OSS is now preferred
-        description: 'Best balance of quality and performance for medical reports'
+        legacy: true,
+        description: 'Legacy 2B medical model - superseded by Gemma-3 4B models'
       },
       'medical-gemma-2b-q5': {
-        displayName: 'Medical Gemma 2B Q5',
+        displayName: 'Medical Gemma 2B Q5 (Legacy)',
         modelFile: 'medical-gemma-2b:q5_k_s',
         ramRequirement: 2500, // MB
         contextLength: 2048,
-        quality: 'high',
+        quality: 'medium',
         speed: 'fast',
-        description: 'Quantized version with good quality and faster inference'
+        legacy: true,
+        description: 'Legacy quantized 2B model'
       },
       'medical-gemma-2b-q4': {
-        displayName: 'Medical Gemma 2B Q4',
+        displayName: 'Medical Gemma 2B Q4 (Legacy)',
         modelFile: 'medical-gemma-2b:q4_k_s',
         ramRequirement: 2000, // MB
         contextLength: 2048,
-        quality: 'good',
+        quality: 'medium',
         speed: 'fast',
-        description: 'Further quantized for lower resource usage'
+        legacy: true,
+        description: 'Legacy further quantized 2B model'
       },
+      
+      // Fallback Models
       'gemma2:2b': {
         displayName: 'Gemma 2 2B (Fallback)',
         modelFile: 'gemma2:2b',
@@ -186,11 +230,23 @@ class OllamaModelService {
         return isAvailable && fitsInRam;
       })
       .sort((a, b) => {
-        // Prefer recommended models, then by quality (higher RAM requirement = better quality)
+        // Priority 1: Gemma-3 medical models (best for German medical analysis)
+        if (a[1].gemma3 && a[1].medicalSpecialized && !(b[1].gemma3 && b[1].medicalSpecialized)) return -1;
+        if (!(a[1].gemma3 && a[1].medicalSpecialized) && b[1].gemma3 && b[1].medicalSpecialized) return 1;
+        
+        // Priority 2: Recommended models
         if (a[1].recommended && !b[1].recommended) return -1;
         if (!a[1].recommended && b[1].recommended) return 1;
+        
+        // Priority 3: Avoid legacy models unless necessary
+        if (a[1].legacy && !b[1].legacy) return 1;
+        if (!a[1].legacy && b[1].legacy) return -1;
+        
+        // Priority 4: Avoid fallback models
         if (a[1].fallback && !b[1].fallback) return 1;
         if (!a[1].fallback && b[1].fallback) return -1;
+        
+        // Priority 5: Higher RAM requirement = better quality
         return b[1].ramRequirement - a[1].ramRequirement;
       });
 
@@ -495,15 +551,20 @@ Medical Report:
     
     // Ensure findings is properly structured
     if (typeof parsed.findings === 'string') {
+      const structuredFindings = this.createBasicStructuredFindings(parsed.findings);
       parsed.findings = { 
         content: parsed.findings, 
-        structuredFindings: this.createBasicStructuredFindings(parsed.findings)
+        structuredFindings: structuredFindings
       };
     } else if (parsed.findings && typeof parsed.findings === 'object' && !parsed.findings.content) {
       // If findings is an object but doesn't have the expected structure, add missing parts
       parsed.findings.content = parsed.findings.content || '';
       parsed.findings.structuredFindings = parsed.findings.structuredFindings || [];
     }
+    
+    // Generate enhanced findings for proper UI display
+    const structuredFindings = parsed.findings?.structuredFindings || this.createBasicStructuredFindings(parsed.findings?.content || '');
+    parsed.enhancedFindings = this.convertToEnhancedFindings(structuredFindings);
     
     // Ensure other required fields exist
     parsed.technicalDetails = parsed.technicalDetails || '';
@@ -561,6 +622,84 @@ Medical Report:
   }
 
   /**
+   * Convert structured findings to enhanced findings format for proper UI display
+   */
+  convertToEnhancedFindings(structuredFindings) {
+    console.log('Converting structured findings to enhanced findings format...');
+    
+    const normalFindings = [];
+    const pathologicalFindings = [];
+    const specialObservations = [];
+    const measurements = [];
+    const localizations = [];
+    
+    structuredFindings.forEach(finding => {
+      const text = finding.text;
+      const significance = finding.significance;
+      const category = finding.category;
+      
+      // Skip administrative text (contains addresses, dates, doctor names, etc.)
+      if (this.isAdministrativeText(text)) {
+        return;
+      }
+      
+      // Categorize findings based on significance and medical content
+      if (category === 'Messung' || text.match(/\d+[\.,]?\d*\s*(mm|cm|m|ml|l|grad|°|prozent|%)/i)) {
+        measurements.push(text);
+      } else if (text.match(/(links|rechts|beidseits|mittig|zentral|lateral|medial|anterior|posterior|cranial|caudal|proximal|distal|dorsal|ventral)/i)) {
+        localizations.push(text);
+      } else if (significance === 'critical' || text.match(/(karzinom|tumor|malign|metastasen|adenokarzinom|bronchialkarzinom)/i)) {
+        pathologicalFindings.push(text);
+      } else if (significance === 'significant' || text.match(/(auffällig|pathologisch|verdacht|entzündung|stenose|läsion)/i)) {
+        pathologicalFindings.push(text);
+      } else if (text.match(/(unauffällig|normal|regelrecht|physiologisch|keine.*auffälligkeiten|ohne.*befund)/i)) {
+        normalFindings.push(text);
+      } else if (text.length > 30 && category !== 'Befund') {
+        specialObservations.push(text);
+      }
+    });
+    
+    console.log('Enhanced findings categorized:', {
+      normalFindings: normalFindings.length,
+      pathologicalFindings: pathologicalFindings.length,
+      specialObservations: specialObservations.length,
+      measurements: measurements.length,
+      localizations: localizations.length
+    });
+    
+    return {
+      normalFindings: normalFindings.slice(0, 5), // Limit to prevent UI overload
+      pathologicalFindings: pathologicalFindings.slice(0, 5),
+      specialObservations: specialObservations.slice(0, 5),
+      measurements: measurements.slice(0, 3),
+      localizations: localizations.slice(0, 3),
+      confidence: 0.8, // Backend processing confidence
+      processingAgent: 'ollama_backend_enhanced',
+      timestamp: Date.now()
+    };
+  }
+
+  /**
+   * Check if text contains administrative content that should be filtered out
+   */
+  isAdministrativeText(text) {
+    const adminPatterns = [
+      /Allianz.*Mörkenstraße/i,
+      /Dr\..*med\./i,
+      /Herrn.*Prof\./i,
+      /Sehr geehrter.*Kollege/i,
+      /\d{2}\.\d{2}\.\d{4}/i, // Dates
+      /\d{5}\s+\w+/i, // Postal codes + cities
+      /Nachrichtlich an:/i,
+      /berichten über/i,
+      /behandelten/i,
+      /XXXXXXXXXXXX/i // Anonymized data
+    ];
+    
+    return adminPatterns.some(pattern => pattern.test(text));
+  }
+
+  /**
    * Parse natural language medical text response from Ollama
    */
   parseNaturalLanguageResponse(response, language) {
@@ -581,6 +720,9 @@ Medical Report:
     // Create structured findings from the response
     const structuredFindings = this.createBasicStructuredFindings(sections.findings || cleanedResponse);
     
+    // Convert structured findings to enhanced findings format for proper UI display
+    const enhancedFindings = this.convertToEnhancedFindings(structuredFindings);
+    
     return {
       technicalDetails: sections.technique || '',
       findings: {
@@ -589,10 +731,12 @@ Medical Report:
       },
       impression: sections.impression || this.generateBasicImpression(cleanedResponse, language),
       recommendations: sections.recommendations || this.generateBasicRecommendations(language),
+      enhancedFindings: enhancedFindings, // Add enhanced findings for proper UI display
       metadata: {
         source: 'ollama-natural-language',
         originalLength: response.length,
-        processedLength: cleanedResponse.length
+        processedLength: cleanedResponse.length,
+        hasEnhancedFindings: true
       }
     };
   }
@@ -757,18 +901,23 @@ Medical Report:
    * Create fallback response structure
    */
   createFallbackResponse(response) {
+    const structuredFindings = this.createBasicStructuredFindings(response.substring(0, 1000));
+    const enhancedFindings = this.convertToEnhancedFindings(structuredFindings);
+    
     return {
       technicalDetails: '',
       findings: {
         content: response.substring(0, 1000), // Take first 1000 chars as fallback
-        structuredFindings: this.createBasicStructuredFindings(response.substring(0, 1000))
+        structuredFindings: structuredFindings
       },
       impression: 'Automatische Analyse des medizinischen Befundes.',
       recommendations: 'Weitere klinische Korrelation empfohlen.',
+      enhancedFindings: enhancedFindings, // Add enhanced findings for proper UI display
       metadata: {
         source: 'ollama-fallback',
         originalLength: response.length,
-        fallbackUsed: true
+        fallbackUsed: true,
+        hasEnhancedFindings: true
       }
     };
   }
@@ -925,27 +1074,36 @@ Medical Report:
    * Switch to a different model
    */
   async switchModel(modelName) {
-    const config = Object.values(this.modelConfigs).find(c => c.modelFile === modelName);
+    // First try to find by configuration key, then by modelFile
+    let config = this.modelConfigs[modelName];
+    if (!config) {
+      // Try to find by modelFile name
+      config = Object.values(this.modelConfigs).find(c => c.modelFile === modelName);
+    }
+    
     if (!config) {
       throw new Error(`Unknown model: ${modelName}`);
     }
+    
+    // Use the actual modelFile for validation and switching
+    const actualModelFile = config.modelFile;
 
-    if (this.currentModel === modelName) {
-      console.log(`OllamaModelService: Already using model ${modelName}`);
+    if (this.currentModel === actualModelFile) {
+      console.log(`OllamaModelService: Already using model ${actualModelFile}`);
       return true;
     }
 
-    console.log(`OllamaModelService: Switching to model ${modelName}...`);
+    console.log(`OllamaModelService: Switching to model ${actualModelFile}...`);
     
     try {
-      // Validate the new model
-      const isWorking = await this.validateModel(modelName);
+      // Validate the new model using the actual modelFile
+      const isWorking = await this.validateModel(actualModelFile);
       if (!isWorking) {
         throw new Error('Model validation failed');
       }
 
-      this.currentModel = modelName;
-      console.log(`OllamaModelService: Successfully switched to ${modelName}`);
+      this.currentModel = actualModelFile;
+      console.log(`OllamaModelService: Successfully switched to ${actualModelFile}`);
       return true;
     } catch (error) {
       console.error(`OllamaModelService: Failed to switch to ${modelName}:`, error);

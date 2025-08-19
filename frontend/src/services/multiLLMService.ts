@@ -322,8 +322,8 @@ ${rawText}`;
    * Refine transcript using local Ollama models
    */
   private async refineWithOllama(prompt: string): Promise<string> {
-    // Try medical-gemma-2b first, then gpt-oss:20b as fallback (use exact model names)
-    const models = ['medical-gemma-2b:latest', 'gpt-oss:20b'];
+    // Try Gemma-3 medical models first, then GPT-OSS as fallback (use same models as Local Demo)
+    const models = ['gemma3-medical-fp16:latest', 'gemma3-medical-q8:latest', 'gemma3-medical-q5:latest', 'gpt-oss:latest'];
     const ollamaBaseUrl = process.env.NEXT_PUBLIC_OLLAMA_BASE_URL || 'http://localhost:11434';
     
     let lastError: Error | null = null;

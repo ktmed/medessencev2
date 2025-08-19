@@ -51,14 +51,28 @@ export const useEnhancedSpeechToText = ({
   const [hasRecognitionSupport, setHasRecognitionSupport] = useState(false);
   const [validationEnabled, setValidationEnabled] = useState(medicalValidation);
   const [confidence, setConfidence] = useState(0);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('disconnected');
+  const [retryCount, setRetryCount] = useState(0);
+  const [diagnostics, setDiagnostics] = useState<string[]>([]);
 
   const recognitionRef = useRef<any>(null);
   const finalTranscriptRef = useRef('');
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const connectionHealthRef = useRef<NodeJS.Timeout | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
+  const sessionStartRef = useRef<number>(Date.now());
+  const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const maxRetries = 5; // Increased from 3
+  const retryDelayMs = 1000;
+  const healthCheckInterval = 5000; // Check connection health every 5 seconds
+  const maxSessionDuration = 60000; // 60 seconds max per session (WebSpeech limitation)
+  const restartInterval = 55000; // Restart every 55 seconds to prevent timeout
 
-  // Medical dictionary for real-time corrections
+  // Medical dictionary for real-time corrections - Enhanced with cardiology terms
   const medicalCorrections = useRef(new Map([
+    // Basic medical terms
     ['mammografie', 'mammographie'],
-    ['sonografie', 'sonographie'],
+    ['sonografie', 'sonographie'], 
     ['mama', 'mamma'],
     ['mamme', 'mamma'],
     ['be fund', 'befund'],
@@ -72,19 +86,237 @@ export const useEnhancedSpeechToText = ({
     ['se quenz', 'sequenz'],
     ['re konstruktion', 'rekonstruktion'],
     ['ultra schall', 'ultraschall'],
-    ['sono graphie', 'sonographie']
+    ['sono graphie', 'sonographie'],
+    
+    // Cardiology & Echocardiography terms - Based on tester feedback
+    ['transdorakale', 'transthorakale'],
+    ['trans thorakale', 'transthorakale'],
+    ['trans torakale', 'transthorakale'],
+    ['echo kardiographie', 'echokardiographie'],
+    ['echo kardio graphie', 'echokardiographie'],
+    ['linke ventrikel', 'linker ventrikel'],
+    ['linke ventrikeln', 'linker ventrikel'],
+    ['normotruf', 'normotroph'],
+    ['normo troph', 'normotroph'],
+    ['wand bewegungsstörungen', 'wandbewegungsstörungen'],
+    ['wand bewegung störungen', 'wandbewegungsstörungen'],
+    ['lv funktion', 'lv-funktion'],
+    ['rechter ventrikeln', 'rechter ventrikel'],
+    ['recht ventrikel', 'rechter ventrikel'],
+    ['divertiert', 'dilatiert'],
+    ['rechts herz', 'rechtsherzbelastung'],
+    ['recht herz belastung', 'rechtsherzbelastung'],
+    ['perikateguss', 'perikarderguss'],
+    ['peri kard erguss', 'perikarderguss'],
+    ['pleura erguss', 'pleuraerguss'],
+    ['pleura ergusskonfiguration', 'pleuraergusskonfiguration'],
+    ['pleura erguss konfiguration', 'pleuraergusskonfiguration'], 
+    ['subkristaler', 'subkostaler'],
+    ['sub kostaler', 'subkostaler'],
+    ['sub kristaler', 'subkostaler'],
+    ['b linien', 'b-linien'],
+    ['antillionen', 'anterioren'],
+    ['antilloren', 'anterioren'],
+    ['lungen sonographie', 'lungensonographie'],
+    ['intestielle', 'interstitielle'],
+    ['inter stitielle', 'interstitielle'],
+    ['stau ung', 'stauung'],
+    
+    // Common pronunciation errors
+    ['sys tolische', 'systolische'],
+    ['dias tolische', 'diastolische'],
+    ['ventri kuläre', 'ventrikuläre'],
+    ['myo kardial', 'myokardial'],
+    ['endo kardial', 'endokardial'],
+    ['kardio vaskulär', 'kardiovaskulär'],
+    
+    // Technical/procedural terms that are commonly mis-transcribed
+    ['doppler echo', 'doppler-echo'],
+    ['farb doppler', 'farbdoppler'],
+    ['kontinuierlich welle', 'kontinuierliche welle'],
+    ['pulsed wave', 'pulsed-wave'],
+    ['spectral doppler', 'spektraldoppler']
   ]));
+
+  // Add diagnostic logging
+  const addDiagnostic = useCallback((message: string) => {
+    const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+    const diagnosticMessage = `[${timestamp}] ${message}`;
+    console.log('Speech Recognition:', diagnosticMessage);
+    setDiagnostics(prev => [...prev.slice(-4), diagnosticMessage]); // Keep last 5 messages
+  }, []);
+
+  // Browser compatibility check
+  const checkBrowserCompatibility = useCallback(() => {
+    const diagnostics = [];
+    
+    // Check for basic speech recognition support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      diagnostics.push('❌ Speech Recognition API not supported');
+      return diagnostics;
+    }
+
+    // Check browser type and version
+    const userAgent = navigator.userAgent;
+    if (userAgent.includes('Chrome')) {
+      const chromeVersion = userAgent.match(/Chrome\/(\d+)/)?.[1];
+      diagnostics.push(`✅ Chrome ${chromeVersion} detected`);
+    } else if (userAgent.includes('Edge')) {
+      diagnostics.push('✅ Edge detected');
+    } else if (userAgent.includes('Safari')) {
+      diagnostics.push('⚠️ Safari detected (limited support)');
+    } else {
+      diagnostics.push('⚠️ Unknown browser (may have limited support)');
+    }
+
+    // Check HTTPS
+    if (location.protocol === 'https:') {
+      diagnostics.push('✅ HTTPS connection');
+    } else {
+      diagnostics.push('⚠️ HTTP connection (may cause issues)');
+    }
+
+    // Check microphone permissions
+    if (navigator.permissions) {
+      navigator.permissions.query({ name: 'microphone' as PermissionName }).then(result => {
+        if (result.state === 'granted') {
+          addDiagnostic('✅ Microphone permission granted');
+        } else if (result.state === 'denied') {
+          addDiagnostic('❌ Microphone permission denied');
+        } else {
+          addDiagnostic('⚠️ Microphone permission not yet granted');
+        }
+      }).catch(() => {
+        addDiagnostic('❓ Unable to check microphone permissions');
+      });
+    }
+
+    return diagnostics;
+  }, [addDiagnostic]);
+
+  // Connection health monitoring
+  const startHealthMonitoring = useCallback(() => {
+    if (connectionHealthRef.current) {
+      clearInterval(connectionHealthRef.current);
+    }
+
+    connectionHealthRef.current = setInterval(() => {
+      const now = Date.now();
+      const timeSinceActivity = now - lastActivityRef.current;
+      
+      // If listening but no activity for more than 10 seconds, consider it stale
+      if (isListening && timeSinceActivity > 10000 && connectionStatus === 'connected') {
+        addDiagnostic('🔍 Stale connection detected, triggering reconnect');
+        attemptReconnection();
+      }
+    }, healthCheckInterval);
+  }, [isListening, connectionStatus, addDiagnostic]);
+
+  // Session management - restart recognition periodically to avoid timeouts
+  const scheduleSessionRestart = useCallback(() => {
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+    }
+
+    restartTimeoutRef.current = setTimeout(() => {
+      if (isListening && connectionStatus === 'connected') {
+        addDiagnostic('🔄 Preventive session restart (WebSpeech API limitation)');
+        
+        // Gracefully restart the session
+        if (recognitionRef.current) {
+          recognitionRef.current.stop();
+          setTimeout(() => {
+            if (isListening) {
+              sessionStartRef.current = Date.now();
+              startListening();
+            }
+          }, 1000);
+        }
+      }
+    }, restartInterval);
+  }, [isListening, connectionStatus, addDiagnostic]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+      if (connectionHealthRef.current) {
+        clearInterval(connectionHealthRef.current);
+      }
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
+      if (recognitionRef.current && isListening) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, [isListening]);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       setHasRecognitionSupport(true);
       recognitionRef.current = new SpeechRecognition();
+      setConnectionStatus('disconnected');
+      
+      // Run browser compatibility check
+      const browserDiagnostics = checkBrowserCompatibility();
+      browserDiagnostics.forEach(diagnostic => addDiagnostic(diagnostic));
+      addDiagnostic('🚀 Speech Recognition service initialized');
     } else {
       setHasRecognitionSupport(false);
       setError('Speech recognition not supported in this browser');
+      setConnectionStatus('disconnected');
+      addDiagnostic('❌ Speech Recognition API not available');
     }
-  }, []);
+  }, [addDiagnostic, checkBrowserCompatibility]);
+
+  // Retry mechanism for reconnection
+  const attemptReconnection = useCallback(() => {
+    if (retryCount >= maxRetries) {
+      addDiagnostic(`❌ Maximum retries (${maxRetries}) exceeded`);
+      setError('Failed to reconnect to transcription service after maximum retries');
+      setConnectionStatus('disconnected');
+      setRetryCount(0);
+      return;
+    }
+
+    const attempt = retryCount + 1;
+    addDiagnostic(`🔄 Reconnection attempt ${attempt}/${maxRetries}`);
+    setConnectionStatus('reconnecting');
+    setError(`Connection to transcription service lost. Attempting to reconnect... (${attempt}/${maxRetries})`);
+    
+    retryTimeoutRef.current = setTimeout(() => {
+      setRetryCount(prev => prev + 1);
+      
+      // Clean up previous recognition instance
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+          recognitionRef.current = null;
+        } catch (e) {
+          addDiagnostic('⚠️ Error stopping previous recognition instance');
+        }
+      }
+      
+      // Recreate recognition instance
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        recognitionRef.current = new SpeechRecognition();
+        addDiagnostic('🔧 Recreated recognition instance');
+        
+        if (isListening) {
+          addDiagnostic('🎤 Attempting to restart listening');
+          startListening();
+        }
+      } else {
+        addDiagnostic('❌ Failed to recreate recognition instance');
+      }
+    }, retryDelayMs * attempt); // Exponential backoff
+  }, [retryCount, maxRetries, isListening, addDiagnostic]);
 
   const applyMedicalCorrections = useCallback((text: string): { 
     correctedText: string; 
@@ -238,6 +470,7 @@ export const useEnhancedSpeechToText = ({
 
     // Event handlers
     recognitionRef.current.onresult = (event: any) => {
+      lastActivityRef.current = Date.now(); // Update activity timestamp
       let interimTranscriptText = '';
       let newFinalText = '';
       let highestConfidence = 0;
@@ -313,12 +546,58 @@ export const useEnhancedSpeechToText = ({
     };
 
     recognitionRef.current.onerror = (event: any) => {
-      setError(`Speech recognition error: ${event.error}`);
+      console.error('Speech recognition error:', event.error);
       setIsListening(false);
+      setConnectionStatus('disconnected');
+      
+      // Handle different error types
+      switch (event.error) {
+        case 'network':
+          setError('Network error - attempting to reconnect...');
+          attemptReconnection();
+          break;
+        case 'service-not-allowed':
+          setError('Microphone access denied. Please allow microphone access and refresh.');
+          break;
+        case 'not-allowed':
+          setError('Microphone access not allowed. Please check browser permissions.');
+          break;
+        case 'no-speech':
+          setError('No speech detected. Try speaking closer to the microphone.');
+          break;
+        case 'audio-capture':
+          setError('Audio capture failed. Check microphone connection.');
+          break;
+        case 'aborted':
+          // Don't show error for user-initiated stops
+          setError(null);
+          break;
+        default:
+          setError(`Speech recognition error: ${event.error}`);
+          // For unknown errors, try to reconnect
+          if (isListening) {
+            attemptReconnection();
+          }
+          break;
+      }
     };
 
     recognitionRef.current.onend = () => {
+      addDiagnostic('🏁 Recognition ended');
       setIsListening(false);
+      
+      // Check if this was an unexpected end (not user-initiated)
+      const sessionDuration = Date.now() - sessionStartRef.current;
+      if (sessionDuration < maxSessionDuration && connectionStatus === 'connected') {
+        addDiagnostic(`⚠️ Unexpected end after ${Math.round(sessionDuration/1000)}s - attempting restart`);
+        
+        // This was likely a service interruption, try to restart
+        setTimeout(() => {
+          if (hasRecognitionSupport && !isListening) {
+            attemptReconnection();
+          }
+        }, 1000);
+      }
       
       // When recording ends, make sure we send the final complete transcript
       if (finalTranscriptRef.current.trim() || interimTranscript.trim()) {
@@ -339,12 +618,43 @@ export const useEnhancedSpeechToText = ({
       }
     };
 
+    // Add connection status handlers
+    recognitionRef.current.onstart = () => {
+      addDiagnostic('✅ Recognition started successfully');
+      setConnectionStatus('connected');
+      setError(null);
+      setRetryCount(0); // Reset retry count on successful connection
+      lastActivityRef.current = Date.now();
+      sessionStartRef.current = Date.now(); // Track session start
+      
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+      
+      // Start health monitoring
+      startHealthMonitoring();
+      
+      // Schedule preventive restart
+      scheduleSessionRestart();
+    };
+
     // Start recognition
     try {
+      addDiagnostic('🎤 Starting speech recognition...');
       recognitionRef.current.start();
     } catch (err: any) {
-      setError(`Failed to start speech recognition: ${err.message}`);
+      const errorMsg = `Failed to start speech recognition: ${err.message}`;
+      addDiagnostic(`❌ ${errorMsg}`);
+      console.error('Failed to start speech recognition:', err);
+      setError(errorMsg);
       setIsListening(false);
+      setConnectionStatus('disconnected');
+      
+      // Try to reconnect if the service was previously working
+      if (hasRecognitionSupport) {
+        attemptReconnection();
+      }
     }
   }, [
     isListening,
@@ -353,14 +663,50 @@ export const useEnhancedSpeechToText = ({
     lang,
     validateTranscription,
     applyMedicalCorrections,
-    onTranscriptChange
+    onTranscriptChange,
+    hasRecognitionSupport,
+    attemptReconnection,
+    confidence,
+    addDiagnostic,
+    startHealthMonitoring,
+    scheduleSessionRestart,
+    connectionStatus,
+    maxSessionDuration
   ]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current && isListening) {
+      addDiagnostic('🛑 Stopping speech recognition');
       recognitionRef.current.stop();
     }
-  }, [isListening]);
+    setConnectionStatus('disconnected');
+    
+    // Stop health monitoring
+    if (connectionHealthRef.current) {
+      clearInterval(connectionHealthRef.current);
+      connectionHealthRef.current = null;
+    }
+    
+    // Stop session restart timer
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+  }, [isListening, addDiagnostic]);
+
+  const manualRetry = useCallback(() => {
+    setRetryCount(0);
+    setError(null);
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+    
+    if (isListening) {
+      stopListening();
+      setTimeout(() => startListening(), 500);
+    }
+  }, [isListening, stopListening, startListening]);
 
   const resetFinalTranscript = useCallback(() => {
     finalTranscriptRef.current = '';
@@ -419,6 +765,10 @@ export const useEnhancedSpeechToText = ({
     validationEnabled,
     toggleValidation,
     getQualityAssessment,
-    confidence
+    confidence,
+    connectionStatus,
+    manualRetry,
+    retryCount,
+    diagnostics
   };
 };

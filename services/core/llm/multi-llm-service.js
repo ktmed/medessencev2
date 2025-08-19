@@ -274,10 +274,13 @@ KRITISCH WICHTIG - Abschnitte NICHT wiederholen:
 - Prognose und Einschätzung
 - KEINE Wiederholung der Detail-Fakten aus "findings"!
 
-**"recommendations" Abschnitt** (NUR Empfehlungen):
-- Weitere diagnostische Maßnahmen
-- Nachsorge und Follow-up
-- Behandlungsempfehlungen
+**"recommendations" Abschnitt** (NUR spezifische, klinisch angemessene Empfehlungen):
+- KONKRETE und SPEZIFISCHE Empfehlungen basierend auf den Befunden
+- Bei pathologischen Befunden: Angemessene Nachkontrollen, weitere Diagnostik oder Therapie
+- Bei normalen Befunden: Routine-Follow-up oder keine weiteren Maßnahmen
+- Berücksichtige die klinische Dringlichkeit - bei kritischen Befunden STARKE Empfehlungen
+- Bei unklaren Befunden: Spezifische weitere Untersuchungen zur Abklärung
+- ZEITRAHMEN für Empfehlungen angeben (z.B. "innerhalb von 24h", "in 3-6 Monaten")
 
 Format: NUR JSON-Ausgabe mit folgender erweiterten Struktur:
 
@@ -891,13 +894,43 @@ IMPORTANT: Generate the response in ${language === 'de' ? 'German' : language ==
     try {
       console.log('Attempting report generation with Ollama (local processing)...');
       
-      const result = await this.ollamaService.generateReport(prompt, language);
-      console.log(`Successfully generated report with Ollama (model: ${result.model})`);
+      // Create medical prompt for German medical analysis with improved recommendations
+      const medicalPrompt = `Du bist ein erfahrener Radiologe. Analysiere diesen medizinischen Text und extrahiere strukturierte Informationen:
+
+${transcriptionText}
+
+WICHTIGE ANWEISUNGEN:
+- FOKUSSIEREN Sie sich NUR auf die medizinischen Inhalte
+- IGNORIEREN Sie administrative Inhalte wie: Briefköpfe, Adressen, Grußformeln, Unterschriften
+- EXTRAHIEREN Sie ALLE medizinischen Details: Diagnosen, Befunde, Therapien, Anamnese, Untersuchungsergebnisse
+
+Strukturieren Sie die medizinischen Informationen in folgende Abschnitte:
+
+1. Technische Details (falls vorhanden)
+2. Befund (OBJEKTIVE Fakten und Daten)
+3. Beurteilung (SUBJEKTIVE Interpretation und Zusammenfassung)  
+4. Empfehlung (spezifische, klinisch angemessene weitere Maßnahmen)
+
+WICHTIGE ANWEISUNGEN FÜR EMPFEHLUNGEN:
+- Gib KONKRETE und SPEZIFISCHE Empfehlungen basierend auf den Befunden
+- Bei pathologischen Befunden: Empfehle angemessene Nachkontrollen, weitere Diagnostik oder Therapie
+- Bei normalen Befunden: Empfehle Routine-Follow-up oder keine weiteren Maßnahmen
+- Berücksichtige die klinische Dringlichkeit - bei kritischen Befunden STARKE Empfehlungen
+- Bei unklaren Befunden: Empfehle spezifische weitere Untersuchungen zur Abklärung
+- Gib Zeitrahmen für Empfehlungen an (z.B. "innerhalb von 24h", "in 3-6 Monaten")
+
+Antworten Sie NUR mit den strukturierten medizinischen Informationen auf Deutsch.`;
+
+      const result = await this.ollamaService.generateReport(medicalPrompt, language);
+      console.log(`Successfully generated report with Ollama (model: ${result.model || 'Ollama Model'})`);
+      
+      // Parse and structure the result to match expected format
+      const structuredResult = this.parseOllamaReport(result, transcriptionText, language);
       
       // Cache the successful response
       const cacheKey = this.generateCacheKey(transcriptionText, language, 'report');
       const response = {
-        ...result,
+        ...structuredResult,
         provider: 'ollama-local',
         fallback: false
       };
@@ -909,6 +942,77 @@ IMPORTANT: Generate the response in ${language === 'de' ? 'German' : language ==
       console.error('Ollama report generation failed:', error.message);
       throw new Error(`Local model processing failed: ${error.message}. Please check Ollama setup and model availability.`);
     }
+  }
+
+  /**
+   * Parse Ollama report response to match expected format
+   */
+  parseOllamaReport(ollamaResult, originalText, language) {
+    console.log('Parsing Ollama report result...');
+    
+    // Handle different response formats from Ollama
+    let reportText = '';
+    let modelName = 'Ollama Model';
+    
+    if (typeof ollamaResult === 'string') {
+      reportText = ollamaResult;
+    } else if (ollamaResult && typeof ollamaResult === 'object') {
+      // Handle structured response from OllamaModelService
+      if (ollamaResult.findings) {
+        return {
+          findings: ollamaResult.findings,
+          impression: ollamaResult.impression || '',
+          recommendations: ollamaResult.recommendations || '',
+          technicalDetails: ollamaResult.technicalDetails || '',
+          model: ollamaResult.model || modelName,
+          provider: 'ollama-local'
+        };
+      }
+      
+      reportText = ollamaResult.response || ollamaResult.text || JSON.stringify(ollamaResult);
+      modelName = ollamaResult.model || modelName;
+    }
+    
+    // Extract sections using German medical patterns
+    const sections = {
+      findings: '',
+      impression: '',
+      recommendations: '',
+      technicalDetails: ''
+    };
+    
+    // Extract sections using common German medical patterns
+    const befundMatch = reportText.match(/(?:BEFUND|Befund)[:\s]*([\s\S]*?)(?=(?:BEURTEILUNG|Beurteilung|EMPFEHLUNG|Empfehlung|TECHNIK|Technik):|$)/i);
+    const beurteilungMatch = reportText.match(/(?:BEURTEILUNG|Beurteilung)[:\s]*([\s\S]*?)(?=(?:EMPFEHLUNG|Empfehlung|TECHNIK|Technik):|$)/i);
+    const empfehlungMatch = reportText.match(/(?:EMPFEHLUNG|Empfehlung)[:\s]*([\s\S]*?)(?=(?:TECHNIK|Technik):|$)/i);
+    const technikMatch = reportText.match(/(?:TECHNIK|Technik|TECHNISCHE DETAILS|Technische Details)[:\s]*([\s\S]*?)$/i);
+    
+    sections.findings = befundMatch?.[1]?.trim() || reportText;
+    sections.impression = beurteilungMatch?.[1]?.trim() || 'Siehe Befund oben.';
+    sections.recommendations = empfehlungMatch?.[1]?.trim() || 'Weitere Abklärung nach klinischer Einschätzung.';
+    sections.technicalDetails = technikMatch?.[1]?.trim() || '';
+    
+    // If no clear sections found, put everything in findings
+    if (!befundMatch && !beurteilungMatch && !empfehlungMatch && !technikMatch) {
+      sections.findings = reportText;
+    }
+    
+    console.log('Ollama report parsed:', {
+      findingsLength: sections.findings.length,
+      impressionLength: sections.impression.length,
+      recommendationsLength: sections.recommendations.length,
+      technicalLength: sections.technicalDetails.length,
+      model: modelName
+    });
+    
+    return {
+      findings: sections.findings,
+      impression: sections.impression,  
+      recommendations: sections.recommendations,
+      technicalDetails: sections.technicalDetails,
+      model: modelName,
+      provider: 'ollama-local'
+    };
   }
 }
 

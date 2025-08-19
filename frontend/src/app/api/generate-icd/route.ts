@@ -6,6 +6,7 @@ interface ICDRequest {
   reportContent: string;
   language: Language;
   codeSystem?: 'ICD-10-GM' | 'ICD-10' | 'ICD-11';
+  processingMode?: 'cloud' | 'local';
 }
 
 interface LLMProvider {
@@ -367,6 +368,7 @@ export async function POST(request: NextRequest) {
     console.log('- Language:', body.language);
     console.log('- Content length:', body.reportContent?.length || 0);
     console.log('- Code system:', body.codeSystem || 'ICD-10-GM');
+    console.log('- Processing mode:', body.processingMode || 'cloud');
 
     if (!body.reportContent) {
       return NextResponse.json(
@@ -375,6 +377,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // For local processing mode, use backend service
+    if (body.processingMode === 'local') {
+      console.log('🏠 Using local processing for ICD code generation');
+      
+      try {
+        // Call the backend Multi-LLM service endpoint for ICD codes
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:3002';
+        const response = await fetch(`${backendUrl}/api/generate-icd`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            reportContent: body.reportContent,
+            language: body.language || 'de',
+            codeSystem: body.codeSystem || 'ICD-10-GM',
+            processingMode: 'local'
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Backend service error: ${response.status} - ${response.statusText}`);
+        }
+
+        const backendICD = await response.json();
+        console.log('✅ Local ICD codes generated via backend service');
+        console.log('- Provider:', backendICD.provider);
+        console.log('- Total codes:', backendICD.codes?.length || 0);
+
+        return NextResponse.json(backendICD);
+
+      } catch (backendError) {
+        console.error('❌ Backend ICD service failed, falling back to frontend processing:', backendError instanceof Error ? backendError.message : 'Unknown error');
+        
+        // Fallback to local Ollama processing
+        return await generateLocalICD(body);
+      }
+    }
+
+    // Cloud processing using frontend service
+    console.log('☁️ Using cloud processing for ICD code generation');
     const icdService = new ServerICDService();
     const icdCodes = await icdService.generateICDCodes(
       body.reportContent,
@@ -400,4 +443,171 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// Local ICD generation using frontend Ollama (fallback)
+async function generateLocalICD(body: ICDRequest) {
+  console.log('🏠 Generating local ICD codes via frontend Ollama...');
+  
+  try {
+    // Try Ollama models directly
+    const models = ['gemma3-medical-fp16:latest', 'gemma3-medical-q8:latest', 'gemma3-medical-q5:latest', 'gpt-oss:latest'];
+    const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+    
+    let lastError: Error | null = null;
+    
+    for (const model of models) {
+      try {
+        console.log(`Attempting local ICD generation with ${model}...`);
+        
+        const codeSystem = body.codeSystem || 'ICD-10-GM';
+        
+        const icdPrompt = `Analysiere den folgenden medizinischen Bericht und erstelle ${codeSystem}-Kodierungen:
+
+${body.reportContent}
+
+AUFGABE:
+1. Identifiziere alle medizinischen Diagnosen und Befunde
+2. Ordne die entsprechenden ${codeSystem}-Codes zu
+3. Bewerte die Wahrscheinlichkeit (0.0-1.0)
+4. Klassifiziere als primary/secondary/differential
+
+FORMAT der Antwort (ein Code pro Zeile):
+ICD_CODE: [Code] | BESCHREIBUNG: [Deutsche Beschreibung] | KONFIDENZ: [0.0-1.0] | RELEVANZ: [0.0-1.0] | PRIORITÄT: [primary|secondary|differential] | KATEGORIE: [Organsystem] | BEGRÜNDUNG: [Warum dieser Code passt]
+
+Beispiel:
+ICD_CODE: M79.3 | BESCHREIBUNG: Panniculitis, nicht näher bezeichnet | KONFIDENZ: 0.85 | RELEVANZ: 0.90 | PRIORITÄT: primary | KATEGORIE: Muskuloskeletal | BEGRÜNDUNG: Entzündliche Veränderungen im Unterhautfettgewebe
+
+Analysiere systematisch und gebe nur die wahrscheinlichsten ${codeSystem}-Codes zurück:`;
+
+        const response = await fetch(`${ollamaBaseUrl}/api/generate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: model,
+            prompt: icdPrompt,
+            stream: false,
+            options: {
+              temperature: 0.1, // Low temperature for accurate coding
+              top_p: 0.9,
+              repeat_penalty: 1.1
+            }
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Ollama API error: ${response.status} - ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log(`Successfully generated ICD codes with local ${model}`);
+        
+        // Parse the response into structured format
+        const parsedICD = parseOllamaICDResponse(data.response || '', body, model);
+        
+        return NextResponse.json(parsedICD);
+        
+      } catch (error) {
+        console.error(`Local model ${model} failed:`, error instanceof Error ? error.message : 'Unknown error');
+        lastError = error instanceof Error ? error : new Error('Unknown error');
+        continue;
+      }
+    }
+    
+    throw new Error(`All local models failed. Last error: ${lastError?.message || 'Unknown error'}`);
+    
+  } catch (error) {
+    console.error('❌ Local ICD generation failed completely:', error);
+    
+    // Return a fallback ICD result
+    return NextResponse.json({
+      codes: [{
+        code: 'Z03.9',
+        description: 'Beobachtung bei Verdacht auf Krankheit oder Zustand, nicht näher bezeichnet',
+        confidence: 0.5,
+        radiologyRelevance: 0.5,
+        priority: 'secondary',
+        category: 'Allgemein',
+        reasoning: 'Fallback-Code da lokale Verarbeitung fehlgeschlagen ist'
+      }],
+      summary: {
+        totalCodes: 1,
+        primaryDiagnoses: 0,
+        secondaryDiagnoses: 1,
+        averageConfidence: 0.5
+      },
+      agentType: 'icd-coding',
+      language: body.language || 'de',
+      provider: 'local-failed',
+      timestamp: new Date().toISOString(),
+      cached: false,
+      fallback: true
+    });
+  }
+}
+
+// Parse Ollama ICD response to structured format
+function parseOllamaICDResponse(responseText: string, body: ICDRequest, model: string) {
+  console.log('Parsing Ollama ICD response to structured format...');
+  
+  const codes = [];
+  const lines = responseText.split('\n');
+  
+  for (const line of lines) {
+    if (line.includes('ICD_CODE:')) {
+      try {
+        const parts = line.split('|').map(p => p.trim());
+        const codeMatch = parts[0]?.match(/ICD_CODE:\s*([A-Z]\d+\.?\d*)/);
+        const descMatch = parts[1]?.match(/BESCHREIBUNG:\s*(.+)/);
+        const confMatch = parts[2]?.match(/KONFIDENZ:\s*([0-9.]+)/);
+        const relMatch = parts[3]?.match(/RELEVANZ:\s*([0-9.]+)/);
+        const prioMatch = parts[4]?.match(/PRIORITÄT:\s*(\w+)/);
+        const catMatch = parts[5]?.match(/KATEGORIE:\s*(.+)/);
+        const reasonMatch = parts[6]?.match(/BEGRÜNDUNG:\s*(.+)/);
+        
+        if (codeMatch && descMatch) {
+          codes.push({
+            code: codeMatch[1],
+            description: descMatch[1],
+            confidence: Math.min(parseFloat(confMatch?.[1] || '0.7'), 1.0),
+            radiologyRelevance: Math.min(parseFloat(relMatch?.[1] || '0.7'), 1.0),
+            priority: (prioMatch?.[1] as 'primary' | 'secondary' | 'differential') || 'secondary',
+            category: catMatch?.[1] || 'Allgemein',
+            reasoning: reasonMatch?.[1] || 'Lokale Analyse basierend auf Befunden'
+          });
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not parse local ICD line:', line);
+      }
+    }
+  }
+  
+  // Calculate summary statistics
+  const primaryCodes = codes.filter(c => c.priority === 'primary').length;
+  const secondaryCodes = codes.filter(c => c.priority === 'secondary').length;
+  const avgConfidence = codes.length > 0 
+    ? codes.reduce((sum, c) => sum + c.confidence, 0) / codes.length 
+    : 0.7;
+  
+  return {
+    codes: codes.slice(0, 8), // Limit to top 8 codes for local processing
+    summary: {
+      totalCodes: codes.length,
+      primaryDiagnoses: primaryCodes,
+      secondaryDiagnoses: secondaryCodes,
+      averageConfidence: Math.round(avgConfidence * 100) / 100
+    },
+    agentType: 'icd-coding',
+    language: body.language || 'de',
+    provider: 'ollama-local',
+    timestamp: new Date().toISOString(),
+    cached: false,
+    fallback: false,
+    metadata: {
+      model: model,
+      processingMode: 'local'
+    }
+  };
 }

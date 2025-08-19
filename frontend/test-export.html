@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Export Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        pre { background: #f8f9fa; padding: 20px; border: 1px solid #dee2e6; border-radius: 5px; white-space: pre-wrap; }
+        .emoji { font-size: 1.2em; }
+        .section { margin: 20px 0; padding: 15px; border-left: 4px solid #007bff; background: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏥 Enhanced Report Export Test</h1>
+        
+        <div class="section">
+            <h3>Test Sample Report with Enhanced Features</h3>
+            <p>This demonstrates the enhanced export functionality that now includes:</p>
+            <ul>
+                <li>🟢 Color-coded Enhanced Findings (Normal, Pathological, Special, Measurements, Localizations)</li>
+                <li>🏥 ICD-10-GM Codes with priority levels (Primary, Secondary, Differential)</li>
+                <li>📊 Confidence scores and detailed reasoning</li>
+                <li>🎯 Professional medical formatting</li>
+            </ul>
+        </div>
+        
+        <button onclick="downloadSampleReport()">📥 Download Enhanced Report Sample</button>
+        
+        <div style="margin-top: 30px;">
+            <h3>Sample Report Preview:</h3>
+            <pre id="reportPreview"></pre>
+        </div>
+    </div>
+
+    <script>
+        // Mock data simulating real report structure
+        const mockReport = {
+            id: "report-1755462705571",
+            patientId: "TEST-001",
+            transcriptionId: "export-test",
+            findings: "Die Computertomographie des Thorax zeigt ein abdominell und pulmonal metastasiertes Urothelkarzinom der rechten Niere. Es liegt eine Größenprogression der linkszentralen Lungenraumforderung vor.",
+            impression: "Progrediente pulmonale Metastasierung bei bekanntem Urothelkarzinom der rechten Niere. Neue parahiläre Raumforderung linksseitig.",
+            recommendations: "Umgehende onkologische Vorstellung innerhalb von 48 Stunden zur Therapieplanung. Kontrollthoracolumnal-CT in 6-8 Wochen zur Verlaufskontrolle empfohlen.",
+            technicalDetails: "Native CT-Untersuchung des Thorax in axialer Schichtführung mit multiplanarer Rekonstruktion.",
+            generatedAt: Date.now(),
+            language: "de",
+            type: "CT Scan",
+            metadata: {
+                aiProvider: "claude",
+                aiGenerated: true
+            },
+            // Enhanced findings with color coding
+            enhancedFindings: {
+                normalFindings: [
+                    "Herz und Mediastinum regelrecht konfiguriert",
+                    "Keine Pleuraergüsse beidseits"
+                ],
+                pathologicalFindings: [
+                    "Größenprogression der linkszentralen Lungenraumforderung von 5,2 x 4,5 cm auf 6,3 x 5,4 cm",
+                    "Neue parahiläre Raumforderung linksseitig",
+                    "Multiple kleine pulmonale Rundherde beidseits"
+                ],
+                specialObservations: [
+                    "Verdacht auf lymphangitische Ausbreitung im linken Oberlappen"
+                ],
+                measurements: [
+                    "Linkszentrale Raumforderung: 6,3 x 5,4 cm",
+                    "Parahiläre Raumforderung: 2,1 x 1,8 cm"
+                ],
+                localizations: [
+                    "Linker Oberlappen, zentral",
+                    "Linker Hilum, parahilär"
+                ],
+                confidence: 0.92,
+                processingAgent: "ct_scan_specialist",
+                timestamp: Date.now()
+            },
+            // ICD codes with priority levels
+            icdPredictions: {
+                codes: [
+                    {
+                        code: "C65",
+                        description: "Bösartige Neubildung des Nierenbeckens",
+                        confidence: 0.95,
+                        radiologyRelevance: 0.90,
+                        priority: "primary",
+                        category: "Oncology",
+                        reasoning: "Bekannte Grunderkrankung als Primärtumor"
+                    },
+                    {
+                        code: "C78.0",
+                        description: "Sekundäre bösartige Neubildung der Lunge",
+                        confidence: 0.88,
+                        radiologyRelevance: 0.95,
+                        priority: "primary",
+                        category: "Oncology",
+                        reasoning: "Multiple pulmonale Metastasen radiologisch nachweisbar"
+                    },
+                    {
+                        code: "Z51.1",
+                        description: "Chemotherapie bei bösartiger Neubildung",
+                        confidence: 0.75,
+                        radiologyRelevance: 0.60,
+                        priority: "secondary",
+                        category: "Treatment",
+                        reasoning: "Onkologische Therapie bei metastasierter Erkrankung indiziert"
+                    }
+                ],
+                summary: {
+                    totalCodes: 3,
+                    primaryDiagnoses: 2,
+                    secondaryDiagnoses: 1,
+                    averageConfidence: 0.86
+                },
+                provider: "claude",
+                timestamp: new Date().toISOString(),
+                cached: false,
+                fallback: false
+            }
+        };
+
+        function formatReportForExport(report) {
+            const headerText = 'MEDIZINISCHER BEFUNDBERICHT';
+            const isGerman = report.language === 'de';
+            
+            // Format enhanced findings for export
+            const formatEnhancedFindings = (enhancedFindings) => {
+                if (!enhancedFindings) return '';
+                
+                const sections = [];
+                
+                // Normal findings (Green/Unauffällig)
+                if (enhancedFindings.normalFindings?.length > 0) {
+                    sections.push(`\\n🟢 NORMALE BEFUNDE (${enhancedFindings.normalFindings.length}):\\n${enhancedFindings.normalFindings.map((finding, i) => `  ${i + 1}. ${finding}`).join('\\n')}`);
+                }
+                
+                // Pathological findings (Red/Pathologisch)
+                if (enhancedFindings.pathologicalFindings?.length > 0) {
+                    sections.push(`\\n🔴 PATHOLOGISCHE BEFUNDE (${enhancedFindings.pathologicalFindings.length}):\\n${enhancedFindings.pathologicalFindings.map((finding, i) => `  ${i + 1}. ${finding}`).join('\\n')}`);
+                }
+                
+                // Special observations (Yellow/Besondere Beobachtungen)
+                if (enhancedFindings.specialObservations?.length > 0) {
+                    sections.push(`\\n🟡 BESONDERE BEOBACHTUNGEN (${enhancedFindings.specialObservations.length}):\\n${enhancedFindings.specialObservations.map((finding, i) => `  ${i + 1}. ${finding}`).join('\\n')}`);
+                }
+                
+                // Measurements (Purple/Messungen)
+                if (enhancedFindings.measurements?.length > 0) {
+                    sections.push(`\\n🟣 MESSUNGEN (${enhancedFindings.measurements.length}):\\n${enhancedFindings.measurements.map((finding, i) => `  ${i + 1}. ${finding}`).join('\\n')}`);
+                }
+                
+                // Localizations (Orange/Lokalisationen)
+                if (enhancedFindings.localizations?.length > 0) {
+                    sections.push(`\\n🟠 LOKALISATIONEN (${enhancedFindings.localizations.length}):\\n${enhancedFindings.localizations.map((finding, i) => `  ${i + 1}. ${finding}`).join('\\n')}`);
+                }
+                
+                if (sections.length > 0) {
+                    const confidence = Math.round((enhancedFindings.confidence || 0) * 100);
+                    const agent = enhancedFindings.processingAgent || 'AI';
+                    const timestamp = new Date(enhancedFindings.timestamp || Date.now()).toLocaleString();
+                    
+                    return sections.join('\\n') + 
+                           `\\n\\nVerarbeitungsagent: ${agent} | Konfidenz: ${confidence}% | Generiert: ${timestamp}`;
+                }
+                
+                return '';
+            };
+            
+            // Format ICD codes for export
+            const formatICDCodes = (icdPredictions) => {
+                if (!icdPredictions?.codes?.length) return '';
+                
+                const priorityGroups = {
+                    primary: icdPredictions.codes.filter(code => code.priority === 'primary'),
+                    secondary: icdPredictions.codes.filter(code => code.priority === 'secondary'),
+                    differential: icdPredictions.codes.filter(code => code.priority === 'differential')
+                };
+                
+                const sections = [];
+                
+                if (priorityGroups.primary.length > 0) {
+                    sections.push(`\\n🔴 PRIMÄRDIAGNOSEN (${priorityGroups.primary.length}):`);
+                    priorityGroups.primary.forEach((code, i) => {
+                        const confidence = Math.round(code.confidence * 100);
+                        const relevance = Math.round(code.radiologyRelevance * 100);
+                        sections.push(`  ${i + 1}. ${code.code} - ${code.description}`);
+                        sections.push(`     Konfidenz: ${confidence}% | Relevanz: ${relevance}% | Kategorie: ${code.category}`);
+                        if (code.reasoning) {
+                            sections.push(`     Begründung: ${code.reasoning}`);
+                        }
+                        sections.push('');
+                    });
+                }
+                
+                if (priorityGroups.secondary.length > 0) {
+                    sections.push(`\\n🟡 SEKUNDÄRDIAGNOSEN (${priorityGroups.secondary.length}):`);
+                    priorityGroups.secondary.forEach((code, i) => {
+                        const confidence = Math.round(code.confidence * 100);
+                        const relevance = Math.round(code.radiologyRelevance * 100);
+                        sections.push(`  ${i + 1}. ${code.code} - ${code.description}`);
+                        sections.push(`     Konfidenz: ${confidence}% | Relevanz: ${relevance}% | Kategorie: ${code.category}`);
+                        if (code.reasoning) {
+                            sections.push(`     Begründung: ${code.reasoning}`);
+                        }
+                        sections.push('');
+                    });
+                }
+                
+                if (sections.length > 0) {
+                    const totalCodes = icdPredictions.summary?.totalCodes || icdPredictions.codes.length;
+                    const avgConfidence = Math.round((icdPredictions.summary?.averageConfidence || 0) * 100);
+                    const provider = icdPredictions.provider || 'AI';
+                    const timestamp = icdPredictions.timestamp ? new Date(icdPredictions.timestamp).toLocaleString() : new Date().toLocaleString();
+                    
+                    return sections.join('\\n') + 
+                           `\\nZusammenfassung: ${totalCodes} Codes | Durchschnittliche Konfidenz: ${avgConfidence}% | Anbieter: ${provider} | Generiert: ${timestamp}`;
+                }
+                
+                return '';
+            };
+            
+            const enhancedFindingsSection = formatEnhancedFindings(report.enhancedFindings);
+            const icdCodesSection = formatICDCodes(report.icdPredictions);
+            
+            return `${headerText}
+${'='.repeat(headerText.length)}
+
+Bericht-ID: ${report.id}
+Erstellt: ${new Date(report.generatedAt).toLocaleString()}
+Sprache: Deutsch
+Patient-ID: ${report.patientId || 'N/A'}
+KI-Anbieter: ${report.metadata?.aiProvider || 'N/A'}
+
+BEFUND
+------
+${report.findings}
+
+BEURTEILUNG
+-----------
+${report.impression}
+
+EMPFEHLUNG
+----------
+${report.recommendations}
+
+TECHNISCHE DETAILS
+------------------
+${report.technicalDetails}${enhancedFindingsSection ? `
+
+STRUKTURIERTE BEFUNDE (KI-ANALYSIERT)
+-------------------------------------${enhancedFindingsSection}` : ''}${icdCodesSection ? `
+
+ICD-10-GM KODIERUNG
+-------------------${icdCodesSection}` : ''}`;
+        }
+
+        function downloadSampleReport() {
+            const reportText = formatReportForExport(mockReport);
+            
+            // Update preview
+            document.getElementById('reportPreview').textContent = reportText;
+            
+            // Download the report
+            const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `enhanced-medical-report-${mockReport.id}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            console.log('✅ Enhanced report downloaded with:');
+            console.log('- 🟢 Normal findings:', mockReport.enhancedFindings.normalFindings.length);
+            console.log('- 🔴 Pathological findings:', mockReport.enhancedFindings.pathologicalFindings.length);
+            console.log('- 🟡 Special observations:', mockReport.enhancedFindings.specialObservations.length);
+            console.log('- 🟣 Measurements:', mockReport.enhancedFindings.measurements.length);
+            console.log('- 🟠 Localizations:', mockReport.enhancedFindings.localizations.length);
+            console.log('- 🏥 ICD codes:', mockReport.icdPredictions.codes.length);
+        }
+
+        // Load preview on page load
+        window.onload = function() {
+            const reportText = formatReportForExport(mockReport);
+            document.getElementById('reportPreview').textContent = reportText;
+        };
+    </script>
+</body>
+</html>

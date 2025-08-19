@@ -6,6 +6,7 @@ interface SummaryRequest {
   reportContent: string;
   language: Language;
   complexity?: 'simple' | 'detailed' | 'technical';
+  processingMode?: 'cloud' | 'local';
 }
 
 interface LLMProvider {
@@ -790,6 +791,7 @@ export async function POST(request: NextRequest) {
     console.log('- Language:', body.language);
     console.log('- Content length:', body.reportContent?.length || 0);
     console.log('- Complexity:', body.complexity || 'detailed');
+    console.log('- Processing mode:', body.processingMode || 'cloud');
 
     if (!body.reportContent) {
       return NextResponse.json(
@@ -798,6 +800,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // For local processing mode, use backend service
+    if (body.processingMode === 'local') {
+      console.log('🏠 Using local processing for summary generation');
+      
+      try {
+        // Call the backend Multi-LLM service endpoint for summary
+        const backendUrl = process.env.BACKEND_URL || 'http://localhost:3002';
+        const response = await fetch(`${backendUrl}/api/generate-summary`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            reportContent: body.reportContent,
+            language: body.language || 'de',
+            complexity: body.complexity || 'detailed',
+            processingMode: 'local'
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Backend service error: ${response.status} - ${response.statusText}`);
+        }
+
+        const backendSummary = await response.json();
+        console.log('✅ Local summary generated via backend service');
+        console.log('- Provider:', backendSummary.metadata?.aiProvider);
+
+        return NextResponse.json(backendSummary);
+
+      } catch (backendError) {
+        console.error('❌ Backend summary service failed, falling back to frontend processing:', backendError instanceof Error ? backendError.message : 'Unknown error');
+        
+        // Fallback to local Ollama processing
+        return await generateLocalSummary(body);
+      }
+    }
+
+    // Cloud processing using frontend service
+    console.log('☁️ Using cloud processing for summary generation');
     const summaryService = new ServerSummaryService();
     const summary = await summaryService.generateSummary(
       body.reportContent,
@@ -822,4 +864,161 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// Local summary generation using frontend Ollama (fallback)
+async function generateLocalSummary(body: SummaryRequest) {
+  console.log('🏠 Generating local summary via frontend Ollama...');
+  
+  try {
+    // Try Ollama models directly
+    const models = ['gemma3-medical-fp16:latest', 'gemma3-medical-q8:latest', 'gemma3-medical-q5:latest', 'gpt-oss:latest'];
+    const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+    
+    let lastError: Error | null = null;
+    
+    for (const model of models) {
+      try {
+        console.log(`Attempting local summary generation with ${model}...`);
+        
+        const complexityMap = {
+          simple: 'einfache, patientenfreundliche',
+          detailed: 'detaillierte medizinische', 
+          technical: 'umfassende technische'
+        };
+        
+        const complexity = body.complexity || 'detailed';
+        const complexityDesc = complexityMap[complexity] || complexityMap.detailed;
+        
+        const summaryPrompt = `Erstelle eine ${complexityDesc} Zusammenfassung des folgenden medizinischen Berichts auf Deutsch:
+
+${body.reportContent}
+
+Strukturiere die Zusammenfassung mit folgenden Abschnitten:
+- HAUPTBEFUNDE: [2-3 wichtigste medizinische Befunde]
+- KLINISCHE BEDEUTUNG: [Was bedeuten die Befunde für den Patienten?]
+- EMPFEHLUNGEN: [Konkrete nächste Schritte und Maßnahmen]
+
+Verwende ${complexity === 'simple' ? 'einfache, verständliche Sprache für Patienten' : complexity === 'technical' ? 'präzise medizinische Fachterminologie' : 'klare medizinische Sprache'}.
+
+Antworte NUR mit der strukturierten Zusammenfassung auf Deutsch.`;
+
+        const response = await fetch(`${ollamaBaseUrl}/api/generate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: model,
+            prompt: summaryPrompt,
+            stream: false,
+            options: {
+              temperature: 0.2,
+              top_p: 0.9,
+              repeat_penalty: 1.1
+            }
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Ollama API error: ${response.status} - ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        console.log(`Successfully generated summary with local ${model}`);
+        
+        // Parse the response into structured format
+        const parsedSummary = parseOllamaSummaryResponse(data.response || '', body, model);
+        
+        return NextResponse.json(parsedSummary);
+        
+      } catch (error) {
+        console.error(`Local model ${model} failed:`, error instanceof Error ? error.message : 'Unknown error');
+        lastError = error instanceof Error ? error : new Error('Unknown error');
+        continue;
+      }
+    }
+    
+    throw new Error(`All local models failed. Last error: ${lastError?.message || 'Unknown error'}`);
+    
+  } catch (error) {
+    console.error('❌ Local summary generation failed completely:', error);
+    
+    // Return a fallback summary
+    return NextResponse.json({
+      id: `summary-${Date.now()}`,
+      reportId: body.reportId,
+      summary: `Lokale Verarbeitung fehlgeschlagen - siehe ursprünglicher Bericht:\n\n${body.reportContent.substring(0, 500)}...`,
+      keyFindings: ['Siehe ursprünglicher Bericht'],
+      recommendations: ['Rücksprache mit behandelndem Arzt empfohlen'],
+      language: body.language || 'de',
+      generatedAt: Date.now(),
+      complexity: body.complexity || 'detailed',
+      metadata: {
+        aiProvider: 'local-failed',
+        processingAgent: 'local_fallback',
+        confidence: 0.3
+      }
+    });
+  }
+}
+
+// Parse Ollama summary response to structured format
+function parseOllamaSummaryResponse(responseText: string, body: SummaryRequest, model: string) {
+  console.log('Parsing Ollama summary response to structured format...');
+  
+  const keyFindings: string[] = [];
+  const recommendations: string[] = [];
+  let summaryText = responseText;
+  
+  // Extract structured sections using German patterns
+  const hauptbefundeMatch = responseText.match(/(?:HAUPTBEFUNDE|Hauptbefunde)[:\s]*([\s\S]*?)(?=(?:KLINISCHE BEDEUTUNG|Klinische Bedeutung|EMPFEHLUNGEN|Empfehlungen):|$)/i);
+  const empfehlungenMatch = responseText.match(/(?:EMPFEHLUNGEN|Empfehlungen)[:\s]*([\s\S]*?)$/i);
+  const bedeutungMatch = responseText.match(/(?:KLINISCHE BEDEUTUNG|Klinische Bedeutung)[:\s]*([\s\S]*?)(?=(?:EMPFEHLUNGEN|Empfehlungen):|$)/i);
+  
+  if (hauptbefundeMatch?.[1]) {
+    const findingsText = hauptbefundeMatch[1].trim();
+    // Split by lines and extract bullet points or numbered items
+    const findingLines = findingsText.split('\n').filter(line => 
+      line.trim() && (line.includes('-') || line.includes('•') || /^\d+\./.test(line.trim()))
+    );
+    findingLines.forEach(line => {
+      const cleaned = line.replace(/^[-•\d.\s]+/, '').trim();
+      if (cleaned) keyFindings.push(cleaned);
+    });
+  }
+  
+  if (empfehlungenMatch?.[1]) {
+    const recText = empfehlungenMatch[1].trim();
+    const recLines = recText.split('\n').filter(line => 
+      line.trim() && (line.includes('-') || line.includes('•') || /^\d+\./.test(line.trim()))
+    );
+    recLines.forEach(line => {
+      const cleaned = line.replace(/^[-•\d.\s]+/, '').trim();
+      if (cleaned) recommendations.push(cleaned);
+    });
+  }
+  
+  // Use clinical significance section as main summary if available
+  if (bedeutungMatch?.[1]) {
+    summaryText = bedeutungMatch[1].trim();
+  }
+  
+  return {
+    id: `summary-${Date.now()}`,
+    reportId: body.reportId,
+    summary: summaryText,
+    keyFindings: keyFindings.length > 0 ? keyFindings : ['Siehe detaillierte Zusammenfassung'],
+    recommendations: recommendations.length > 0 ? recommendations : ['Weitere ärztliche Betreuung empfohlen'],
+    language: body.language || 'de',
+    generatedAt: Date.now(),
+    complexity: body.complexity || 'detailed',
+    metadata: {
+      aiProvider: 'ollama-local',
+      processingAgent: 'local_ollama_summary',
+      confidence: 0.8,
+      model: model,
+      processingMode: 'local'
+    }
+  };
 }

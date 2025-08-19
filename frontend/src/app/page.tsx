@@ -308,8 +308,9 @@ export default function Dashboard() {
         }
 
         // Auto-generate Enhanced Findings only if not already provided by the API
-        console.log('🔍 DEBUGGING Enhanced Findings Validation - Version 2.0:');
+        console.log('🔍 DEBUGGING Enhanced Findings Validation - Version 3.0:');
         console.log('- report.enhancedFindings exists:', !!report.enhancedFindings);
+        
         if (report.enhancedFindings) {
           console.log('- enhancedFindings structure:', Object.keys(report.enhancedFindings));
           console.log('- normalFindings:', report.enhancedFindings.normalFindings);
@@ -319,39 +320,85 @@ export default function Dashboard() {
           console.log('- specialObservations:', report.enhancedFindings.specialObservations);
           console.log('- specialObservations length:', report.enhancedFindings.specialObservations?.length || 0);
           console.log('- Full enhanced findings object:', JSON.stringify(report.enhancedFindings, null, 2));
+          
+          // Check for fallback signatures that indicate AI failure
+          const isFallbackNormal = report.enhancedFindings.normalFindings?.some(finding => 
+            finding.includes('Strukturierte Befunde nicht verfügbar') || 
+            finding.includes('Structured findings not available') ||
+            finding.includes('Siehe Originalbefund')
+          );
+          console.log('- Contains fallback normal findings:', isFallbackNormal);
+          
+          const processingAgent = report.enhancedFindings.processingAgent;
+          console.log('- Processing agent:', processingAgent);
+          console.log('- Is fallback processing:', processingAgent === 'fallback');
         }
 
-        const hasValidEnhancedFindings = report.enhancedFindings && (
-          (report.enhancedFindings.normalFindings && report.enhancedFindings.normalFindings.length > 0) ||
-          (report.enhancedFindings.pathologicalFindings && report.enhancedFindings.pathologicalFindings.length > 0) ||
-          (report.enhancedFindings.specialObservations && report.enhancedFindings.specialObservations.length > 0)
-        );
+        // More strict validation - check for meaningful content, not just existence
+        const hasValidEnhancedFindings = report.enhancedFindings && 
+          report.enhancedFindings.processingAgent !== 'fallback' && 
+          !report.enhancedFindings.normalFindings?.some(finding => 
+            finding.includes('Strukturierte Befunde nicht verfügbar') || 
+            finding.includes('Structured findings not available') ||
+            finding.includes('Siehe Originalbefund')
+          ) && (
+            (report.enhancedFindings.normalFindings && report.enhancedFindings.normalFindings.length > 0) ||
+            (report.enhancedFindings.pathologicalFindings && report.enhancedFindings.pathologicalFindings.length > 0) ||
+            (report.enhancedFindings.specialObservations && report.enhancedFindings.specialObservations.length > 0)
+          );
 
-        console.log('🔍 hasValidEnhancedFindings result:', hasValidEnhancedFindings);
+        console.log('🔍 hasValidEnhancedFindings result (v3.0):', hasValidEnhancedFindings);
 
         if (hasValidEnhancedFindings) {
           console.log('✅ Enhanced findings already provided by report API - skipping secondary call');
           console.log('- Normal findings:', report.enhancedFindings?.normalFindings?.length || 0);
           console.log('- Pathological findings:', report.enhancedFindings?.pathologicalFindings?.length || 0);
           console.log('- Confidence:', report.enhancedFindings?.confidence);
+          console.log('- Processing agent:', report.enhancedFindings?.processingAgent);
         } else {
           try {
-            console.log('🔍 Auto-generating enhanced findings for AI report (not provided by API)...');
+            console.log('🔍 Auto-generating enhanced findings for AI report (primary findings inadequate)...');
+            console.log('- Reason: Primary API provided fallback or empty enhanced findings');
+            
             const enhancedFindings = await apiService.generateEnhancedFindings(
               report.id,
               reportContent,
               language
             );
             
+            console.log('🔍 Secondary API enhanced findings received:');
+            console.log('- Normal findings count:', enhancedFindings.normalFindings?.length || 0);
+            console.log('- Pathological findings count:', enhancedFindings.pathologicalFindings?.length || 0);
+            console.log('- Processing agent:', enhancedFindings.processingAgent);
+            console.log('- Full secondary findings:', JSON.stringify(enhancedFindings, null, 2));
+            
+            // Add a timestamp to track when we update
+            const timestamp = Date.now();
+            console.log('🕒 Updating report with secondary enhanced findings at:', new Date(timestamp).toISOString());
+            
             // Update the report with enhanced findings
-            setCurrentReport(prev => prev ? {
-              ...prev,
-              enhancedFindings: enhancedFindings
-            } : prev);
+            setCurrentReport(prev => {
+              if (!prev) return prev;
+              
+              const updated = {
+                ...prev,
+                enhancedFindings: {
+                  ...enhancedFindings,
+                  updateSource: 'secondary_api',
+                  updateTimestamp: timestamp
+                }
+              };
+              
+              console.log('🔄 Report state updated with secondary enhanced findings');
+              return updated;
+            });
             
             console.log('✅ Enhanced findings added to report via secondary API call');
           } catch (error) {
             console.warn('⚠️ Enhanced findings generation failed:', error);
+            
+            // If secondary API fails, at least preserve what we have
+            console.log('🛡️ Preserving primary API enhanced findings despite secondary failure');
           }
         }
       } else {
