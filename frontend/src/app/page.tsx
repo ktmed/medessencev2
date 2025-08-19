@@ -293,8 +293,7 @@ export default function Dashboard() {
             report.id,
             reportContent,
             language,
-            'ICD-10-GM' as const,
-            reportProcessingMode as 'cloud' | 'local'
+            'ICD-10-GM' as const
           );
           
           // Update the report with ICD codes
@@ -443,8 +442,7 @@ export default function Dashboard() {
             report.id,
             reportContent,
             language,
-            'ICD-10-GM' as const,
-            reportProcessingMode as 'cloud' | 'local'
+            'ICD-10-GM' as const
           );
           
           // Update the report with ICD codes
