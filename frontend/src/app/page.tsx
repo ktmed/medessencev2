@@ -29,7 +29,6 @@ export default function Dashboard() {
   const [currentSummary, setCurrentSummary] = useState<PatientSummary | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [refinedTranscript, setRefinedTranscript] = useState<string>('');
   const [reportProcessingMode, setReportProcessingMode] = useState<'cloud' | 'local'>('cloud');
   
   // Debug logging for processing mode changes
@@ -239,7 +238,7 @@ export default function Dashboard() {
   const handleGenerateReport = useCallback(async () => {
     const finalTranscriptions = transcriptions.filter(t => t.isFinal);
     
-    if (finalTranscriptions.length === 0 && !refinedTranscript) {
+    if (finalTranscriptions.length === 0) {
       setUIState(prev => ({ 
         ...prev, 
         error: 'No transcription available to generate report' 
@@ -255,9 +254,9 @@ export default function Dashboard() {
       setIsGeneratingReport(true);
       setUIState(prev => ({ ...prev, error: null }));
       
-      // Use refined transcript if available, otherwise use original transcription
-      const textToUse = refinedTranscript || (finalTranscriptions.length > 0 ? finalTranscriptions[0].text : '');
-      const transcriptionId = finalTranscriptions.length > 0 ? finalTranscriptions[0].id : `refined-${Date.now()}`;
+      // Use original transcription
+      const textToUse = finalTranscriptions.length > 0 ? finalTranscriptions[0].text : '';
+      const transcriptionId = finalTranscriptions.length > 0 ? finalTranscriptions[0].id : `transcription-${Date.now()}`;
       
       console.log('🚀 Generating report via API service');
       console.log('- Processing mode:', reportProcessingMode);
@@ -293,7 +292,9 @@ export default function Dashboard() {
           const icdCodes = await apiService.generateICDCodes(
             report.id,
             reportContent,
-            language
+            language,
+            'ICD-10-GM',
+            reportProcessingMode
           );
           
           // Update the report with ICD codes
@@ -307,24 +308,37 @@ export default function Dashboard() {
           console.warn('⚠️ ICD code generation failed:', error);
         }
 
-        // Auto-generate Enhanced Findings if AI was used successfully
-        try {
-          console.log('🔍 Auto-generating enhanced findings for AI report...');
-          const enhancedFindings = await apiService.generateEnhancedFindings(
-            report.id,
-            reportContent,
-            language
-          );
-          
-          // Update the report with enhanced findings
-          setCurrentReport(prev => prev ? {
-            ...prev,
-            enhancedFindings: enhancedFindings
-          } : prev);
-          
-          console.log('✅ Enhanced findings added to report');
-        } catch (error) {
-          console.warn('⚠️ Enhanced findings generation failed:', error);
+        // Auto-generate Enhanced Findings only if not already provided by the API
+        const hasValidEnhancedFindings = report.enhancedFindings && (
+          (report.enhancedFindings.normalFindings && report.enhancedFindings.normalFindings.length > 0) ||
+          (report.enhancedFindings.pathologicalFindings && report.enhancedFindings.pathologicalFindings.length > 0) ||
+          (report.enhancedFindings.specialObservations && report.enhancedFindings.specialObservations.length > 0)
+        );
+
+        if (hasValidEnhancedFindings) {
+          console.log('✅ Enhanced findings already provided by report API - skipping secondary call');
+          console.log('- Normal findings:', report.enhancedFindings?.normalFindings?.length || 0);
+          console.log('- Pathological findings:', report.enhancedFindings?.pathologicalFindings?.length || 0);
+          console.log('- Confidence:', report.enhancedFindings?.confidence);
+        } else {
+          try {
+            console.log('🔍 Auto-generating enhanced findings for AI report (not provided by API)...');
+            const enhancedFindings = await apiService.generateEnhancedFindings(
+              report.id,
+              reportContent,
+              language
+            );
+            
+            // Update the report with enhanced findings
+            setCurrentReport(prev => prev ? {
+              ...prev,
+              enhancedFindings: enhancedFindings
+            } : prev);
+            
+            console.log('✅ Enhanced findings added to report via secondary API call');
+          } catch (error) {
+            console.warn('⚠️ Enhanced findings generation failed:', error);
+          }
         }
       } else {
         console.log('❌ Skipping ICD generation - conditions not met');
@@ -346,22 +360,8 @@ export default function Dashboard() {
         error: `Failed to generate report: ${error instanceof Error ? error.message : 'Unknown error'}` 
       }));
     }
-  }, [transcriptions, refinedTranscript, language, reportProcessingMode]);
+  }, [transcriptions, language, reportProcessingMode]);
 
-  // Handle refined transcription from AI
-  const handleRefinedTranscription = useCallback((refined: string) => {
-    console.log('Refined transcription received');
-    setRefinedTranscript(refined);
-    setUIState(prev => ({ 
-      ...prev, 
-      success: 'Transcription refined with AI' 
-    }));
-    
-    // Clear success message after 3 seconds
-    setTimeout(() => {
-      setUIState(prev => ({ ...prev, success: null }));
-    }, 3000);
-  }, []);
 
   // Generate report from pasted text using API service
   const handleGenerateReportFromText = useCallback(async () => {
@@ -427,7 +427,9 @@ export default function Dashboard() {
           const icdCodes = await apiService.generateICDCodes(
             report.id,
             reportContent,
-            language
+            language,
+            'ICD-10-GM',
+            reportProcessingMode
           );
           
           // Update the report with ICD codes
@@ -441,24 +443,37 @@ export default function Dashboard() {
           console.warn('⚠️ ICD code generation failed for pasted text:', error);
         }
 
-        // Auto-generate Enhanced Findings for pasted text
-        try {
-          console.log('🔍 Auto-generating enhanced findings for pasted text report...');
-          const enhancedFindings = await apiService.generateEnhancedFindings(
-            report.id,
-            reportContent,
-            language
-          );
-          
-          // Update the report with enhanced findings
-          setCurrentReport(prev => prev ? {
-            ...prev,
-            enhancedFindings: enhancedFindings
-          } : prev);
-          
-          console.log('✅ Enhanced findings added to pasted text report');
-        } catch (error) {
-          console.warn('⚠️ Enhanced findings generation failed for pasted text:', error);
+        // Auto-generate Enhanced Findings for pasted text only if not already provided by the API
+        const hasValidEnhancedFindings = report.enhancedFindings && (
+          (report.enhancedFindings.normalFindings && report.enhancedFindings.normalFindings.length > 0) ||
+          (report.enhancedFindings.pathologicalFindings && report.enhancedFindings.pathologicalFindings.length > 0) ||
+          (report.enhancedFindings.specialObservations && report.enhancedFindings.specialObservations.length > 0)
+        );
+
+        if (hasValidEnhancedFindings) {
+          console.log('✅ Enhanced findings already provided by pasted text report API - skipping secondary call');
+          console.log('- Normal findings:', report.enhancedFindings?.normalFindings?.length || 0);
+          console.log('- Pathological findings:', report.enhancedFindings?.pathologicalFindings?.length || 0);
+          console.log('- Confidence:', report.enhancedFindings?.confidence);
+        } else {
+          try {
+            console.log('🔍 Auto-generating enhanced findings for pasted text report (not provided by API)...');
+            const enhancedFindings = await apiService.generateEnhancedFindings(
+              report.id,
+              reportContent,
+              language
+            );
+            
+            // Update the report with enhanced findings
+            setCurrentReport(prev => prev ? {
+              ...prev,
+              enhancedFindings: enhancedFindings
+            } : prev);
+            
+            console.log('✅ Enhanced findings added to pasted text report via secondary API call');
+          } catch (error) {
+            console.warn('⚠️ Enhanced findings generation failed for pasted text:', error);
+          }
         }
       } else {
         console.log('❌ Skipping pasted text ICD generation - conditions not met');
@@ -508,7 +523,8 @@ export default function Dashboard() {
         reportId,
         reportContent,
         summaryLanguage,
-        complexity
+        complexity,
+        reportProcessingMode
       );
       
       setCurrentSummary(summary);
@@ -651,7 +667,6 @@ export default function Dashboard() {
           <WebSpeechRecorder
             language={language}
             onTranscription={handleTranscription}
-            onRefinedTranscription={handleRefinedTranscription}
             processingMode={reportProcessingMode}
             onProcessingModeChange={setReportProcessingMode}
           />
@@ -765,25 +780,15 @@ export default function Dashboard() {
           />
 
           {/* Manual Report Generation */}
-          {(transcriptions.filter(t => t.isFinal).length > 0 || refinedTranscript) && !currentReport && !isGeneratingReport && (
+          {transcriptions.filter(t => t.isFinal).length > 0 && !currentReport && !isGeneratingReport && (
             <div className="medical-card">
               <div className="text-center">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   Generate Medical Report
                 </h3>
                 <p className="text-sm text-gray-600 mb-4">
-                  {refinedTranscript 
-                    ? 'Create a structured medical report from your AI-refined transcription' 
-                    : 'Create a structured medical report from your transcription'
-                  }
+                  Create a structured medical report from your transcription
                 </p>
-                {refinedTranscript && (
-                  <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-md">
-                    <p className="text-sm text-orange-700">
-                      ✨ AI-refined transcript available - will be used for report generation
-                    </p>
-                  </div>
-                )}
                 <button
                   onClick={handleGenerateReport}
                   disabled={isGeneratingReport}
