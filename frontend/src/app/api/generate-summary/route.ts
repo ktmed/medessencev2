@@ -820,38 +820,126 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
     // Parse the report content to extract key sections
     const sections = this.parseReportSections(reportContent);
     
-    // Create a concise summary by extracting key sentences and simplifying
-    const keyPoints = this.extractKeySentences(reportContent, language);
-    const simplifiedFindings = this.simplifyMedicalText(sections.findings || '', language);
-    const simplifiedImpression = this.simplifyMedicalText(sections.impression || '', language);
+    // Detect original report language to avoid mixing
+    const reportLanguage = this.detectReportLanguage(reportContent);
+    console.log('🔍 Original report language detected:', reportLanguage);
+    console.log('🔍 Requested summary language:', language);
+    
+    // Create language-appropriate summaries based on content analysis
+    const summaryData = this.analyzeMedicalContent(reportContent, sections);
     
     if (language === 'de') {
       return `PATIENTENFREUNDLICHE ZUSAMMENFASSUNG
 
 WICHTIGSTE ERGEBNISSE:
-${simplifiedFindings || 'Die Untersuchung wurde durchgeführt und dokumentiert.'}
+${this.createGermanSummary(summaryData)}
 
 BEWERTUNG:
-${simplifiedImpression || 'Die Ergebnisse wurden fachärztlich beurteilt.'}
+${summaryData.hasNormalFindings ? 'Die meisten Untersuchungsergebnisse liegen im normalen Bereich.' : 
+  summaryData.hasAbnormalFindings ? 'Es wurden einige Auffälligkeiten festgestellt, die weitere Aufmerksamkeit erfordern.' :
+  'Die Ergebnisse wurden fachärztlich beurteilt.'}
 
 EMPFOHLENE SCHRITTE:
-${sections.recommendations || 'Weitere Betreuung durch Ihren Arzt wird empfohlen.'}
+${summaryData.hasRecommendations ? 'Weitere Schritte wurden mit Ihrem Arzt besprochen.' : 'Weitere Betreuung durch Ihren Arzt wird empfohlen.'}
 
 Diese vereinfachte Zusammenfassung soll Ihnen helfen, Ihre medizinischen Ergebnisse besser zu verstehen.`;
     } else {
       return `PATIENT-FRIENDLY SUMMARY
 
 KEY RESULTS:
-${simplifiedFindings || 'The examination was completed and documented.'}
+${this.createEnglishSummary(summaryData)}
 
 ASSESSMENT:
-${simplifiedImpression || 'The results have been professionally evaluated.'}
+${summaryData.hasNormalFindings ? 'Most examination results are within normal ranges.' : 
+  summaryData.hasAbnormalFindings ? 'Some findings require further attention and follow-up.' :
+  'The results have been professionally evaluated.'}
 
 RECOMMENDED NEXT STEPS:
-${sections.recommendations || 'Continued care with your physician is recommended.'}
+${summaryData.hasRecommendations ? 'Next steps have been discussed with your physician.' : 'Continued care with your physician is recommended.'}
 
 This simplified summary is designed to help you better understand your medical results.`;
     }
+  }
+
+  private detectReportLanguage(reportContent: string): 'de' | 'en' | 'mixed' {
+    const germanKeywords = ['befund', 'diagnose', 'untersuchung', 'patient', 'kategorie', 'mammographie', 'radiologie'];
+    const englishKeywords = ['finding', 'diagnosis', 'examination', 'patient', 'category', 'mammography', 'radiology'];
+    
+    const lowerContent = reportContent.toLowerCase();
+    const germanMatches = germanKeywords.filter(word => lowerContent.includes(word)).length;
+    const englishMatches = englishKeywords.filter(word => lowerContent.includes(word)).length;
+    
+    if (germanMatches > englishMatches) return 'de';
+    if (englishMatches > germanMatches) return 'en';
+    return 'mixed';
+  }
+
+  private analyzeMedicalContent(reportContent: string, sections: any): {
+    hasNormalFindings: boolean;
+    hasAbnormalFindings: boolean;
+    hasRecommendations: boolean;
+    contentType: 'radiology' | 'pathology' | 'general';
+    complexity: 'simple' | 'complex';
+  } {
+    const lowerContent = reportContent.toLowerCase();
+    
+    // Check for normal/abnormal findings
+    const normalIndicators = ['normal', 'unauffällig', 'regelrecht', 'physiologisch', 'unremarkable'];
+    const abnormalIndicators = ['pathologisch', 'auffällig', 'abnormal', 'verdächtig', 'suspicious'];
+    
+    const hasNormalFindings = normalIndicators.some(indicator => lowerContent.includes(indicator));
+    const hasAbnormalFindings = abnormalIndicators.some(indicator => lowerContent.includes(indicator));
+    const hasRecommendations = sections.recommendations && sections.recommendations.length > 10;
+    
+    // Determine content type
+    let contentType: 'radiology' | 'pathology' | 'general' = 'general';
+    if (lowerContent.includes('mammographie') || lowerContent.includes('mammography') || lowerContent.includes('radiolog')) {
+      contentType = 'radiology';
+    } else if (lowerContent.includes('patholog') || lowerContent.includes('biopsy') || lowerContent.includes('biopsie')) {
+      contentType = 'pathology';
+    }
+    
+    const complexity = reportContent.length > 500 ? 'complex' : 'simple';
+    
+    return {
+      hasNormalFindings,
+      hasAbnormalFindings,
+      hasRecommendations,
+      contentType,
+      complexity
+    };
+  }
+
+  private createGermanSummary(data: any): string {
+    if (data.contentType === 'radiology') {
+      return data.hasNormalFindings ? 
+        'Die bildgebende Untersuchung zeigt normale Befunde ohne auffällige Veränderungen.' :
+        data.hasAbnormalFindings ?
+        'In der bildgebenden Untersuchung wurden einige Veränderungen festgestellt, die weiterer Beurteilung bedürfen.' :
+        'Die radiologische Untersuchung wurde durchgeführt und ausgewertet.';
+    }
+    
+    return data.hasNormalFindings ? 
+      'Die Untersuchung zeigt normale Ergebnisse.' :
+      data.hasAbnormalFindings ?
+      'Es wurden einige Auffälligkeiten festgestellt.' :
+      'Die medizinische Untersuchung wurde abgeschlossen.';
+  }
+
+  private createEnglishSummary(data: any): string {
+    if (data.contentType === 'radiology') {
+      return data.hasNormalFindings ? 
+        'The imaging examination shows normal findings without significant abnormalities.' :
+        data.hasAbnormalFindings ?
+        'The imaging study revealed some changes that require further evaluation.' :
+        'The radiological examination has been completed and evaluated.';
+    }
+    
+    return data.hasNormalFindings ? 
+      'The examination shows normal results.' :
+      data.hasAbnormalFindings ?
+      'Some abnormalities were identified during the examination.' :
+      'The medical examination has been completed.';
   }
 
   private extractKeySentences(text: string, language: 'de' | 'en'): string[] {
