@@ -309,11 +309,26 @@ export default function Dashboard() {
         }
 
         // Auto-generate Enhanced Findings only if not already provided by the API
+        console.log('🔍 DEBUGGING Enhanced Findings Validation:');
+        console.log('- report.enhancedFindings exists:', !!report.enhancedFindings);
+        if (report.enhancedFindings) {
+          console.log('- enhancedFindings structure:', Object.keys(report.enhancedFindings));
+          console.log('- normalFindings:', report.enhancedFindings.normalFindings);
+          console.log('- normalFindings length:', report.enhancedFindings.normalFindings?.length || 0);
+          console.log('- pathologicalFindings:', report.enhancedFindings.pathologicalFindings);
+          console.log('- pathologicalFindings length:', report.enhancedFindings.pathologicalFindings?.length || 0);
+          console.log('- specialObservations:', report.enhancedFindings.specialObservations);
+          console.log('- specialObservations length:', report.enhancedFindings.specialObservations?.length || 0);
+          console.log('- Full enhanced findings object:', JSON.stringify(report.enhancedFindings, null, 2));
+        }
+
         const hasValidEnhancedFindings = report.enhancedFindings && (
           (report.enhancedFindings.normalFindings && report.enhancedFindings.normalFindings.length > 0) ||
           (report.enhancedFindings.pathologicalFindings && report.enhancedFindings.pathologicalFindings.length > 0) ||
           (report.enhancedFindings.specialObservations && report.enhancedFindings.specialObservations.length > 0)
         );
+
+        console.log('🔍 hasValidEnhancedFindings result:', hasValidEnhancedFindings);
 
         if (hasValidEnhancedFindings) {
           console.log('✅ Enhanced findings already provided by report API - skipping secondary call');
@@ -444,11 +459,20 @@ export default function Dashboard() {
         }
 
         // Auto-generate Enhanced Findings for pasted text only if not already provided by the API
+        console.log('🔍 DEBUGGING Pasted Text Enhanced Findings Validation:');
+        console.log('- report.enhancedFindings exists:', !!report.enhancedFindings);
+        if (report.enhancedFindings) {
+          console.log('- enhancedFindings structure:', Object.keys(report.enhancedFindings));
+          console.log('- Full enhanced findings object:', JSON.stringify(report.enhancedFindings, null, 2));
+        }
+
         const hasValidEnhancedFindings = report.enhancedFindings && (
           (report.enhancedFindings.normalFindings && report.enhancedFindings.normalFindings.length > 0) ||
           (report.enhancedFindings.pathologicalFindings && report.enhancedFindings.pathologicalFindings.length > 0) ||
           (report.enhancedFindings.specialObservations && report.enhancedFindings.specialObservations.length > 0)
         );
+
+        console.log('🔍 Pasted text hasValidEnhancedFindings result:', hasValidEnhancedFindings);
 
         if (hasValidEnhancedFindings) {
           console.log('✅ Enhanced findings already provided by pasted text report API - skipping secondary call');
