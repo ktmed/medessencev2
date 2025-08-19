@@ -8,6 +8,7 @@ import { formatTimestamp, cn } from '@/utils';
 import MarkdownRenderer from './MarkdownRenderer';
 import EnhancedFindingsNew from './EnhancedFindingsNew';
 import ICDPredictionsComponent from './ICDPredictions';
+import { EnhancedFindingsErrorBoundary } from './ErrorBoundary';
 
 interface ReportViewerProps {
   report: MedicalReport | null;
@@ -611,12 +612,14 @@ ${'-'.repeat(isGerman ? 'ICD-10-GM KODIERUNG'.length : 'ICD-10-GM CODING'.length
                           ENHANCED
                         </span>
                       </h3>
-                      <EnhancedFindingsNew
-                        enhancedFindings={currentReport.enhancedFindings!}
-                        sourceContent={`${currentReport.findings}\n\n${currentReport.impression}\n\n${currentReport.recommendations}`}
-                        isEditing={isEditing}
-                        onContentChange={(content) => updateEditedField('findings', content)}
-                      />
+                      <EnhancedFindingsErrorBoundary>
+                        <EnhancedFindingsNew
+                          enhancedFindings={currentReport.enhancedFindings!}
+                          sourceContent={`${currentReport.findings}\n\n${currentReport.impression}\n\n${currentReport.recommendations}`}
+                          isEditing={isEditing}
+                          onContentChange={(content) => updateEditedField('findings', content)}
+                        />
+                      </EnhancedFindingsErrorBoundary>
                     </>
                   ) : (
                     <>
@@ -659,12 +662,14 @@ ${'-'.repeat(isGerman ? 'ICD-10-GM KODIERUNG'.length : 'ICD-10-GM CODING'.length
                         ENHANCED
                       </span>
                     </h3>
-                    <EnhancedFindingsNew
-                      enhancedFindings={currentReport.enhancedFindings!}
-                      sourceContent={`${currentReport.findings}\n\n${currentReport.impression}\n\n${currentReport.recommendations}`}
-                      isEditing={isEditing}
-                      onContentChange={(content) => updateEditedField('findings', content)}
-                    />
+                    <EnhancedFindingsErrorBoundary>
+                      <EnhancedFindingsNew
+                        enhancedFindings={currentReport.enhancedFindings!}
+                        sourceContent={`${currentReport.findings}\n\n${currentReport.impression}\n\n${currentReport.recommendations}`}
+                        isEditing={isEditing}
+                        onContentChange={(content) => updateEditedField('findings', content)}
+                      />
+                    </EnhancedFindingsErrorBoundary>
                   </div>
                 ) : (
                   // Traditional Findings Section

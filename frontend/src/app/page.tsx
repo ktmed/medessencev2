@@ -7,6 +7,7 @@ import TranscriptionDisplay from '@/components/TranscriptionDisplay';
 import ReportViewer from '@/components/ReportViewer';
 import SummaryGenerator from '@/components/SummaryGenerator';
 import LanguageSelector, { CompactLanguageSelector } from '@/components/LanguageSelector';
+import { ReportErrorBoundary, SummaryErrorBoundary, EnhancedFindingsErrorBoundary } from '@/components/ErrorBoundary';
 // WebSocket removed - using Web Speech API directly
 import { apiService } from '@/services/apiService';
 import { 
@@ -749,11 +750,13 @@ export default function Dashboard() {
         {/* Center Column - Medical Reports */}
         <div className="dashboard-reports space-y-6">
           {/* Report Viewer */}
-          <ReportViewer
-            report={currentReport}
-            isGenerating={isGeneratingReport}
-            language={language}
-          />
+          <ReportErrorBoundary>
+            <ReportViewer
+              report={currentReport}
+              isGenerating={isGeneratingReport}
+              language={language}
+            />
+          </ReportErrorBoundary>
 
           {/* Manual Report Generation */}
           {transcriptions.filter(t => t.isFinal).length > 0 && !currentReport && !isGeneratingReport && (
@@ -780,13 +783,15 @@ export default function Dashboard() {
         {/* Right Column - Patient Summaries */}
         <div className="dashboard-summaries space-y-6">
           {/* Summary Generator */}
-          <SummaryGenerator
-            summary={currentSummary}
-            report={currentReport}
-            isGenerating={isGeneratingSummary}
-            language={language}
-            onGenerate={handleGenerateSummary}
-          />
+          <SummaryErrorBoundary>
+            <SummaryGenerator
+              summary={currentSummary}
+              report={currentReport}
+              isGenerating={isGeneratingSummary}
+              language={language}
+              onGenerate={handleGenerateSummary}
+            />
+          </SummaryErrorBoundary>
         </div>
       </div>
 
