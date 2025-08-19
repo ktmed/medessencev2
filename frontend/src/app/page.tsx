@@ -309,7 +309,7 @@ export default function Dashboard() {
         }
 
         // Auto-generate Enhanced Findings only if not already provided by the API
-        console.log('🔍 DEBUGGING Enhanced Findings Validation:');
+        console.log('🔍 DEBUGGING Enhanced Findings Validation - Version 2.0:');
         console.log('- report.enhancedFindings exists:', !!report.enhancedFindings);
         if (report.enhancedFindings) {
           console.log('- enhancedFindings structure:', Object.keys(report.enhancedFindings));
