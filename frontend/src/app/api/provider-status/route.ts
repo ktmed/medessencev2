@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     },
     
     // Expected initialization order
-    initializationOrder: [],
+    initializationOrder: [] as Array<{ name: string; status: string }>,
     
     // Models configuration
     models: {
