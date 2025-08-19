@@ -974,7 +974,7 @@ Antworte NUR mit der strukturierten Zusammenfassung auf ${body.language === 'en'
 }
 
 // Parse Ollama summary response to structured format
-function parseOllamaSummaryResponse(responseText: string, body: SummaryRequest, model: string) {
+function parseOllamaSummaryResponse(responseText: string, body: { reportId: string; reportContent: string; language: Language; complexity?: 'simple' | 'detailed' | 'technical'; processingMode?: 'cloud' | 'local' }, model: string) {
   console.log('Parsing Ollama summary response to structured format...');
   
   const keyFindings: string[] = [];
