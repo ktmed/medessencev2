@@ -383,7 +383,7 @@ export default function EnhancedFindingsNew({
             </span>
           </div>
           <div className="text-blue-600 text-xs">
-            {new Date(enhancedFindings.timestamp).toLocaleString()}
+            {enhancedFindings.timestamp ? new Date(enhancedFindings.timestamp).toLocaleString() : 'Generated now'}
           </div>
         </div>
 

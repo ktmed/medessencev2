@@ -49,7 +49,9 @@ export interface EnhancedFindings {
   localizations: string[];
   confidence: number;
   processingAgent: string;
+  provider?: string;
   timestamp: number;
+  generatedAt?: number; // Legacy field, use timestamp instead
 }
 
 export interface ICDCode {

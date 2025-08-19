@@ -331,7 +331,7 @@ Write professionally but without markdown formatting.`;
       confidence: Math.min(0.9, 0.6 + (uniqueNormal.length + uniquePathological.length) * 0.1),
       processingAgent: 'enhanced_ai_parser',
       provider: 'ai-enhanced',
-      generatedAt: Date.now()
+      timestamp: Date.now()
     };
   }
 

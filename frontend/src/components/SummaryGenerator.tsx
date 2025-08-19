@@ -42,7 +42,8 @@ export default function SummaryGenerator({
   className,
 }: SummaryGeneratorProps) {
   const [selectedLanguage, setSelectedLanguage] = useState<Language>(language);
-  const [selectedComplexity, setSelectedComplexity] = useState<'simple' | 'detailed' | 'technical'>('detailed');
+  // Always use simple complexity for friendly summaries
+  const selectedComplexity = 'simple' as const;
   const [isEditing, setIsEditing] = useState(false);
   const [editedSummary, setEditedSummary] = useState<PatientSummary | null>(null);
 
@@ -243,71 +244,20 @@ ${getMedicalTerm('reviewWithProvider', summary.language)}
         </div>
       </div>
 
-      {/* Complexity Selection */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium med-text-navy mb-3">
-          Summary Complexity
-        </label>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {[
-            {
-              value: 'simple' as const,
-              title: 'Simple',
-              description: 'Patient-friendly, easy to understand',
-              icon: '👤',
-              color: 'bg-green-50 border-green-200 hover:bg-green-100'
-            },
-            {
-              value: 'detailed' as const,
-              title: 'Detailed',
-              description: 'Comprehensive medical summary',
-              icon: '📋',
-              color: 'bg-blue-50 border-blue-200 hover:bg-blue-100'
-            },
-            {
-              value: 'technical' as const,
-              title: 'Technical',
-              description: 'Professional medical terminology',
-              icon: '🔬',
-              color: 'bg-purple-50 border-purple-200 hover:bg-purple-100'
-            }
-          ].map((complexity) => (
-            <button
-              key={complexity.value}
-              onClick={() => setSelectedComplexity(complexity.value)}
-              className={cn(
-                'p-3 text-left rounded-xl border-2 transition-all duration-200 transform hover:scale-105 min-h-[80px]',
-                selectedComplexity === complexity.value
-                  ? 'med-orange-gradient text-white border-transparent shadow-lg'
-                  : `bg-white border-gray-200 text-gray-700 hover:shadow-md ${complexity.color}`
-              )}
-            >
-              <div className="flex items-center space-x-2">
-                <div className={cn(
-                  'text-xl p-1.5 rounded-lg flex-shrink-0',
-                  selectedComplexity === complexity.value
-                    ? 'bg-white/20'
-                    : 'bg-gray-100'
-                )}>
-                  {complexity.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className={cn(
-                    'font-semibold text-sm mb-0.5 truncate',
-                    selectedComplexity === complexity.value ? 'text-white' : 'text-gray-900'
-                  )}>
-                    {complexity.title}
-                  </div>
-                  <div className={cn(
-                    'text-xs leading-tight line-clamp-2',
-                    selectedComplexity === complexity.value ? 'text-white/90' : 'text-gray-600'
-                  )}>
-                    {complexity.description}
-                  </div>
-                </div>
-              </div>
-            </button>
-          ))}
+      {/* Summary Type Info */}
+      <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-xl border border-green-200">
+        <div className="flex items-center space-x-3">
+          <div className="text-2xl p-2 rounded-lg bg-white/50">
+            👤
+          </div>
+          <div>
+            <div className="font-semibold text-gray-900 mb-1">
+              Patient-Friendly Summary
+            </div>
+            <div className="text-sm text-gray-600">
+              Easy to understand, friendly language for patient communication
+            </div>
+          </div>
         </div>
       </div>
 
@@ -386,11 +336,9 @@ ${getMedicalTerm('reviewWithProvider', summary.language)}
                     </h4>
                     <p className="text-sm text-gray-600 mt-0.5">Generated with AI assistance</p>
                   </div>
-                  {summary.complexity && (
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-sm">
-                      {summary.complexity.charAt(0).toUpperCase() + summary.complexity.slice(1)}
-                    </span>
-                  )}
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-gradient-to-r from-green-500 to-green-600 text-white shadow-sm">
+                    Patient-Friendly
+                  </span>
                 </div>
                 {summary.metadata?.aiProvider && (
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-green-500 to-green-600 text-white shadow-sm">
