@@ -10,6 +10,7 @@ import LanguageSelector, { CompactLanguageSelector } from '@/components/Language
 import { ReportErrorBoundary, SummaryErrorBoundary, EnhancedFindingsErrorBoundary } from '@/components/ErrorBoundary';
 // WebSocket removed - using Web Speech API directly
 import { apiService } from '@/services/apiService';
+import { ReportService } from '@/services/ReportService';
 import { 
   Language, 
   TranscriptionData, 
@@ -31,6 +32,27 @@ export default function Dashboard() {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [reportProcessingMode, setReportProcessingMode] = useState<'cloud' | 'local'>('cloud');
+  
+  // Initialize ReportService with state management callbacks
+  const [reportService] = useState(() => new ReportService({
+    onStateChange: (state) => {
+      setIsGeneratingReport(state.status === 'generating' || state.status === 'enhancing');
+      if (state.status === 'complete') {
+        setCurrentReport(state.report);
+      } else if (state.status === 'error') {
+        setUIState(prev => ({ ...prev, error: state.error }));
+      }
+    },
+    onSummaryStateChange: (state) => {
+      setIsGeneratingSummary(state.status === 'generating');
+      if (state.status === 'complete') {
+        setCurrentSummary(state.summary);
+      } else if (state.status === 'error') {
+        setUIState(prev => ({ ...prev, error: state.error }));
+      }
+    },
+    validateResponses: true
+  }));
   
   // Debug logging for processing mode changes
   useEffect(() => {

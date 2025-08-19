@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  GenerateEnhancedFindingsRequestSchema,
+  EnhancedFindingsSchema,
+  normalizeTimestamp
+} from '@/lib/validation';
+import {
+  withRequestValidation,
+  withResponseValidation,
+  withErrorHandling,
+  createApiResponse,
+  logApiMetrics
+} from '@/lib/api-middleware';
 import { EnhancedFindings, Language } from '@/types';
 
-interface EnhancedFindingsRequest {
-  reportId: string;
-  reportContent: string;
-  language: Language;
-}
+const validateRequest = withRequestValidation(GenerateEnhancedFindingsRequestSchema);
+const validateResponse = withResponseValidation(EnhancedFindingsSchema, 'Enhanced Findings');
 
 interface LLMProvider {
   name: string;
@@ -20,7 +29,7 @@ class ServerEnhancedFindingsService {
   }
 
   private initializeProviders() {
-    const providerPriority = (process.env.AI_PROVIDER_PRIORITY || 'claude,gemini,openai')
+    const providerPriority = (process.env.AI_PROVIDER_PRIORITY || 'gemini,openai,claude')
       .split(',')
       .map(p => p.trim());
     
@@ -267,6 +276,7 @@ Create a structured analysis of the findings:`
       localizations: localizations.length > 0 ? localizations : [],
       confidence: 0.85,
       processingAgent: `enhanced-findings-${provider}`,
+      provider,
       timestamp: Date.now()
     };
   }
@@ -286,48 +296,51 @@ Create a structured analysis of the findings:`
       localizations: [],
       confidence: 0.5,
       processingAgent: 'fallback',
+      provider: 'rule-based',
       timestamp: Date.now()
     };
   }
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const body: EnhancedFindingsRequest = await request.json();
-    
-    console.log('🌐 API Route: Generate Enhanced Findings Request');
-    console.log('- Report ID:', body.reportId);
-    console.log('- Language:', body.language);
-    console.log('- Content length:', body.reportContent?.length || 0);
-
-    if (!body.reportContent) {
-      return NextResponse.json(
-        { error: 'No report content provided' },
-        { status: 400 }
-      );
-    }
-
-    const enhancedFindingsService = new ServerEnhancedFindingsService();
-    const enhancedFindings = await enhancedFindingsService.generateEnhancedFindings(
-      body.reportContent,
-      body.language || 'de'
-    );
-
-    console.log('✅ Enhanced findings generated successfully');
-    console.log('- Normal findings count:', enhancedFindings.normalFindings.length);
-    console.log('- Pathological findings count:', enhancedFindings.pathologicalFindings.length);
-
-    return NextResponse.json(enhancedFindings);
-
-  } catch (error) {
-    console.error('❌ Enhanced Findings API Route Error:', error);
-    
-    return NextResponse.json(
-      { 
-        error: 'Failed to generate enhanced findings',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
+async function handleGenerateEnhancedFindings(request: NextRequest): Promise<NextResponse> {
+  const startTime = Date.now();
+  
+  // Validate request
+  const validation = await validateRequest(request);
+  if (validation.error) {
+    logApiMetrics('/api/generate-enhanced-findings', 'POST', Date.now() - startTime, 400, 'Validation error');
+    return validation.error;
   }
+  
+  const { reportId, reportContent, language } = validation.data;
+  
+  console.log('🌐 Validated API Route: Generate Enhanced Findings Request');
+  console.log('- Report ID:', reportId);
+  console.log('- Language:', language);
+  console.log('- Content length:', reportContent.length);
+
+  const enhancedFindingsService = new ServerEnhancedFindingsService();
+  const rawEnhancedFindings = await enhancedFindingsService.generateEnhancedFindings(
+    reportContent,
+    language
+  );
+
+  // Standardize timestamps and validate response
+  const enhancedFindings = {
+    ...rawEnhancedFindings,
+    timestamp: normalizeTimestamp(rawEnhancedFindings.timestamp)
+  };
+
+  // Validate the response before sending
+  const validatedEnhancedFindings = validateResponse(enhancedFindings);
+
+  console.log('✅ Validated enhanced findings generated successfully');
+  console.log('- Normal findings count:', enhancedFindings.normalFindings.length);
+  console.log('- Pathological findings count:', enhancedFindings.pathologicalFindings.length);
+  
+  logApiMetrics('/api/generate-enhanced-findings', 'POST', Date.now() - startTime, 200);
+  return createApiResponse(validatedEnhancedFindings);
 }
+
+// Export the handler wrapped with comprehensive error handling
+export const POST = withErrorHandling(handleGenerateEnhancedFindings);

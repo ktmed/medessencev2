@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  GenerateICDRequestSchema,
+  ICDPredictionsSchema,
+  normalizeTimestamp
+} from '@/lib/validation';
+import {
+  withRequestValidation,
+  withResponseValidation,
+  withErrorHandling,
+  createApiResponse,
+  logApiMetrics
+} from '@/lib/api-middleware';
 import { ICDPredictions, Language } from '@/types';
 
-interface ICDRequest {
-  reportId: string;
-  reportContent: string;
-  language: Language;
-  codeSystem?: 'ICD-10-GM' | 'ICD-10' | 'ICD-11';
-  processingMode?: 'cloud' | 'local';
-}
+const validateRequest = withRequestValidation(GenerateICDRequestSchema);
+const validateResponse = withResponseValidation(ICDPredictionsSchema, 'ICD Predictions');
 
 interface LLMProvider {
   name: string;
@@ -22,7 +29,7 @@ class ServerICDService {
   }
 
   private initializeProviders() {
-    const providerPriority = (process.env.AI_PROVIDER_PRIORITY || 'claude,gemini,openai')
+    const providerPriority = (process.env.AI_PROVIDER_PRIORITY || 'gemini,openai,claude')
       .split(',')
       .map(p => p.trim());
     
@@ -279,7 +286,7 @@ Analyze systematically and return only the most probable and relevant ${codeSyst
       agentType: 'icd-coding',
       language: language,
       provider: provider,
-      timestamp: new Date().toISOString(),
+      generatedAt: Date.now(),
       cached: false,
       fallback: false
     };
@@ -352,33 +359,34 @@ Analyze systematically and return only the most probable and relevant ${codeSyst
       agentType: 'rule-based-icd',
       language: language,
       provider: 'rule-based',
-      timestamp: new Date().toISOString(),
+      generatedAt: Date.now(),
       cached: false,
       fallback: true
     };
   }
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const body: ICDRequest = await request.json();
-    
-    console.log('🌐 API Route: Generate ICD Codes Request');
-    console.log('- Report ID:', body.reportId);
-    console.log('- Language:', body.language);
-    console.log('- Content length:', body.reportContent?.length || 0);
-    console.log('- Code system:', body.codeSystem || 'ICD-10-GM');
-    console.log('- Processing mode:', body.processingMode || 'cloud');
+async function handleGenerateICD(request: NextRequest): Promise<NextResponse> {
+  const startTime = Date.now();
+  
+  // Validate request
+  const validation = await validateRequest(request);
+  if (validation.error) {
+    logApiMetrics('/api/generate-icd', 'POST', Date.now() - startTime, 400, 'Validation error');
+    return validation.error;
+  }
+  
+  const { reportId, reportContent, language, codeSystem, processingMode } = validation.data;
+  
+  console.log('🌐 Validated API Route: Generate ICD Codes Request');
+  console.log('- Report ID:', reportId);
+  console.log('- Language:', language);
+  console.log('- Content length:', reportContent.length);
+  console.log('- Code system:', codeSystem);
+  console.log('- Processing mode:', processingMode);
 
-    if (!body.reportContent) {
-      return NextResponse.json(
-        { error: 'No report content provided' },
-        { status: 400 }
-      );
-    }
-
-    // For local processing mode, use backend service
-    if (body.processingMode === 'local') {
+  // For local processing mode, use backend service
+  if (processingMode === 'local') {
       console.log('🏠 Using local processing for ICD code generation');
       
       try {
@@ -390,9 +398,9 @@ export async function POST(request: NextRequest) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            reportContent: body.reportContent,
-            language: body.language || 'de',
-            codeSystem: body.codeSystem || 'ICD-10-GM',
+            reportContent,
+            language,
+            codeSystem,
             processingMode: 'local'
           })
         });
@@ -412,41 +420,43 @@ export async function POST(request: NextRequest) {
         console.error('❌ Backend ICD service failed, falling back to frontend processing:', backendError instanceof Error ? backendError.message : 'Unknown error');
         
         // Fallback to local Ollama processing
-        return await generateLocalICD(body);
+        return await generateLocalICD({ reportId, reportContent, language, codeSystem, processingMode });
       }
     }
 
-    // Cloud processing using frontend service
-    console.log('☁️ Using cloud processing for ICD code generation');
-    const icdService = new ServerICDService();
-    const icdCodes = await icdService.generateICDCodes(
-      body.reportContent,
-      body.language || 'de',
-      body.codeSystem || 'ICD-10-GM'
-    );
+  // Cloud processing using frontend service
+  console.log('☁️ Using cloud processing for ICD code generation');
+  const icdService = new ServerICDService();
+  const rawICDCodes = await icdService.generateICDCodes(
+    reportContent,
+    language,
+    codeSystem
+  );
 
-    console.log('✅ ICD codes generated successfully');
-    console.log('- Total codes:', icdCodes.codes.length);
-    console.log('- Primary diagnoses:', icdCodes.summary.primaryDiagnoses);
-    console.log('- Provider:', icdCodes.provider);
+  // Standardize timestamps and validate response
+  const icdCodes = {
+    ...rawICDCodes,
+    generatedAt: normalizeTimestamp(rawICDCodes.generatedAt)
+  };
 
-    return NextResponse.json(icdCodes);
+  // Validate the response before sending
+  const validatedICDCodes = validateResponse(icdCodes);
 
-  } catch (error) {
-    console.error('❌ ICD API Route Error:', error);
-    
-    return NextResponse.json(
-      { 
-        error: 'Failed to generate ICD codes',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
-  }
+  console.log('✅ Validated ICD codes generated successfully');
+  console.log('- Total codes:', icdCodes.codes.length);
+  console.log('- Primary diagnoses:', icdCodes.summary.primaryDiagnoses);
+  console.log('- Provider:', icdCodes.provider);
+  
+  logApiMetrics('/api/generate-icd', 'POST', Date.now() - startTime, 200);
+  return createApiResponse(validatedICDCodes);
+
 }
 
+// Export the handler wrapped with comprehensive error handling
+export const POST = withErrorHandling(handleGenerateICD);
+
 // Local ICD generation using frontend Ollama (fallback)
-async function generateLocalICD(body: ICDRequest) {
+async function generateLocalICD(body: { reportId: string; reportContent: string; language: Language; codeSystem?: 'ICD-10-GM' | 'ICD-10' | 'ICD-11'; processingMode?: 'cloud' | 'local' }) {
   console.log('🏠 Generating local ICD codes via frontend Ollama...');
   
   try {
@@ -541,7 +551,7 @@ Analysiere systematisch und gebe nur die wahrscheinlichsten ${codeSystem}-Codes 
       agentType: 'icd-coding',
       language: body.language || 'de',
       provider: 'local-failed',
-      timestamp: new Date().toISOString(),
+      generatedAt: Date.now(),
       cached: false,
       fallback: true
     });
@@ -549,7 +559,7 @@ Analysiere systematisch und gebe nur die wahrscheinlichsten ${codeSystem}-Codes 
 }
 
 // Parse Ollama ICD response to structured format
-function parseOllamaICDResponse(responseText: string, body: ICDRequest, model: string) {
+function parseOllamaICDResponse(responseText: string, body: { reportId: string; reportContent: string; language: Language; codeSystem?: 'ICD-10-GM' | 'ICD-10' | 'ICD-11'; processingMode?: 'cloud' | 'local' }, model: string) {
   console.log('Parsing Ollama ICD response to structured format...');
   
   const codes = [];
@@ -602,7 +612,7 @@ function parseOllamaICDResponse(responseText: string, body: ICDRequest, model: s
     agentType: 'icd-coding',
     language: body.language || 'de',
     provider: 'ollama-local',
-    timestamp: new Date().toISOString(),
+    generatedAt: Date.now(),
     cached: false,
     fallback: false,
     metadata: {
