@@ -769,9 +769,9 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
         recommendations: this.createEnglishRecommendations(summaryData)
       },
       ar: {
-        summary: `ملخص تلقائي للتقرير:\n\n${reportContent.substring(0, 500)}...`,
-        findings: 'انظر التقرير الأصلي',
-        recommendations: 'يُنصح بالتشاور مع الطبيب المعالج'
+        summary: this.createIntelligentSummary(reportContent, 'ar'),
+        findings: this.createArabicFindings(summaryData),
+        recommendations: this.createArabicRecommendations(summaryData)
       },
       uk: {
         summary: `Автоматичне резюме звіту:\n\n${reportContent.substring(0, 500)}...`,
@@ -819,7 +819,7 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
     };
   }
 
-  private createIntelligentSummary(reportContent: string, language: 'de' | 'en'): string {
+  private createIntelligentSummary(reportContent: string, language: 'de' | 'en' | 'ar'): string {
     console.log('🧠 Creating intelligent fallback summary for language:', language);
     
     // Parse the report content to extract key sections
@@ -838,6 +838,10 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
       return `${this.createGermanSummary(summaryData)} ${summaryData.hasNormalFindings ? 'Die meisten Untersuchungsergebnisse liegen im normalen Bereich.' : 
         summaryData.hasAbnormalFindings ? 'Es wurden einige Auffälligkeiten festgestellt, die weitere Aufmerksamkeit erfordern.' :
         'Die Ergebnisse wurden fachärztlich beurteilt.'} Diese vereinfachte Zusammenfassung soll Ihnen helfen, Ihre medizinischen Ergebnisse besser zu verstehen.`;
+    } else if (language === 'ar') {
+      return `${this.createArabicSummary(summaryData)} ${summaryData.hasNormalFindings ? 'معظم نتائج الفحص تقع ضمن المعدل الطبيعي.' : 
+        summaryData.hasAbnormalFindings ? 'تم العثور على بعض النتائج التي تتطلب المتابعة.' :
+        'تم تقييم النتائج من قبل الأطباء المختصين.'} هذا الملخص المبسط مصمم لمساعدتك في فهم نتائجك الطبية بشكل أفضل.`;
     } else {
       return `${this.createEnglishSummary(summaryData)} ${summaryData.hasNormalFindings ? 'Most examination results are within normal ranges.' : 
         summaryData.hasAbnormalFindings ? 'Some findings require further attention and follow-up.' :
@@ -966,6 +970,43 @@ Tıbbi terminoloji ve kesin formülasyonlar kullanın:`
       return ['Further investigation or monitoring recommended'];
     }
     return ['Regular follow-up examinations recommended'];
+  }
+
+  private createArabicSummary(data: any): string {
+    if (data.contentType === 'radiology') {
+      return data.hasNormalFindings ? 
+        'فحص التصوير يُظهر نتائج طبيعية بدون تشوهات كبيرة.' :
+        data.hasAbnormalFindings ?
+        'كشفت دراسة التصوير عن بعض التغييرات التي تتطلب مزيداً من التقييم.' :
+        'تم إكمال وتقييم الفحص الشعاعي.';
+    }
+    
+    return data.hasNormalFindings ? 
+      'الفحص يُظهر نتائج طبيعية.' :
+      data.hasAbnormalFindings ?
+      'تم تحديد بعض النتائج غير الطبيعية أثناء الفحص.' :
+      'تم إكمال الفحص الطبي.';
+  }
+
+  private createArabicFindings(data: any): string[] {
+    if (data.hasNormalFindings && data.hasAbnormalFindings) {
+      return ['تم تحديد نتائج طبيعية وغير طبيعية'];
+    } else if (data.hasNormalFindings) {
+      return ['الفحص يُظهر نتائج طبيعية'];
+    } else if (data.hasAbnormalFindings) {
+      return ['تم تحديد بعض النتائج غير الطبيعية'];
+    }
+    return ['تم إكمال الفحص الطبي'];
+  }
+
+  private createArabicRecommendations(data: any): string[] {
+    if (data.hasRecommendations) {
+      return ['تمت مناقشة الخطوات التالية مع طبيبك'];
+    }
+    if (data.hasAbnormalFindings) {
+      return ['يُنصح بإجراء مزيد من الفحص أو المراقبة'];
+    }
+    return ['يُنصح بإجراء فحوصات متابعة منتظمة'];
   }
 
   private extractKeySentences(text: string, language: 'de' | 'en'): string[] {
