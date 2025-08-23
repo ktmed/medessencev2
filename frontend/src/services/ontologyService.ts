@@ -37,7 +37,7 @@ interface OntologyValidationRequest {
 }
 
 class OntologyService {
-  private baseUrl: string = 'http://localhost:8001';
+  private baseUrl: string = process.env.NEXT_PUBLIC_ONTOLOGY_URL || 'http://localhost:8001';
   private cache: Map<string, { data: OntologyValidationResponse; timestamp: number }> = new Map();
   private cacheTimeout: number = 30000; // 30 seconds cache for real-time
   private requestQueue: Map<string, Promise<OntologyValidationResponse>> = new Map();

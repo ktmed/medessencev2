@@ -4,6 +4,7 @@
   "env": {
     "NEXT_PUBLIC_BACKEND_URL": "https://medessence-backend-0441523a6c55.herokuapp.com",
     "NEXT_PUBLIC_WEBSOCKET_URL": "wss://medessence-backend-0441523a6c55.herokuapp.com",
+    "NEXT_PUBLIC_ONTOLOGY_URL": "https://medessence-backend-0441523a6c55.herokuapp.com",
     "AI_PROVIDER_PRIORITY": "claude,openai,gemini"
   }
 }
