@@ -208,28 +208,27 @@ export default function EnhancedFindingsNew({
         console.log('🔍 Normal finding core terms:', normalKeywords);
         
         for (const keyword of normalKeywords) {
-          const keywordIndex = lowerText.indexOf(keyword);
+          const keywordIndex = lowerText.indexOf(keyword.toLowerCase());
           if (keywordIndex !== -1) {
-            // Find word boundaries instead of sentence boundaries
-            // Look for the start of the current phrase/clause
-            let phraseStart = keywordIndex;
-            while (phraseStart > 0 && text[phraseStart - 1] !== '.' && text[phraseStart - 1] !== ',' && phraseStart > keywordIndex - 50) {
-              phraseStart--;
-            }
-            // Skip any whitespace or punctuation at the start
-            while (phraseStart < keywordIndex && /[\s,.]/.test(text[phraseStart])) {
-              phraseStart++;
+            // Just highlight the keyword with minimal context
+            // Go back to the start of the current word
+            let wordStart = keywordIndex;
+            while (wordStart > 0 && /[a-zäöüß0-9]/i.test(text[wordStart - 1])) {
+              wordStart--;
             }
             
-            // Find the end of the current phrase/clause
-            let phraseEnd = keywordIndex + keyword.length;
-            while (phraseEnd < text.length && text[phraseEnd] !== '.' && text[phraseEnd] !== ',' && phraseEnd < keywordIndex + keyword.length + 50) {
-              phraseEnd++;
+            // Find the end of the phrase containing the keyword (stop at punctuation)
+            let wordEnd = keywordIndex + keyword.length;
+            while (wordEnd < text.length && /[a-zäöüß0-9\s-]/i.test(text[wordEnd]) && wordEnd < keywordIndex + keyword.length + 20) {
+              if (text[wordEnd] === '.' || text[wordEnd] === ',' || text[wordEnd] === ';' || text[wordEnd] === ':') {
+                break;
+              }
+              wordEnd++;
             }
             
             highlightResults.push({
-              start: phraseStart,
-              end: phraseEnd,
+              start: wordStart,
+              end: wordEnd,
               matchType: `normal-context-${keyword}`
             });
             break;
@@ -244,28 +243,21 @@ export default function EnhancedFindingsNew({
           for (const measurement of measurementNumbers) {
             const measureIndex = lowerText.indexOf(measurement.toLowerCase());
             if (measureIndex !== -1) {
-              // Find the start of the measurement description (usually starts after a comma or period)
+              // Just highlight the measurement value with minimal context
               let descStart = measureIndex;
-              let backtrack = Math.min(30, measureIndex);
-              for (let i = measureIndex - 1; i >= measureIndex - backtrack; i--) {
-                if (text[i] === '.' || text[i] === ',' || text[i] === ':') {
-                  descStart = i + 1;
-                  break;
-                }
-              }
-              // Skip whitespace
-              while (descStart < measureIndex && /\s/.test(text[descStart])) {
-                descStart++;
+              // Go back just to the start of the current word/number
+              while (descStart > 0 && descStart > measureIndex - 5 && /[a-zäöüß0-9]/i.test(text[descStart - 1])) {
+                descStart--;
               }
               
-              // Find the end of the measurement description
+              // Find the end of just this measurement phrase
               let descEnd = measureIndex + measurement.length;
-              let forwardtrack = Math.min(30, text.length - descEnd);
-              for (let i = descEnd; i < descEnd + forwardtrack; i++) {
-                if (text[i] === '.' || text[i] === ',' || text[i] === ';') {
-                  descEnd = i;
+              // Add just a few more characters if they're part of the measurement
+              while (descEnd < text.length && descEnd < measureIndex + measurement.length + 10) {
+                if (/[.,;:!?]/.test(text[descEnd])) {
                   break;
                 }
+                descEnd++;
               }
               
               highlightResults.push({
@@ -284,8 +276,8 @@ export default function EnhancedFindingsNew({
           const match = text.match(measurementPattern);
           
           if (match && match.index !== undefined) {
-            const contextStart = Math.max(0, match.index - 15);
-            const contextEnd = Math.min(text.length, match.index + match[0].length + 15);
+            const contextStart = Math.max(0, match.index - 5);
+            const contextEnd = Math.min(text.length, match.index + match[0].length + 5);
             
             highlightResults.push({
               start: contextStart,
@@ -315,26 +307,20 @@ export default function EnhancedFindingsNew({
           for (const term of anatomicalTerms) {
             const termIndex = lowerText.indexOf(term.toLowerCase());
             if (termIndex !== -1) {
-              // Find phrase boundaries for more precise highlighting
+              // Minimal highlighting - just the term and immediate context
               let contextStart = termIndex;
-              let backtrack = Math.min(20, termIndex);
-              for (let i = termIndex - 1; i >= termIndex - backtrack; i--) {
-                if (text[i] === ',' || text[i] === '.' || text[i] === ';' || text[i] === ':') {
-                  contextStart = i + 1;
-                  break;
-                }
-              }
-              while (contextStart < termIndex && /\s/.test(text[contextStart])) {
-                contextStart++;
+              // Go back to word boundary only
+              while (contextStart > 0 && contextStart > termIndex - 3 && /[a-zäöüß0-9]/i.test(text[contextStart - 1])) {
+                contextStart--;
               }
               
               let contextEnd = termIndex + term.length;
-              let forwardtrack = Math.min(20, text.length - contextEnd);
-              for (let i = contextEnd; i < contextEnd + forwardtrack; i++) {
-                if (text[i] === ',' || text[i] === '.' || text[i] === ';') {
-                  contextEnd = i;
+              // Add minimal forward context
+              while (contextEnd < text.length && contextEnd < termIndex + term.length + 10) {
+                if (/[.,;:!?]/.test(text[contextEnd])) {
                   break;
                 }
+                contextEnd++;
               }
               
               highlightResults.push({
@@ -363,26 +349,24 @@ export default function EnhancedFindingsNew({
       for (const word of meaningfulWords) {
         const wordIndex = lowerText.indexOf(word);
         if (wordIndex !== -1) {
-          // Find phrase boundaries for more accurate highlighting
+          // Minimal context - just highlight the word and immediate phrase
           let contextStart = wordIndex;
-          let backtrack = Math.min(15, wordIndex);
-          for (let i = wordIndex - 1; i >= wordIndex - backtrack; i--) {
-            if (text[i] === ',' || text[i] === '.' || text[i] === ';' || text[i] === ':') {
-              contextStart = i + 1;
-              break;
-            }
-          }
-          while (contextStart < wordIndex && /\s/.test(text[contextStart])) {
-            contextStart++;
+          // Just go back to the start of this word
+          while (contextStart > 0 && contextStart > wordIndex - 2 && /[a-zäöüß0-9]/i.test(text[contextStart - 1])) {
+            contextStart--;
           }
           
           let contextEnd = wordIndex + word.length;
-          let forwardtrack = Math.min(25, text.length - contextEnd);
-          for (let i = contextEnd; i < contextEnd + forwardtrack; i++) {
-            if (text[i] === ',' || text[i] === '.' || text[i] === ';') {
-              contextEnd = i;
+          // Add only minimal forward context (one or two words)
+          let spaceCount = 0;
+          while (contextEnd < text.length && spaceCount < 2) {
+            if (/[.,;:!?]/.test(text[contextEnd])) {
               break;
             }
+            if (/\s/.test(text[contextEnd])) {
+              spaceCount++;
+            }
+            contextEnd++;
           }
           
           highlightResults.push({
@@ -402,25 +386,16 @@ export default function EnhancedFindingsNew({
       for (const term of medicalTerms.slice(0, 2)) { // Only try first 2 longest terms
         const termIndex = lowerText.indexOf(term.toLowerCase());
         if (termIndex !== -1) {
-          // Find word/phrase boundaries for precise highlighting
+          // Very minimal highlighting - just the term itself
           let contextStart = termIndex;
-          // Go back to find start of phrase but not more than 10 chars
-          let backtrack = Math.min(10, termIndex);
-          for (let i = termIndex - 1; i >= termIndex - backtrack; i--) {
-            if (/[\s,.:;]/.test(text[i])) {
-              contextStart = i + 1;
-              break;
-            }
-          }
-          
           let contextEnd = termIndex + term.length;
-          // Go forward to find end of phrase but not more than 10 chars
-          let forwardtrack = Math.min(10, text.length - contextEnd);
-          for (let i = contextEnd; i < contextEnd + forwardtrack; i++) {
-            if (/[\s,.:;]/.test(text[i])) {
-              contextEnd = i;
-              break;
-            }
+          
+          // Only extend to complete the current word if needed
+          while (contextStart > 0 && contextStart > termIndex - 2 && /[a-zäöüß0-9]/i.test(text[contextStart - 1])) {
+            contextStart--;
+          }
+          while (contextEnd < text.length && contextEnd < termIndex + term.length + 2 && /[a-zäöüß0-9]/i.test(text[contextEnd])) {
+            contextEnd++;
           }
           
           highlightResults.push({
