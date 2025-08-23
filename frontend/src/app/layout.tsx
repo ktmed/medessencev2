@@ -30,7 +30,7 @@ export default function RootLayout({
               <div className="flex justify-between items-center h-20">
                 <div className="flex items-center space-x-4">
                   <img 
-                    src="/med-essence-logo.svg" 
+                    src="/mdlogo.svg" 
                     alt="MedEssenceAI" 
                     className="h-12 w-auto"
                   />

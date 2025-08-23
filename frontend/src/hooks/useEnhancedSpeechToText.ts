@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { ontologyService, OntologyValidationResponse } from '@/services/ontologyService';
 
 interface MedicalValidation {
   corrections: Array<{
     original: string;
     corrected: string;
     type: string;
+    confidence?: number;
   }>;
   warnings: Array<{
     type: string;
@@ -13,6 +15,13 @@ interface MedicalValidation {
   }>;
   qualityScore: number;
   isValid: boolean;
+  ontologyEnhanced?: boolean;
+  medicalTermsDetected?: Array<{
+    term: string;
+    category: string;
+    confidence: number;
+  }>;
+  semanticQuality?: number;
 }
 
 interface TranscriptData {
@@ -54,6 +63,8 @@ export const useEnhancedSpeechToText = ({
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('disconnected');
   const [retryCount, setRetryCount] = useState(0);
   const [diagnostics, setDiagnostics] = useState<string[]>([]);
+  const [ontologyAvailable, setOntologyAvailable] = useState<boolean>(false);
+  const [ontologyEnhanced, setOntologyEnhanced] = useState<boolean>(false);
 
   const recognitionRef = useRef<any>(null);
   const finalTranscriptRef = useRef('');
@@ -62,11 +73,83 @@ export const useEnhancedSpeechToText = ({
   const lastActivityRef = useRef<number>(Date.now());
   const sessionStartRef = useRef<number>(Date.now());
   const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const ontologyDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const maxRetries = 5; // Increased from 3
   const retryDelayMs = 1000;
   const healthCheckInterval = 5000; // Check connection health every 5 seconds
   const maxSessionDuration = 60000; // 60 seconds max per session (WebSpeech limitation)
   const restartInterval = 55000; // Restart every 55 seconds to prevent timeout
+
+  // Voice punctuation commands for German and English
+  const punctuationCommands = useRef(new Map([
+    // German punctuation commands
+    ['komma', ','],
+    ['punkt', '.'],
+    ['fragezeichen', '?'],
+    ['ausrufungszeichen', '!'],
+    ['ausrufezeichen', '!'],
+    ['doppelpunkt', ':'],
+    ['semikolon', ';'],
+    ['strichpunkt', ';'],
+    ['gedankenstrich', ' – '],
+    ['bindestrich', '-'],
+    ['anführungszeichen', '"'],
+    ['anführungszeichen auf', '"'],
+    ['anführungszeichen zu', '"'],
+    ['klammer auf', '('],
+    ['klammer zu', ')'],
+    ['eckige klammer auf', '['],
+    ['eckige klammer zu', ']'],
+    ['geschweifte klammer auf', '{'],
+    ['geschweifte klammer zu', '}'],
+    
+    // English punctuation commands
+    ['comma', ','],
+    ['period', '.'],
+    ['full stop', '.'],
+    ['question mark', '?'],
+    ['exclamation mark', '!'],
+    ['exclamation point', '!'],
+    ['colon', ':'],
+    ['semicolon', ';'],
+    ['dash', ' – '],
+    ['hyphen', '-'],
+    ['quote', '"'],
+    ['quotation mark', '"'],
+    ['open quote', '"'],
+    ['close quote', '"'],
+    ['open parenthesis', '('],
+    ['close parenthesis', ')'],
+    ['left parenthesis', '('],
+    ['right parenthesis', ')'],
+    ['open bracket', '['],
+    ['close bracket', ']'],
+    ['left bracket', '['],
+    ['right bracket', ']'],
+    ['open brace', '{'],
+    ['close brace', '}'],
+    ['left brace', '{'],
+    ['right brace', '}'],
+  ]));
+
+  // Paragraph and formatting commands
+  const formatCommands = useRef(new Map([
+    // German formatting commands
+    ['neue zeile', '\n'],
+    ['zeilenumbruch', '\n'],
+    ['neuer absatz', '\n\n'],
+    ['absatz', '\n\n'],
+    ['neue linie', '\n'],
+    ['leerzeile', '\n\n'],
+    
+    // English formatting commands
+    ['new line', '\n'],
+    ['line break', '\n'],
+    ['new paragraph', '\n\n'],
+    ['paragraph', '\n\n'],
+    ['paragraph break', '\n\n'],
+    ['blank line', '\n\n'],
+  ]));
 
   // Medical dictionary for real-time corrections - Enhanced with cardiology terms
   const medicalCorrections = useRef(new Map([
@@ -252,8 +335,31 @@ export const useEnhancedSpeechToText = ({
       if (recognitionRef.current && isListening) {
         recognitionRef.current.stop();
       }
+      if (ontologyDebounceRef.current) {
+        clearTimeout(ontologyDebounceRef.current);
+      }
     };
   }, [isListening]);
+
+  // Check ontology service availability on mount
+  useEffect(() => {
+    const checkOntologyService = async () => {
+      try {
+        const available = await ontologyService.isAvailable();
+        setOntologyAvailable(available);
+        if (available) {
+          addDiagnostic('🧬 Ontology service available for real-time enhancement');
+        } else {
+          addDiagnostic('⚠️ Ontology service unavailable - using local corrections only');
+        }
+      } catch (error) {
+        setOntologyAvailable(false);
+        addDiagnostic('❌ Failed to check ontology service availability');
+      }
+    };
+
+    checkOntologyService();
+  }, [addDiagnostic]);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -318,18 +424,82 @@ export const useEnhancedSpeechToText = ({
     }, retryDelayMs * attempt); // Exponential backoff
   }, [retryCount, maxRetries, isListening, addDiagnostic]);
 
-  const applyMedicalCorrections = useCallback((text: string): { 
+  // Process voice punctuation and formatting commands
+  const processPunctuationCommands = useCallback((text: string): string => {
+    let processedText = text;
+    
+    // First, process punctuation commands
+    for (const [command, punctuation] of Array.from(punctuationCommands.current.entries())) {
+      // Create regex to match the command as a separate word
+      const regex = new RegExp(`\\b${command}\\b`, 'gi');
+      if (regex.test(processedText)) {
+        // Replace command with punctuation and handle spacing
+        processedText = processedText.replace(regex, (match, offset) => {
+          const beforeChar = offset > 0 ? processedText[offset - 1] : '';
+          const afterChar = offset + match.length < processedText.length ? processedText[offset + match.length] : '';
+          
+          // Handle spacing around punctuation
+          if (punctuation === ',' || punctuation === '.' || punctuation === '?' || punctuation === '!' || punctuation === ':' || punctuation === ';') {
+            // Remove space before punctuation, ensure space after (unless at end)
+            return punctuation + (afterChar && afterChar !== ' ' ? ' ' : '');
+          } else if (punctuation === '(' || punctuation === '[' || punctuation === '{') {
+            // Opening brackets: space before, no space after
+            return (beforeChar && beforeChar !== ' ' ? ' ' : '') + punctuation;
+          } else if (punctuation === ')' || punctuation === ']' || punctuation === '}') {
+            // Closing brackets: no space before, space after
+            return punctuation + (afterChar && afterChar !== ' ' ? ' ' : '');
+          } else {
+            // Other punctuation like quotes, dashes
+            return punctuation;
+          }
+        });
+      }
+    }
+    
+    // Then, process formatting commands
+    for (const [command, format] of Array.from(formatCommands.current.entries())) {
+      const regex = new RegExp(`\\b${command}\\b`, 'gi');
+      if (regex.test(processedText)) {
+        processedText = processedText.replace(regex, format);
+      }
+    }
+    
+    // Clean up extra spaces that might have been created
+    processedText = processedText.replace(/\s+/g, ' ').trim();
+    
+    // Handle capitalization after sentence-ending punctuation
+    processedText = processedText.replace(/([.!?])\s+(\w)/g, (match, punctuation, letter) => {
+      return punctuation + ' ' + letter.toUpperCase();
+    });
+    
+    // Capitalize first letter of text
+    if (processedText.length > 0) {
+      processedText = processedText.charAt(0).toUpperCase() + processedText.slice(1);
+    }
+    
+    return processedText;
+  }, []);
+
+  // Enhanced medical corrections with ontology integration
+  const applyMedicalCorrections = useCallback(async (text: string, isRealTime: boolean = false): Promise<{ 
     correctedText: string; 
-    corrections: Array<{ original: string; corrected: string; type: string }> 
-  } => {
+    corrections: Array<{ original: string; corrected: string; type: string; confidence?: number }>;
+    ontologyEnhanced: boolean;
+    medicalTermsDetected?: Array<{ term: string; category: string; confidence: number }>;
+    semanticQuality?: number;
+  }> => {
     if (!validationEnabled) {
-      return { correctedText: text, corrections: [] };
+      return { correctedText: text, corrections: [], ontologyEnhanced: false };
     }
 
     let correctedText = text;
-    const corrections: Array<{ original: string; corrected: string; type: string }> = [];
+    const corrections: Array<{ original: string; corrected: string; type: string; confidence?: number }> = [];
+    let ontologyData: OntologyValidationResponse | null = null;
 
-    // Apply phonetic corrections
+    // First process punctuation commands
+    correctedText = processPunctuationCommands(correctedText);
+
+    // Apply local phonetic corrections first (fast, synchronous)
     for (const [incorrect, correct] of Array.from(medicalCorrections.current.entries())) {
       const regex = new RegExp(`\\b${incorrect}\\b`, 'gi');
       if (regex.test(correctedText)) {
@@ -337,13 +507,96 @@ export const useEnhancedSpeechToText = ({
         corrections.push({
           original: incorrect,
           corrected: correct,
-          type: 'phonetic_correction'
+          type: 'phonetic_correction',
+          confidence: 0.9
         });
       }
     }
 
-    return { correctedText, corrections };
-  }, [validationEnabled]);
+    // Try ontology service enhancement if available and text is substantial enough
+    if (ontologyAvailable && correctedText.trim().length > 10) {
+      try {
+        // For real-time, use debounced ontology validation
+        if (isRealTime) {
+          // Clear existing debounce timer
+          if (ontologyDebounceRef.current) {
+            clearTimeout(ontologyDebounceRef.current);
+          }
+
+          // Only call ontology service for longer texts or final transcripts
+          if (correctedText.length > 20 || !isRealTime) {
+            ontologyData = await ontologyService.validateText({
+              text: correctedText,
+              language: lang.startsWith('de') ? 'de' : 'en',
+              real_time: isRealTime,
+              context: isRealTime ? 'transcription' : 'final'
+            });
+          }
+        } else {
+          // For final transcripts, always use ontology service
+          ontologyData = await ontologyService.validateText({
+            text: correctedText,
+            language: lang.startsWith('de') ? 'de' : 'en',
+            real_time: false,
+            context: 'final'
+          });
+        }
+
+        // Process ontology response if successful
+        if (ontologyData?.success && ontologyData.data) {
+          const { enhanced_text, corrections: ontologyCorrections, medical_terms_detected } = ontologyData.data;
+          
+          // Use enhanced text if it's significantly different
+          if (enhanced_text && enhanced_text !== correctedText && enhanced_text.length > correctedText.length * 0.8) {
+            const originalText = correctedText;
+            correctedText = enhanced_text;
+            
+            // Add ontology corrections
+            if (ontologyCorrections && ontologyCorrections.length > 0) {
+              corrections.push(...ontologyCorrections.map(corr => ({
+                original: corr.original,
+                corrected: corr.corrected,
+                type: `ontology_${corr.type}`,
+                confidence: corr.confidence
+              })));
+            } else if (enhanced_text !== originalText) {
+              // Add general semantic correction if specific corrections not provided
+              corrections.push({
+                original: originalText,
+                corrected: enhanced_text,
+                type: 'ontology_semantic',
+                confidence: ontologyData.data.quality_score || 0.85
+              });
+            }
+
+            setOntologyEnhanced(true);
+            
+            return {
+              correctedText,
+              corrections,
+              ontologyEnhanced: true,
+              medicalTermsDetected: medical_terms_detected,
+              semanticQuality: ontologyData.data.quality_score
+            };
+          }
+        }
+      } catch (error) {
+        // Ontology service failed - fall back to local corrections silently
+        if (isRealTime) {
+          console.warn('Real-time ontology validation failed:', error);
+        } else {
+          addDiagnostic('⚠️ Ontology service temporarily unavailable');
+        }
+      }
+    }
+
+    return { 
+      correctedText, 
+      corrections, 
+      ontologyEnhanced: false,
+      semanticQuality: undefined
+    };
+  }, [validationEnabled, processPunctuationCommands, ontologyAvailable, lang, addDiagnostic]);
 
   const detectHallucinations = useCallback((text: string): Array<{
     type: string;
@@ -411,26 +664,49 @@ export const useEnhancedSpeechToText = ({
     return warnings;
   }, []);
 
-  const validateTranscription = useCallback((text: string, confidence: number): MedicalValidation => {
+  const validateTranscription = useCallback(async (text: string, confidence: number, isRealTime: boolean = false): Promise<MedicalValidation> => {
     if (!validationEnabled) {
       return {
         corrections: [],
         warnings: [],
         qualityScore: confidence,
-        isValid: true
+        isValid: true,
+        ontologyEnhanced: false
       };
     }
 
-    // Apply medical corrections
-    const { correctedText, corrections } = applyMedicalCorrections(text);
+    // Apply enhanced medical corrections with ontology integration
+    const { 
+      correctedText, 
+      corrections, 
+      ontologyEnhanced, 
+      medicalTermsDetected, 
+      semanticQuality 
+    } = await applyMedicalCorrections(text, isRealTime);
 
-    // Detect potential hallucinations
+    // Detect potential hallucinations in the corrected text
     const warnings = detectHallucinations(correctedText);
 
-    // Calculate quality score
+    // Calculate quality score - factor in semantic quality from ontology
     let qualityScore = confidence;
+    
+    // Boost quality score if ontology enhanced and semantic quality is good
+    if (ontologyEnhanced && semanticQuality) {
+      qualityScore = Math.max(qualityScore, semanticQuality * 0.9); // Use 90% of semantic quality as baseline
+    }
+    
     if (warnings.length > 0) {
       qualityScore *= 0.7; // Reduce score for potential hallucinations
+    }
+
+    // Add ontology-specific warnings
+    if (ontologyAvailable && !ontologyEnhanced && text.length > 20 && isRealTime) {
+      warnings.push({
+        type: 'ontology_unavailable',
+        message: 'Ontology service enhancement temporarily unavailable',
+        severity: 'low',
+        matches: []
+      });
     }
 
     // Check confidence thresholds
@@ -443,15 +719,28 @@ export const useEnhancedSpeechToText = ({
       });
     }
 
+    // Add medical terms quality indicator
+    if (medicalTermsDetected && medicalTermsDetected.length > 0) {
+      const medicalTermsCount = medicalTermsDetected.length;
+      const avgMedicalConfidence = medicalTermsDetected.reduce((sum, term) => sum + term.confidence, 0) / medicalTermsCount;
+      
+      if (avgMedicalConfidence > 0.8) {
+        qualityScore = Math.min(qualityScore + 0.1, 1.0); // Boost for good medical term recognition
+      }
+    }
+
     const isValid = qualityScore >= 0.5 && confidence >= confidenceThreshold;
 
     return {
       corrections,
       warnings,
       qualityScore,
-      isValid
+      isValid,
+      ontologyEnhanced,
+      medicalTermsDetected,
+      semanticQuality
     };
-  }, [validationEnabled, confidenceThreshold, applyMedicalCorrections, detectHallucinations]);
+  }, [validationEnabled, confidenceThreshold, applyMedicalCorrections, detectHallucinations, ontologyAvailable]);
 
   const startListening = useCallback(() => {
     if (!recognitionRef.current || isListening) return;
@@ -492,56 +781,129 @@ export const useEnhancedSpeechToText = ({
 
       // Update interim transcript (this shows what's currently being spoken)
       if (interimTranscriptText) {
-        const { correctedText } = applyMedicalCorrections(interimTranscriptText);
-        setInterimTranscript(correctedText);
-        
-        // Create full text including previous final + current interim
-        const fullCurrentText = finalTranscriptRef.current + (finalTranscriptRef.current ? ' ' : '') + correctedText;
-        const validation = validateTranscription(fullCurrentText.trim(), highestConfidence);
-        
-        const transcriptData: TranscriptData = {
-          text: fullCurrentText.trim(),
-          isFinal: false,
-          confidence: highestConfidence,
-          validation: validation
-        };
+        // For interim results, use fast local corrections without ontology (to avoid delay)
+        applyMedicalCorrections(interimTranscriptText, true).then(({ correctedText }) => {
+          setInterimTranscript(correctedText);
+          
+          // Create full text including previous final + current interim
+          const fullCurrentText = finalTranscriptRef.current + (finalTranscriptRef.current ? ' ' : '') + correctedText;
+          
+          // Use async validation for real-time enhancement
+          validateTranscription(fullCurrentText.trim(), highestConfidence, true).then(validation => {
+            const transcriptData: TranscriptData = {
+              text: fullCurrentText.trim(),
+              isFinal: false,
+              confidence: highestConfidence,
+              validation: validation
+            };
 
-        setConfidence(highestConfidence);
-        setTranscript(transcriptData);
-        
-        if (onTranscriptChange) {
-          onTranscriptChange(transcriptData);
-        }
+            setConfidence(highestConfidence);
+            setTranscript(transcriptData);
+            
+            if (onTranscriptChange) {
+              onTranscriptChange(transcriptData);
+            }
+          }).catch(error => {
+            console.warn('Real-time validation failed:', error);
+            // Fall back to basic transcript without validation
+            const transcriptData: TranscriptData = {
+              text: fullCurrentText.trim(),
+              isFinal: false,
+              confidence: highestConfidence
+            };
+
+            setConfidence(highestConfidence);
+            setTranscript(transcriptData);
+            
+            if (onTranscriptChange) {
+              onTranscriptChange(transcriptData);
+            }
+          });
+        }).catch(error => {
+          console.warn('Medical corrections failed:', error);
+          // Use original text if corrections fail
+          setInterimTranscript(interimTranscriptText);
+          const fullCurrentText = finalTranscriptRef.current + (finalTranscriptRef.current ? ' ' : '') + interimTranscriptText;
+          
+          const transcriptData: TranscriptData = {
+            text: fullCurrentText.trim(),
+            isFinal: false,
+            confidence: highestConfidence
+          };
+
+          setConfidence(highestConfidence);
+          setTranscript(transcriptData);
+          
+          if (onTranscriptChange) {
+            onTranscriptChange(transcriptData);
+          }
+        });
       }
 
       // Update final transcript (accumulate all final results)
       if (newFinalText) {
-        const { correctedText } = applyMedicalCorrections(newFinalText);
-        
-        // Add the new final text to the existing final transcript
-        const updatedFinalTranscript = finalTranscriptRef.current + (finalTranscriptRef.current ? ' ' : '') + correctedText;
-        finalTranscriptRef.current = updatedFinalTranscript;
-        setFinalTranscript(updatedFinalTranscript);
-        
-        // Clear interim since it became final
-        setInterimTranscript('');
-        
-        // Send the complete accumulated text
-        const validation = validateTranscription(updatedFinalTranscript, highestConfidence);
-        
-        const transcriptData: TranscriptData = {
-          text: updatedFinalTranscript,
-          isFinal: true,
-          confidence: highestConfidence,
-          validation: validation
-        };
+        // For final results, use full ontology enhancement
+        applyMedicalCorrections(newFinalText, false).then(({ correctedText }) => {
+          // Add the new final text to the existing final transcript
+          const updatedFinalTranscript = finalTranscriptRef.current + (finalTranscriptRef.current ? ' ' : '') + correctedText;
+          finalTranscriptRef.current = updatedFinalTranscript;
+          setFinalTranscript(updatedFinalTranscript);
+          
+          // Clear interim since it became final
+          setInterimTranscript('');
+          
+          // Send the complete accumulated text with full validation
+          validateTranscription(updatedFinalTranscript, highestConfidence, false).then(validation => {
+            const transcriptData: TranscriptData = {
+              text: updatedFinalTranscript,
+              isFinal: true,
+              confidence: highestConfidence,
+              validation: validation
+            };
 
-        setConfidence(highestConfidence);
-        setTranscript(transcriptData);
-        
-        if (onTranscriptChange) {
-          onTranscriptChange(transcriptData);
-        }
+            setConfidence(highestConfidence);
+            setTranscript(transcriptData);
+            
+            if (onTranscriptChange) {
+              onTranscriptChange(transcriptData);
+            }
+          }).catch(error => {
+            console.warn('Final validation failed:', error);
+            // Fall back to basic transcript
+            const transcriptData: TranscriptData = {
+              text: updatedFinalTranscript,
+              isFinal: true,
+              confidence: highestConfidence
+            };
+
+            setConfidence(highestConfidence);
+            setTranscript(transcriptData);
+            
+            if (onTranscriptChange) {
+              onTranscriptChange(transcriptData);
+            }
+          });
+        }).catch(error => {
+          console.warn('Final corrections failed:', error);
+          // Use original text
+          const updatedFinalTranscript = finalTranscriptRef.current + (finalTranscriptRef.current ? ' ' : '') + newFinalText;
+          finalTranscriptRef.current = updatedFinalTranscript;
+          setFinalTranscript(updatedFinalTranscript);
+          setInterimTranscript('');
+          
+          const transcriptData: TranscriptData = {
+            text: updatedFinalTranscript,
+            isFinal: true,
+            confidence: highestConfidence
+          };
+
+          setConfidence(highestConfidence);
+          setTranscript(transcriptData);
+          
+          if (onTranscriptChange) {
+            onTranscriptChange(transcriptData);
+          }
+        });
       }
     };
 
@@ -602,19 +964,34 @@ export const useEnhancedSpeechToText = ({
       // When recording ends, make sure we send the final complete transcript
       if (finalTranscriptRef.current.trim() || interimTranscript.trim()) {
         const completeText = (finalTranscriptRef.current + ' ' + interimTranscript).trim();
-        const validation = validateTranscription(completeText, confidence);
         
-        const finalTranscriptData: TranscriptData = {
-          text: completeText,
-          isFinal: true,
-          confidence: confidence,
-          validation: validation
-        };
-        
-        setTranscript(finalTranscriptData);
-        if (onTranscriptChange) {
-          onTranscriptChange(finalTranscriptData);
-        }
+        // Apply full enhancement for the final complete text
+        validateTranscription(completeText, confidence, false).then(validation => {
+          const finalTranscriptData: TranscriptData = {
+            text: completeText,
+            isFinal: true,
+            confidence: confidence,
+            validation: validation
+          };
+          
+          setTranscript(finalTranscriptData);
+          if (onTranscriptChange) {
+            onTranscriptChange(finalTranscriptData);
+          }
+        }).catch(error => {
+          console.warn('Final session validation failed:', error);
+          // Send without validation
+          const finalTranscriptData: TranscriptData = {
+            text: completeText,
+            isFinal: true,
+            confidence: confidence
+          };
+          
+          setTranscript(finalTranscriptData);
+          if (onTranscriptChange) {
+            onTranscriptChange(finalTranscriptData);
+          }
+        });
       }
     };
 
@@ -769,6 +1146,9 @@ export const useEnhancedSpeechToText = ({
     connectionStatus,
     manualRetry,
     retryCount,
-    diagnostics
+    diagnostics,
+    // Ontology-specific properties
+    ontologyAvailable,
+    ontologyEnhanced
   };
 };

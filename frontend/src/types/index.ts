@@ -62,6 +62,8 @@ export interface ICDCode {
   priority: 'primary' | 'secondary' | 'differential';
   category: string;
   reasoning: string;
+  provider?: string; // 'ontology' | 'gemini' | 'openai' | 'claude' etc.
+  selected?: boolean; // For user selection in frontend
 }
 
 export interface ICDPredictions {
@@ -70,6 +72,7 @@ export interface ICDPredictions {
     totalCodes: number;
     primaryDiagnoses: number;
     secondaryConditions: number;
+    averageConfidence?: number;
   };
   confidence: number;
   provider: string;
@@ -80,6 +83,9 @@ export interface ICDPredictions {
   timestamp?: string;
   cached?: boolean;
   fallback?: boolean;
+  processingAgent?: string;
+  dualProvider?: boolean; // Indicates both ontology and AI providers were used
+  selectedCodes?: ICDCode[]; // User-selected codes for final report
 }
 
 export interface MedicalReport {

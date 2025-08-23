@@ -152,12 +152,19 @@ export default function Dashboard() {
           );
           
           // Update the report with ICD codes
-          setCurrentReport(prev => prev ? {
-            ...prev,
-            icdPredictions: icdCodes
-          } : prev);
+          setCurrentReport(prev => {
+            const updated = prev ? {
+              ...prev,
+              icdPredictions: icdCodes
+            } : prev;
+            console.log('📊 ICD Codes Update Debug:');
+            console.log('- Previous report had ICD:', !!prev?.icdPredictions);
+            console.log('- New ICD codes:', icdCodes);
+            console.log('- Updated report has ICD:', !!updated?.icdPredictions);
+            return updated;
+          });
           
-          console.log('✅ ICD codes added to report');
+          console.log('✅ ICD codes added to report:', icdCodes?.codes?.length, 'codes');
         } catch (error) {
           console.warn('⚠️ ICD code generation failed:', error);
         }

@@ -11,7 +11,7 @@ import {
   createApiResponse,
   logApiMetrics
 } from '@/lib/api-middleware';
-import { ICDPredictions, Language } from '@/types';
+import { ICDPredictions, Language, ICDCode } from '@/types';
 
 const validateRequest = withRequestValidation(GenerateICDRequestSchema);
 const validateResponse = withResponseValidation(ICDPredictionsSchema, 'ICD Predictions');
@@ -72,34 +72,221 @@ class ServerICDService {
   }
 
   async generateICDCodes(reportContent: string, language: Language, codeSystem: string = 'ICD-10-GM'): Promise<ICDPredictions> {
-    console.log('🏥 Generating ICD codes...');
+    console.log('🏥 Generating ICD codes with dual providers...');
     console.log('- Report content length:', reportContent.length);
     console.log('- Language:', language);
     console.log('- Code system:', codeSystem);
     console.log('- Available providers:', this.providers.map(p => p.name));
 
-    if (this.providers.length === 0) {
-      console.error('❌ No AI providers available for ICD coding');
-      return this.generateFallbackICD(reportContent, language);
-    }
-
-    const prompt = this.createICDPrompt(reportContent, language, codeSystem);
+    const allCodes: ICDCode[] = [];
+    const providers: string[] = [];
     
-    for (const provider of this.providers) {
+    // Get ontology service results for German ICD-10-GM codes
+    let ontologyResult: ICDPredictions | null = null;
+    if (codeSystem === 'ICD-10-GM' && language === 'de') {
       try {
-        console.log(`🤖 Trying ${provider.name} for ICD coding...`);
-        const aiResponse = await provider.handler(prompt);
-        console.log(`✅ ${provider.name} succeeded for ICD coding!`);
-        
-        return this.parseICDResponse(aiResponse, language, provider.name);
+        console.log('🧬 Getting ontology service recommendations...');
+        ontologyResult = await this.callOntologyService(reportContent);
+        if (ontologyResult && ontologyResult.codes) {
+          console.log(`✅ Ontology service provided ${ontologyResult.codes.length} codes`);
+          // Add ontology codes with provider tag
+          ontologyResult.codes.forEach(code => {
+            allCodes.push({
+              ...code,
+              provider: 'ontology', // Explicitly set provider
+              confidence: code.confidence
+            } as ICDCode);
+          });
+          providers.push('ontology');
+        }
       } catch (error) {
-        console.error(`❌ ${provider.name} failed for ICD coding:`, error instanceof Error ? error.message : 'Unknown error');
-        continue;
+        console.error('⚠️ Ontology service failed:', error);
       }
     }
 
-    console.error('❌ All AI providers failed for ICD coding - using fallback');
-    return this.generateFallbackICD(reportContent, language);
+    // Get AI provider results
+    let aiResult: ICDPredictions | null = null;
+    if (this.providers.length > 0) {
+      const prompt = this.createICDPrompt(reportContent, language, codeSystem);
+      
+      for (const provider of this.providers) {
+        try {
+          console.log(`🤖 Getting ${provider.name} recommendations...`);
+          const aiResponse = await provider.handler(prompt);
+          console.log(`✅ ${provider.name} succeeded!`);
+          
+          aiResult = this.parseICDResponse(aiResponse, language, provider.name);
+          if (aiResult && aiResult.codes) {
+            // Add AI codes with provider tag
+            aiResult.codes.forEach(code => {
+              allCodes.push({
+                ...code,
+                provider: provider.name, // Explicitly set provider
+                confidence: code.confidence
+              } as ICDCode);
+            });
+            providers.push(provider.name);
+          }
+          break; // Use first successful AI provider
+        } catch (error) {
+          console.error(`❌ ${provider.name} failed:`, error instanceof Error ? error.message : 'Unknown error');
+          continue;
+        }
+      }
+    }
+
+    // Filter codes to only include those with >90% confidence
+    const highConfidenceCodes = allCodes.filter(code => code.confidence > 0.9);
+    console.log(`📊 Filtered ${allCodes.length} codes to ${highConfidenceCodes.length} high-confidence codes (>90%)`);
+
+    // Remove duplicates based on ICD code, keeping the one with higher confidence
+    const uniqueCodes = new Map<string, ICDCode>();
+    highConfidenceCodes.forEach(code => {
+      const existing = uniqueCodes.get(code.code);
+      if (!existing || code.confidence > existing.confidence) {
+        // Ensure provider is preserved
+        const codeWithProvider = {
+          ...code,
+          provider: code.provider || 'unknown'
+        };
+        uniqueCodes.set(code.code, codeWithProvider);
+      }
+    });
+
+    const finalCodes = Array.from(uniqueCodes.values());
+    
+    // Sort by confidence and priority
+    finalCodes.sort((a, b) => {
+      // First by priority
+      const priorityOrder = { primary: 0, secondary: 1, differential: 2 };
+      const priorityDiff = (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2);
+      if (priorityDiff !== 0) return priorityDiff;
+      // Then by confidence
+      return b.confidence - a.confidence;
+    });
+
+    // Calculate summary
+    const primaryCodes = finalCodes.filter(c => c.priority === 'primary');
+    const secondaryCodes = finalCodes.filter(c => c.priority === 'secondary');
+    const avgConfidence = finalCodes.length > 0 
+      ? finalCodes.reduce((sum, c) => sum + c.confidence, 0) / finalCodes.length 
+      : 0;
+
+    return {
+      codes: finalCodes,
+      summary: {
+        totalCodes: finalCodes.length,
+        primaryDiagnoses: primaryCodes.length,
+        secondaryConditions: secondaryCodes.length,
+        averageConfidence: avgConfidence
+      },
+      confidence: avgConfidence,
+      provider: providers.join('+'), // e.g., "ontology+gemini"
+      generatedAt: Date.now(),
+      language: language,
+      dualProvider: providers.length > 1, // True only if we have multiple providers
+      processingAgent: 'dual-provider-icd'
+    };
+  }
+
+  private async callOntologyService(reportContent: string): Promise<ICDPredictions | null> {
+    try {
+      const response = await fetch('http://localhost:8001/api/enhance-transcription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Accept': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify({
+          transcription_text: reportContent,
+          modality: this.detectModality(reportContent)
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ontology service error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Fix encoding issues in the response
+      const fixEncoding = (text: string): string => {
+        // Common UTF-8 to Latin-1 misinterpretations in German text
+        return text
+          .replace(/Ã¤/g, 'ä')
+          .replace(/Ã¶/g, 'ö')
+          .replace(/Ã¼/g, 'ü')
+          .replace(/Ã„/g, 'Ä')
+          .replace(/Ã–/g, 'Ö')
+          .replace(/Ãœ/g, 'Ü')
+          .replace(/ÃŸ/g, 'ß')
+          .replace(/Ã¢/g, 'â')
+          .replace(/Ã©/g, 'é')
+          .replace(/Ã¨/g, 'è')
+          .replace(/Ã®/g, 'î')
+          .replace(/Ã´/g, 'ô')
+          .replace(/Ã /g, 'à')
+          .replace(/Ã§/g, 'ç');
+      };
+      
+      // Transform ontology response to ICDPredictions format
+      if (data.success && data.data?.suggested_icd_codes) {
+        const icdCodes = data.data.suggested_icd_codes.map((code: any, index: number) => ({
+          code: code.code,
+          description: fixEncoding(code.description),
+          confidence: code.confidence || 0.8,
+          radiologyRelevance: 0.9 - (index * 0.05), // Decreasing relevance by order
+          priority: index === 0 ? 'primary' : index < 3 ? 'secondary' : 'differential',
+          category: this.extractCategory(code.description),
+          reasoning: `Basierend auf Ontologie-Datenbank mit ${code.sources?.join(', ') || 'Textanalyse'}`
+        }));
+
+        const primaryCodes = icdCodes.filter((c: any) => c.priority === 'primary');
+        const secondaryCodes = icdCodes.filter((c: any) => c.priority === 'secondary');
+        const differentialCodes = icdCodes.filter((c: any) => c.priority === 'differential');
+        
+        return {
+          codes: icdCodes,
+          summary: {
+            totalCodes: icdCodes.length,
+            primaryDiagnoses: primaryCodes.length,
+            secondaryConditions: secondaryCodes.length
+          },
+          confidence: data.data.confidence || 0.85,
+          provider: 'ontology-postgresql',
+          generatedAt: Date.now(),
+          language: 'de' as Language,
+          processingAgent: 'icd-ontology-service'
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Ontology service error:', error);
+      return null;
+    }
+  }
+
+  private detectModality(reportContent: string): string {
+    const content = reportContent.toLowerCase();
+    if (content.includes('mammographie') || content.includes('mammografie')) return 'mammographie';
+    if (content.includes('sonographie') || content.includes('ultraschall')) return 'sonographie';
+    if (content.includes(' ct ') || content.includes('computertomographie')) return 'ct';
+    if (content.includes(' mrt ') || content.includes(' mr ') || content.includes('magnetresonanz')) return 'mrt';
+    if (content.includes('röntgen') || content.includes('x-ray')) return 'röntgen';
+    return 'unspecified';
+  }
+
+  private extractCategory(description: string): string {
+    const desc = description.toLowerCase();
+    if (desc.includes('brust') || desc.includes('mamma')) return 'Mammologie';
+    if (desc.includes('leber') || desc.includes('hepat')) return 'Hepatologie';
+    if (desc.includes('herz') || desc.includes('kardi')) return 'Kardiologie';
+    if (desc.includes('lunge') || desc.includes('pulmo')) return 'Pneumologie';
+    if (desc.includes('niere') || desc.includes('renal')) return 'Nephrologie';
+    if (desc.includes('gehirn') || desc.includes('cerebr')) return 'Neurologie';
+    if (desc.includes('knochen') || desc.includes('ossär')) return 'Orthopädie';
+    return 'Allgemein';
   }
 
   private createICDPrompt(reportContent: string, language: Language, codeSystem: string): string {
@@ -280,7 +467,8 @@ Analyze systematically and return only the most probable and relevant ${codeSyst
       summary: {
         totalCodes: codes.length,
         primaryDiagnoses: primaryCodes,
-        secondaryConditions: secondaryCodes
+        secondaryConditions: secondaryCodes,
+        averageConfidence: avgConfidence
       },
       confidence: avgConfidence,
       provider: provider,
@@ -354,7 +542,10 @@ Analyze systematically and return only the most probable and relevant ${codeSyst
       summary: {
         totalCodes: fallbackCodes.length,
         primaryDiagnoses: 0,
-        secondaryConditions: fallbackCodes.length
+        secondaryConditions: fallbackCodes.length,
+        averageConfidence: fallbackCodes.length > 0 ? 
+          fallbackCodes.reduce((sum, code) => sum + code.confidence, 0) / fallbackCodes.length :
+          0.6
       },
       confidence: 0.6,
       provider: 'rule-based',

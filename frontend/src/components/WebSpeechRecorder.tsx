@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { Mic, MicOff, AlertCircle, CheckCircle, AlertTriangle, Activity, RefreshCw, Wifi, WifiOff, ChevronDown, ChevronRight } from 'lucide-react';
+import { Mic, MicOff, AlertCircle, CheckCircle, AlertTriangle, Activity, RefreshCw, Wifi, WifiOff, ChevronDown, ChevronRight, Database, Brain, Sparkles } from 'lucide-react';
 import { useEnhancedSpeechToText } from '@/hooks/useEnhancedSpeechToText';
 import { Language, TranscriptionData } from '@/types';
 import { getMedicalTerm } from '@/utils/languages';
@@ -43,7 +43,10 @@ export default function WebSpeechRecorder({
     connectionStatus,
     manualRetry,
     retryCount,
-    diagnostics
+    diagnostics,
+    // Ontology-specific properties
+    ontologyAvailable,
+    ontologyEnhanced
   } = useEnhancedSpeechToText({
     lang: language === 'de' ? 'de-DE' : 'en-US',
     continuous: true,
@@ -116,23 +119,40 @@ export default function WebSpeechRecorder({
             <h3 className="text-lg font-semibold med-text-navy">
               {getMedicalTerm('audioRecording', language)}
             </h3>
-            <div className="flex items-center space-x-2">
-              <p className="text-sm text-navy-600">Web Speech API (Browser-based)</p>
-              {mounted && (
+            <p className="text-sm text-navy-600">Web Speech API (Browser-based)</p>
+            {mounted && (
+              <div className="flex items-center space-x-4 mt-2">
+                {/* WebSpeech Connection Status */}
                 <div className="flex items-center space-x-1">
                   {connectionStatus === 'connected' && <Wifi className="w-4 h-4 text-green-500" />}
                   {connectionStatus === 'disconnected' && <WifiOff className="w-4 h-4 text-red-500" />}
                   {connectionStatus === 'reconnecting' && <RefreshCw className="w-4 h-4 text-yellow-500 animate-spin" />}
-                  <span className={`text-xs ${
+                  <span className={`text-xs font-medium ${
                     connectionStatus === 'connected' ? 'text-green-600' :
                     connectionStatus === 'disconnected' ? 'text-red-600' : 'text-yellow-600'
                   }`}>
-                    {connectionStatus === 'connected' ? 'Connected' : 
-                     connectionStatus === 'disconnected' ? 'Disconnected' : 'Reconnecting...'}
+                    Speech API
                   </span>
                 </div>
-              )}
-            </div>
+
+                {/* Ontology Service Status */}
+                <div className="flex items-center space-x-1">
+                  {ontologyAvailable ? (
+                    <Database className="w-4 h-4 text-blue-500" />
+                  ) : (
+                    <Database className="w-4 h-4 text-gray-400" />
+                  )}
+                  <span className={`text-xs font-medium ${
+                    ontologyAvailable ? 'text-blue-600' : 'text-gray-500'
+                  }`}>
+                    Ontology
+                  </span>
+                  {ontologyEnhanced && (
+                    <Sparkles className="w-3 h-3 text-yellow-500" />
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -202,7 +222,7 @@ export default function WebSpeechRecorder({
         </div>
         
         {mounted && isListening && (
-          <div className="w-4 h-4 rounded-full bg-error-500 animate-pulse"></div>
+          <div className="recording-indicator"></div>
         )}
       </div>
 
@@ -252,6 +272,9 @@ export default function WebSpeechRecorder({
                     }`}>
                       <span className="capitalize">{quality.overall}</span>
                       {quality.issues > 0 && <span>({quality.issues} issues)</span>}
+                      {transcript.validation?.ontologyEnhanced && (
+                        <Sparkles className="w-3 h-3 text-yellow-500" />
+                      )}
                     </div>
                   );
                 })()}
@@ -261,13 +284,65 @@ export default function WebSpeechRecorder({
 
           {/* Medical Corrections Display */}
           {validationEnabled && transcript.validation && transcript.validation.corrections.length > 0 && (
-            <div className="mt-3 p-2 bg-blue-50 rounded text-xs">
-              <div className="font-medium text-blue-800 mb-1">Medical Corrections Applied:</div>
-              {transcript.validation.corrections.map((correction, idx) => (
-                <div key={idx} className="text-blue-700">
-                  "{correction.original}" → "{correction.corrected}"
-                </div>
-              ))}
+            <div className="mt-3 p-3 bg-blue-50 border-l-4 border-blue-400 rounded text-xs">
+              <div className="font-medium text-blue-800 mb-2 flex items-center justify-between">
+                <span className="flex items-center space-x-1">
+                  <Brain className="w-4 h-4" />
+                  <span>Medical Corrections</span>
+                </span>
+                {transcript.validation.ontologyEnhanced && (
+                  <span className="flex items-center space-x-1 text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                    <Database className="w-3 h-3" />
+                    <span className="text-xs font-medium">Enhanced</span>
+                  </span>
+                )}
+              </div>
+              <div className="space-y-1">
+                {transcript.validation.corrections.slice(0, 3).map((correction, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-blue-700">
+                    <span className="flex items-center space-x-1">
+                      {correction.type?.includes('ontology') ? (
+                        <Database className="w-3 h-3 text-blue-600" />
+                      ) : (
+                        <Brain className="w-3 h-3 text-purple-600" />
+                      )}
+                      <span>"{correction.original}" → "{correction.corrected}"</span>
+                    </span>
+                    {correction.confidence && (
+                      <span className="text-xs text-gray-500 ml-2">
+                        {Math.round(correction.confidence * 100)}%
+                      </span>
+                    )}
+                  </div>
+                ))}
+                {transcript.validation.corrections.length > 3 && (
+                  <div className="text-xs text-gray-500 pt-1">
+                    +{transcript.validation.corrections.length - 3} more corrections
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Medical Terms Detected - Only show if ontology enhanced */}
+          {validationEnabled && transcript.validation?.ontologyEnhanced && transcript.validation.medicalTermsDetected && transcript.validation.medicalTermsDetected.length > 0 && (
+            <div className="mt-2 p-2 bg-green-50 rounded text-xs">
+              <div className="font-medium text-green-800 mb-2 flex items-center space-x-1">
+                <Database className="w-3 h-3" />
+                <span>Terms Detected ({transcript.validation.medicalTermsDetected.length})</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {transcript.validation.medicalTermsDetected.slice(0, 5).map((term, idx) => (
+                  <span key={idx} className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
+                    {term.term}
+                  </span>
+                ))}
+                {transcript.validation.medicalTermsDetected.length > 5 && (
+                  <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">
+                    +{transcript.validation.medicalTermsDetected.length - 5}
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
@@ -342,36 +417,38 @@ export default function WebSpeechRecorder({
         )}
 
         {/* Report Generation Mode Toggle */}
-        <div className="flex items-center justify-between pt-4 border-t border-navy-200">
-          <div className="flex items-center space-x-4">
-            <span className="text-sm font-medium text-navy-700">Report Generation:</span>
-            <div className="flex items-center bg-navy-100 rounded-lg p-1">
-              <button
-                onClick={() => onProcessingModeChange?.('cloud')}
-                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  processingMode === 'cloud' 
-                    ? 'bg-white text-navy-600 shadow-sm' 
-                    : 'text-navy-500 hover:text-navy-700'
-                }`}
-                title="Use cloud AI providers for Befund reports (Claude, Gemini, OpenAI)"
-              >
-                ☁️ Cloud
-              </button>
-              <button
-                onClick={() => onProcessingModeChange?.('local')}
-                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  processingMode === 'local' 
-                    ? 'bg-white text-navy-600 shadow-sm' 
-                    : 'text-navy-500 hover:text-navy-700'
-                }`}
-                title="Use local Ollama models for Befund reports (medical-gemma-2b, gpt-oss:20b)"
-              >
-                🖥️ Local
-              </button>
+        <div className="pt-4 border-t border-navy-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-navy-700">Report Generation:</span>
+              <div className="flex items-center bg-navy-100 rounded-lg p-1">
+                <button
+                  onClick={() => onProcessingModeChange?.('cloud')}
+                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                    processingMode === 'cloud' 
+                      ? 'bg-white text-navy-600 shadow-sm' 
+                      : 'text-navy-500 hover:text-navy-700'
+                  }`}
+                  title="Use cloud AI providers for Befund reports (Claude, Gemini, OpenAI)"
+                >
+                  ☁️ Cloud
+                </button>
+                <button
+                  onClick={() => onProcessingModeChange?.('local')}
+                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                    processingMode === 'local' 
+                      ? 'bg-white text-navy-600 shadow-sm' 
+                      : 'text-navy-500 hover:text-navy-700'
+                  }`}
+                  title="Use local Ollama models for Befund reports (medical-gemma-2b, gpt-oss:20b)"
+                >
+                  🖥️ Local
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="text-xs text-navy-500">
-            For Befund reports: {processingMode === 'cloud' ? 'claude → gemini → openai' : 'medical-gemma-2b → gpt-oss:20b'}
+            <div className="text-xs text-navy-500">
+              {processingMode === 'cloud' ? 'claude → gemini → openai' : 'medical-gemma-2b → gpt-oss:20b'}
+            </div>
           </div>
         </div>
 

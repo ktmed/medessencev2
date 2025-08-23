@@ -54,14 +54,14 @@
 @layer components {
   .medical-card {
     @apply bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-6;
-    border: 1px solid rgb(from var(--med-navy-200) r g b / 0.3);
+    border: 1px solid rgba(205, 215, 224, 0.3);
     transition: all 0.2s ease-in-out;
   }
   
   .medical-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 25px -3px rgb(from var(--med-navy-600) r g b / 0.1), 
-                0 4px 6px -2px rgb(from var(--med-navy-600) r g b / 0.05);
+    box-shadow: 0 10px 25px -3px rgba(74, 97, 122, 0.1), 
+                0 4px 6px -2px rgba(74, 97, 122, 0.05);
   }
   
   .medical-button {
@@ -70,45 +70,45 @@
   
   .medical-button-primary {
     @apply medical-button text-white hover:shadow-md;
-    background: linear-gradient(135deg, var(--med-navy-600), var(--med-navy-700));
+    background: linear-gradient(135deg, #4a617a, #3f5063);
   }
   
   .medical-button-primary:hover {
-    background: linear-gradient(135deg, var(--med-navy-700), var(--med-navy-800));
+    background: linear-gradient(135deg, #3f5063, #374453);
   }
   
   .medical-button-primary:focus {
     @apply ring-2 ring-offset-2;
-    ring-color: var(--med-navy-500);
+    ring-color: #5a7794;
   }
   
   .medical-button-secondary {
     @apply medical-button;
-    background: linear-gradient(135deg, var(--med-navy-100), var(--med-navy-200));
-    color: var(--med-navy-700);
+    background: linear-gradient(135deg, #e6eaef, #cdd7e0);
+    color: #3f5063;
   }
   
   .medical-button-secondary:hover {
-    background: linear-gradient(135deg, var(--med-navy-200), var(--med-navy-300));
+    background: linear-gradient(135deg, #cdd7e0, #a8bac9);
   }
   
   .medical-button-secondary:focus {
     @apply ring-2 ring-offset-2;
-    ring-color: var(--med-navy-500);
+    ring-color: #5a7794;
   }
   
   .medical-button-success {
     @apply medical-button text-white hover:shadow-md;
-    background: linear-gradient(135deg, var(--med-orange-500), var(--med-orange-600));
+    background: linear-gradient(135deg, #f97316, #ea580c);
   }
   
   .medical-button-success:hover {
-    background: linear-gradient(135deg, var(--med-orange-600), var(--med-orange-700));
+    background: linear-gradient(135deg, #ea580c, #c2410c);
   }
   
   .medical-button-success:focus {
     @apply ring-2 ring-offset-2;
-    ring-color: var(--med-orange-400);
+    ring-color: #fb923c;
   }
   
   .medical-button-danger {
@@ -117,16 +117,16 @@
   
   .medical-input {
     @apply w-full px-4 py-3 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 bg-white/80 backdrop-blur-sm;
-    border: 1px solid var(--med-navy-200);
+    border: 1px solid #cdd7e0;
   }
   
   .medical-input:focus {
-    border-color: var(--med-navy-500);
-    ring-color: var(--med-navy-500);
+    border-color: #5a7794;
+    ring-color: #5a7794;
   }
   
   .medical-input::placeholder {
-    color: var(--med-navy-400);
+    color: #a8bac9;
   }
   
   .medical-select {
@@ -135,12 +135,12 @@
   
   .recording-indicator {
     @apply w-3 h-3 rounded-full animate-pulse;
-    background-color: var(--med-orange-600);
+    background-color: #ea580c;
   }
   
   .transcription-text {
     @apply font-mono text-sm leading-relaxed;
-    color: var(--text-secondary);
+    color: #3f5063;
   }
   
   .medical-report {
@@ -149,41 +149,41 @@
   
   .medical-report h3 {
     @apply font-semibold pb-1;
-    color: var(--text-primary);
-    border-bottom: 1px solid var(--med-navy-200);
+    color: #2c3540;
+    border-bottom: 1px solid #cdd7e0;
   }
   
   .medical-report p {
-    color: var(--text-secondary);
+    color: #3f5063;
   }
   
   /* Additional utility classes for Med-Essence branding */
   .med-navy-gradient {
-    background: linear-gradient(135deg, var(--med-navy-600), var(--med-navy-800));
+    background: linear-gradient(135deg, #4a617a, #374453);
   }
   
   .med-orange-gradient {
-    background: linear-gradient(135deg, var(--med-orange-500), var(--med-orange-600));
+    background: linear-gradient(135deg, #f97316, #ea580c);
   }
   
   .med-accent-gradient {
-    background: linear-gradient(135deg, var(--med-navy-600), var(--med-orange-500));
+    background: linear-gradient(135deg, #4a617a, #f97316);
   }
   
   .med-text-navy {
-    color: var(--text-primary);
+    color: #2c3540;
   }
   
   .med-text-orange {
-    color: var(--secondary-color);
+    color: #f97316;
   }
   
   .med-border-navy {
-    border-color: var(--med-navy-200);
+    border-color: #cdd7e0;
   }
   
   .med-bg-light {
-    background-color: var(--background-primary);
+    background-color: #f4f6f8;
   }
 
   /* Three-column dashboard responsive adjustments */

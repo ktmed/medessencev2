@@ -46,6 +46,212 @@ export const GenerateEnhancedFindingsRequestSchema = z.object({
   language: LanguageSchema
 });
 
+// ==================== VALIDATION FUNCTIONS ====================
+
+interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings?: string[];
+  sanitizedText?: string;
+  detectedTerms?: string[];
+  modalityMatch?: boolean;
+  defaultLanguage?: string;
+  validationRules?: any;
+  sanitizedData?: any;
+}
+
+// German medical terms dictionary
+const GERMAN_MEDICAL_TERMS = [
+  'mammographie', 'sonographie', 'computertomographie', 'magnetresonanztomographie',
+  'röntgen', 'befund', 'beurteilung', 'empfehlung', 'unauffällig', 'pathologisch',
+  'kontrastmittel', 'beidseits', 'rechts', 'links', 'ventral', 'dorsal',
+  'kranial', 'kaudal', 'leber', 'lunge', 'herz', 'niere', 'milz', 'pankreas',
+  'gallenblase', 'magen', 'darm', 'wirbelsäule'
+];
+
+export function validateTranscription(text: string): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const detectedTerms: string[] = [];
+  
+  if (!text || text.trim().length === 0) {
+    errors.push('Transcription text is required');
+    return { isValid: false, errors };
+  }
+  
+  if (text.length < 10) {
+    errors.push('Transcription must be at least 10 characters');
+  }
+  
+  if (text.length > 10000) {
+    errors.push('Transcription must not exceed 10000 characters');
+  }
+  
+  // Sanitize and check for XSS
+  const sanitized = sanitizeInput(text);
+  if (sanitized !== text) {
+    warnings.push('Input was sanitized for security');
+  }
+  
+  // Detect German medical terms
+  const lowerText = text.toLowerCase();
+  GERMAN_MEDICAL_TERMS.forEach(term => {
+    if (lowerText.includes(term)) {
+      detectedTerms.push(term);
+    }
+  });
+  
+  return {
+    isValid: errors.length === 0,
+    errors,
+    warnings,
+    sanitizedText: sanitized,
+    detectedTerms
+  };
+}
+
+export function validateICDCode(code: string, modality?: string): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  
+  // ICD-10 format: Letter + 2-3 digits + optional dot + 1-2 digits
+  const icdPattern = /^[A-Z]\d{2,3}(\.\d{1,2})?$/;
+  
+  if (!icdPattern.test(code)) {
+    errors.push('Invalid ICD-10 code format');
+    return { isValid: false, errors };
+  }
+  
+  let modalityMatch = true;
+  if (modality === 'mammography') {
+    const mammographyCodes = ['Z12.31', 'C50', 'N63'];
+    modalityMatch = mammographyCodes.some(prefix => code.startsWith(prefix));
+    
+    if (!modalityMatch) {
+      warnings.push('ICD code may not match the specified modality');
+    }
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors,
+    warnings,
+    modalityMatch
+  };
+}
+
+export function validateModality(modality: string): ValidationResult {
+  const validModalities = ['mammography', 'ultrasound', 'ct_scan', 'mri', 'xray', 'pet_scan'];
+  const errors: string[] = [];
+  
+  if (!validModalities.includes(modality)) {
+    errors.push('Invalid modality type');
+    return { isValid: false, errors };
+  }
+  
+  const validationRules: any = {};
+  if (modality === 'mammography') {
+    validationRules.requiresPatientGender = true;
+    validationRules.minimumAge = 35;
+    validationRules.typicalDuration = '15-30 minutes';
+  }
+  
+  return {
+    isValid: true,
+    errors: [],
+    validationRules
+  };
+}
+
+export function validateLanguage(lang: string): ValidationResult {
+  const supportedLanguages = ['de', 'en', 'fr', 'tr'];
+  const warnings: string[] = [];
+  
+  if (!supportedLanguages.includes(lang)) {
+    warnings.push('Unsupported language, defaulting to German');
+    return {
+      isValid: false,
+      errors: [],
+      warnings,
+      defaultLanguage: 'de'
+    };
+  }
+  
+  return {
+    isValid: true,
+    errors: []
+  };
+}
+
+export function sanitizeInput(input: string): string {
+  // Remove HTML tags
+  let sanitized = input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  sanitized = sanitized.replace(/<[^>]+>/g, '');
+  
+  // Normalize whitespace
+  sanitized = sanitized.replace(/\s+/g, ' ').trim();
+  
+  return sanitized;
+}
+
+export function validateReportData(report: any): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  
+  if (!report.transcription) {
+    errors.push('Transcription is required');
+  }
+  
+  if (!report.modality) {
+    errors.push('Modality is required');
+  }
+  
+  // Validate patient info for mammography
+  if (report.modality === 'mammography' && report.patientInfo) {
+    if (report.patientInfo.age < 35) {
+      warnings.push(`Patient age (${report.patientInfo.age}) is below typical mammography screening age (35+)`);
+    }
+    
+    if (report.patientInfo.gender === 'male') {
+      warnings.push('Mammography for male patients is uncommon');
+    }
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors,
+    warnings
+  };
+}
+
+export function validatePatientData(patient: any): ValidationResult {
+  const errors: string[] = [];
+  const sanitizedData: any = {};
+  
+  if (patient.age !== undefined) {
+    if (patient.age < 0 || patient.age > 120) {
+      errors.push('Invalid age');
+    }
+  }
+  
+  if (patient.gender !== undefined) {
+    const validGenders = ['male', 'female', 'other', 'unknown'];
+    if (!validGenders.includes(patient.gender)) {
+      errors.push('Invalid gender');
+    }
+  }
+  
+  if (patient.name) {
+    sanitizedData.name = sanitizeInput(patient.name);
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors,
+    sanitizedData
+  };
+}
+
 // ==================== RESPONSE SCHEMAS ====================
 
 export const MetadataSchema = z.object({

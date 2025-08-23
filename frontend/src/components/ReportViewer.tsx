@@ -16,6 +16,7 @@ interface ReportViewerProps {
   language: Language;
   onExport?: (report: MedicalReport) => void;
   onSave?: (report: MedicalReport) => void;
+  onICDCodesSelected?: (codes: any[]) => void;
   className?: string;
 }
 
@@ -25,6 +26,7 @@ export default function ReportViewer({
   language,
   onExport,
   onSave,
+  onICDCodesSelected,
   className,
 }: ReportViewerProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -304,7 +306,10 @@ export default function ReportViewer({
       
       if (sections.length > 0) {
         const totalCodes = icdPredictions.summary?.totalCodes || icdPredictions.codes.length;
-        const avgConfidence = Math.round((icdPredictions.summary?.averageConfidence || 0) * 100);
+        const avgConfidence = Math.round((icdPredictions.summary?.averageConfidence ?? 
+          (icdPredictions.codes.length > 0 ? 
+            icdPredictions.codes.reduce((sum: number, code: any) => sum + (code.confidence || 0.8), 0) / icdPredictions.codes.length :
+            0.6)) * 100);
         const provider = icdPredictions.provider || 'AI';
         const timestamp = icdPredictions.timestamp ? new Date(icdPredictions.timestamp).toLocaleString() : new Date().toLocaleString();
         
@@ -714,6 +719,35 @@ ${'-'.repeat(isGerman ? 'ICD-10-GM KODIERUNG'.length : 'ICD-10-GM CODING'.length
                   )}
                 </div>
 
+                {/* Selected ICD Codes Section */}
+                {currentReport.icdPredictions?.selectedCodes && currentReport.icdPredictions.selectedCodes.length > 0 && (
+                  <div className="medical-report">
+                    <h3>Ausgewählte ICD-10-GM Codes</h3>
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <div className="space-y-2">
+                        {currentReport.icdPredictions.selectedCodes.map((code, index) => (
+                          <div key={`${code.code}-${index}`} className="flex items-start gap-3 p-2 bg-white rounded border border-blue-200">
+                            <span className="font-mono font-bold text-navy-900">{code.code}</span>
+                            <span className="flex-1 text-gray-700">{code.description}</span>
+                            {code.provider && (
+                              <span className={`text-xs px-2 py-1 rounded ${
+                                code.provider.toLowerCase().includes('ontology') 
+                                  ? 'bg-blue-100 text-blue-800' 
+                                  : 'bg-purple-100 text-purple-800'
+                              }`}>
+                                {code.provider.toLowerCase().includes('ontology') ? 'DB' : code.provider}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 text-sm text-blue-700">
+                        {currentReport.icdPredictions.selectedCodes.length} Code{currentReport.icdPredictions.selectedCodes.length !== 1 ? 's' : ''} für den Bericht ausgewählt
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Recommendations Section */}
                 <div className="medical-report">
                   <h3>{getMedicalTerm('recommendations', language)}</h3>
@@ -778,6 +812,37 @@ ${'-'.repeat(isGerman ? 'ICD-10-GM KODIERUNG'.length : 'ICD-10-GM CODING'.length
         <div className="mt-6">
           <ICDPredictionsComponent 
             predictions={currentReport.icdPredictions}
+            onCodesSelected={(codes) => {
+              console.log('ICD codes selected for report:', codes);
+              // Update the report with selected codes
+              if (currentReport) {
+                const updatedReport = {
+                  ...currentReport,
+                  icdPredictions: {
+                    codes: currentReport.icdPredictions?.codes || [],
+                    summary: currentReport.icdPredictions?.summary || {
+                      totalCodes: 0,
+                      primaryDiagnoses: 0,
+                      secondaryConditions: 0
+                    },
+                    confidence: currentReport.icdPredictions?.confidence || 0.0,
+                    provider: currentReport.icdPredictions?.provider || 'manual',
+                    generatedAt: currentReport.icdPredictions?.generatedAt || Date.now(),
+                    language: currentReport.icdPredictions?.language || 'de',
+                    selectedCodes: codes,
+                    // Copy other optional fields if they exist
+                    ...(currentReport.icdPredictions?.dualProvider && { dualProvider: currentReport.icdPredictions.dualProvider }),
+                    ...(currentReport.icdPredictions?.processingAgent && { processingAgent: currentReport.icdPredictions.processingAgent })
+                  }
+                };
+                setEditedReport(updatedReport);
+                
+                // Call parent callback if provided
+                if (onICDCodesSelected) {
+                  onICDCodesSelected(codes);
+                }
+              }
+            }}
           />
         </div>
       )}
