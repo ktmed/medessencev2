@@ -157,18 +157,19 @@ export default function EnhancedFindingsNew({
       sourcePreview: text.substring(0, 200) + '...'
     });
     
-    const findingText = finding.text.toLowerCase().trim();
+    const findingText = finding.text.trim();
+    const findingTextLower = findingText.toLowerCase();
     const lowerText = text.toLowerCase();
     
     // Try multiple matching strategies
     let highlightResults: Array<{start: number, end: number, matchType: string}> = [];
     
-    // Strategy 1: Exact match
-    let index = lowerText.indexOf(findingText);
+    // Strategy 1: Exact match (case-insensitive)
+    let index = lowerText.indexOf(findingTextLower);
     if (index !== -1) {
       highlightResults.push({
         start: index,
-        end: index + finding.text.length,
+        end: index + findingText.length,
         matchType: 'exact'
       });
     }
@@ -209,55 +210,140 @@ export default function EnhancedFindingsNew({
         for (const keyword of normalKeywords) {
           const keywordIndex = lowerText.indexOf(keyword);
           if (keywordIndex !== -1) {
-            // Extend to find the full sentence or phrase around this keyword
-            const sentenceStart = Math.max(0, text.lastIndexOf('.', keywordIndex) + 1);
-            const sentenceEnd = Math.min(text.length, text.indexOf('.', keywordIndex + keyword.length));
-            const actualEnd = sentenceEnd === -1 ? text.length : sentenceEnd;
+            // Find word boundaries instead of sentence boundaries
+            // Look for the start of the current phrase/clause
+            let phraseStart = keywordIndex;
+            while (phraseStart > 0 && text[phraseStart - 1] !== '.' && text[phraseStart - 1] !== ',' && phraseStart > keywordIndex - 50) {
+              phraseStart--;
+            }
+            // Skip any whitespace or punctuation at the start
+            while (phraseStart < keywordIndex && /[\s,.]/.test(text[phraseStart])) {
+              phraseStart++;
+            }
+            
+            // Find the end of the current phrase/clause
+            let phraseEnd = keywordIndex + keyword.length;
+            while (phraseEnd < text.length && text[phraseEnd] !== '.' && text[phraseEnd] !== ',' && phraseEnd < keywordIndex + keyword.length + 50) {
+              phraseEnd++;
+            }
             
             highlightResults.push({
-              start: sentenceStart,
-              end: actualEnd,
+              start: phraseStart,
+              end: phraseEnd,
               matchType: `normal-context-${keyword}`
             });
             break;
           }
         }
       } else if (finding.category === 'measurements') {
-        // For measurements, look for numbers and units
-        const measurementPattern = /\d+[\.,]?\d*\s*(mm|cm|m|ml|l|grad|°|prozent|%)/i;
-        const match = text.match(measurementPattern);
+        // For measurements, try to find the exact measurement text first
+        const measurementNumbers = findingText.match(/\d+[\.,]?\d*\s*(mm|cm|m|ml|l|grad|°|prozent|%)/gi);
         
-        if (match && match.index !== undefined) {
-          const contextStart = Math.max(0, match.index - 30);
-          const contextEnd = Math.min(text.length, match.index + match[0].length + 30);
-          
-          highlightResults.push({
-            start: contextStart,
-            end: contextEnd,
-            matchType: 'measurement-context'
-          });
+        if (measurementNumbers && measurementNumbers.length > 0) {
+          // Try to find the exact measurement in the text
+          for (const measurement of measurementNumbers) {
+            const measureIndex = lowerText.indexOf(measurement.toLowerCase());
+            if (measureIndex !== -1) {
+              // Find the start of the measurement description (usually starts after a comma or period)
+              let descStart = measureIndex;
+              let backtrack = Math.min(30, measureIndex);
+              for (let i = measureIndex - 1; i >= measureIndex - backtrack; i--) {
+                if (text[i] === '.' || text[i] === ',' || text[i] === ':') {
+                  descStart = i + 1;
+                  break;
+                }
+              }
+              // Skip whitespace
+              while (descStart < measureIndex && /\s/.test(text[descStart])) {
+                descStart++;
+              }
+              
+              // Find the end of the measurement description
+              let descEnd = measureIndex + measurement.length;
+              let forwardtrack = Math.min(30, text.length - descEnd);
+              for (let i = descEnd; i < descEnd + forwardtrack; i++) {
+                if (text[i] === '.' || text[i] === ',' || text[i] === ';') {
+                  descEnd = i;
+                  break;
+                }
+              }
+              
+              highlightResults.push({
+                start: descStart,
+                end: descEnd,
+                matchType: 'measurement-exact'
+              });
+              break;
+            }
+          }
         }
-      } else if (finding.category === 'localizations') {
-        // For localizations, look for anatomical terms
-        const anatomicalTerms = findingText
-          .split(/[\s,.-]+/)
-          .filter(word => word.length > 3 && !/^(links|rechts|beidseits|mittig|zentral|lateral|medial|anterior|posterior)$/i.test(word))
-          .slice(0, 2);
-
-        console.log('🔍 Anatomical terms for localization:', anatomicalTerms);
         
-        for (const term of anatomicalTerms) {
-          const termIndex = lowerText.indexOf(term);
-          if (termIndex !== -1) {
-            const contextStart = Math.max(0, termIndex - 40);
-            const contextEnd = Math.min(text.length, termIndex + term.length + 40);
+        // Fallback to general measurement pattern if exact match not found
+        if (highlightResults.length === 0) {
+          const measurementPattern = /\d+[\.,]?\d*\s*(mm|cm|m|ml|l|grad|°|prozent|%)/i;
+          const match = text.match(measurementPattern);
+          
+          if (match && match.index !== undefined) {
+            const contextStart = Math.max(0, match.index - 15);
+            const contextEnd = Math.min(text.length, match.index + match[0].length + 15);
             
             highlightResults.push({
               start: contextStart,
               end: contextEnd,
-              matchType: `localization-${term}`
+              matchType: 'measurement-fallback'
             });
-            break;
+          }
+        }
+      } else if (finding.category === 'localizations') {
+        // For localizations, try to match the exact localization text first
+        const localizationIndex = lowerText.indexOf(findingTextLower);
+        if (localizationIndex !== -1) {
+          highlightResults.push({
+            start: localizationIndex,
+            end: localizationIndex + findingText.length,
+            matchType: 'localization-exact'
+          });
+        } else {
+          // Fallback: look for key anatomical terms
+          const anatomicalTerms = findingText
+            .split(/[\s,.-]+/)
+            .filter(word => word.length > 3 && !/^(links|rechts|beidseits|mittig|zentral|lateral|medial|anterior|posterior|der|die|das|und|oder)$/i.test(word))
+            .slice(0, 2);
+
+          console.log('🔍 Anatomical terms for localization:', anatomicalTerms);
+          
+          for (const term of anatomicalTerms) {
+            const termIndex = lowerText.indexOf(term.toLowerCase());
+            if (termIndex !== -1) {
+              // Find phrase boundaries for more precise highlighting
+              let contextStart = termIndex;
+              let backtrack = Math.min(20, termIndex);
+              for (let i = termIndex - 1; i >= termIndex - backtrack; i--) {
+                if (text[i] === ',' || text[i] === '.' || text[i] === ';' || text[i] === ':') {
+                  contextStart = i + 1;
+                  break;
+                }
+              }
+              while (contextStart < termIndex && /\s/.test(text[contextStart])) {
+                contextStart++;
+              }
+              
+              let contextEnd = termIndex + term.length;
+              let forwardtrack = Math.min(20, text.length - contextEnd);
+              for (let i = contextEnd; i < contextEnd + forwardtrack; i++) {
+                if (text[i] === ',' || text[i] === '.' || text[i] === ';') {
+                  contextEnd = i;
+                  break;
+                }
+              }
+              
+              highlightResults.push({
+                start: contextStart,
+                end: contextEnd,
+                matchType: `localization-${term}`
+              });
+              break;
+            }
           }
         }
       }
@@ -277,8 +363,27 @@ export default function EnhancedFindingsNew({
       for (const word of meaningfulWords) {
         const wordIndex = lowerText.indexOf(word);
         if (wordIndex !== -1) {
-          const contextStart = Math.max(0, wordIndex - 30);
-          const contextEnd = Math.min(text.length, wordIndex + word.length + 50);
+          // Find phrase boundaries for more accurate highlighting
+          let contextStart = wordIndex;
+          let backtrack = Math.min(15, wordIndex);
+          for (let i = wordIndex - 1; i >= wordIndex - backtrack; i--) {
+            if (text[i] === ',' || text[i] === '.' || text[i] === ';' || text[i] === ':') {
+              contextStart = i + 1;
+              break;
+            }
+          }
+          while (contextStart < wordIndex && /\s/.test(text[contextStart])) {
+            contextStart++;
+          }
+          
+          let contextEnd = wordIndex + word.length;
+          let forwardtrack = Math.min(25, text.length - contextEnd);
+          for (let i = contextEnd; i < contextEnd + forwardtrack; i++) {
+            if (text[i] === ',' || text[i] === '.' || text[i] === ';') {
+              contextEnd = i;
+              break;
+            }
+          }
           
           highlightResults.push({
             start: contextStart,
@@ -297,8 +402,26 @@ export default function EnhancedFindingsNew({
       for (const term of medicalTerms.slice(0, 2)) { // Only try first 2 longest terms
         const termIndex = lowerText.indexOf(term.toLowerCase());
         if (termIndex !== -1) {
-          const contextStart = Math.max(0, termIndex - 20);
-          const contextEnd = Math.min(text.length, termIndex + term.length + 20);
+          // Find word/phrase boundaries for precise highlighting
+          let contextStart = termIndex;
+          // Go back to find start of phrase but not more than 10 chars
+          let backtrack = Math.min(10, termIndex);
+          for (let i = termIndex - 1; i >= termIndex - backtrack; i--) {
+            if (/[\s,.:;]/.test(text[i])) {
+              contextStart = i + 1;
+              break;
+            }
+          }
+          
+          let contextEnd = termIndex + term.length;
+          // Go forward to find end of phrase but not more than 10 chars
+          let forwardtrack = Math.min(10, text.length - contextEnd);
+          for (let i = contextEnd; i < contextEnd + forwardtrack; i++) {
+            if (/[\s,.:;]/.test(text[i])) {
+              contextEnd = i;
+              break;
+            }
+          }
           
           highlightResults.push({
             start: contextStart,
