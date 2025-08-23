@@ -1,7 +1,7 @@
 # MedEssenceAI - Deployment Guide
 **Version**: 1.0  
 **Date**: August 18, 2025  
-**Live URL**: https://fresh-deploy-murex.vercel.app/
+**Live URL**: https://medessencev3-test-kerem-tomaks-projects.vercel.app/
 
 ---
 
@@ -181,11 +181,11 @@ GOOGLE_API_KEY=AIza...
 
 # Security
 JWT_SECRET=your-jwt-secret-key
-CORS_ORIGIN=https://fresh-deploy-murex.vercel.app
+CORS_ORIGIN=https://medessencev3-test-kerem-tomaks-projects.vercel.app
 
 # WebSocket
 WEBSOCKET_PORT=8080
-SOCKET_IO_ORIGIN=https://fresh-deploy-murex.vercel.app
+SOCKET_IO_ORIGIN=https://medessencev3-test-kerem-tomaks-projects.vercel.app
 ```
 
 ---
@@ -244,7 +244,7 @@ railway variables set OPENAI_API_KEY=your_key
 railway variables set ANTHROPIC_API_KEY=your_key
 railway variables set GOOGLE_API_KEY=your_key
 railway variables set JWT_SECRET=your_secret
-railway variables set CORS_ORIGIN=https://fresh-deploy-murex.vercel.app
+railway variables set CORS_ORIGIN=https://medessencev3-test-kerem-tomaks-projects.vercel.app
 
 # 4. Deploy backend
 railway deploy
@@ -273,7 +273,7 @@ git push origin main
 curl https://your-backend-url.com/api/health
 
 # Frontend access
-open https://fresh-deploy-murex.vercel.app
+open https://medessencev3-test-kerem-tomaks-projects.vercel.app
 
 # WebSocket test (in browser console)
 const socket = io('wss://your-backend-url.com');
@@ -383,7 +383,7 @@ GET /api/health/transcription # Speech services
 ### 8.2 Performance Issues
 ```bash
 # Frontend performance
-lighthouse https://fresh-deploy-murex.vercel.app
+lighthouse https://medessencev3-test-kerem-tomaks-projects.vercel.app
 
 # Backend performance  
 curl -w "@curl-format.txt" -s -o /dev/null https://your-backend-url.com/api/health

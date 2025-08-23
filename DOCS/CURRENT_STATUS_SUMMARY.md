@@ -1,7 +1,7 @@
 # MedEssenceAI - Current Status Summary
 **Date**: August 18, 2025  
 **Version**: Production v1.0  
-**Live URL**: https://fresh-deploy-murex.vercel.app/
+**Live URL**: https://medessencev3-test-kerem-tomaks-projects.vercel.app/
 
 ---
 

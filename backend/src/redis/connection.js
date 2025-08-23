@@ -55,10 +55,16 @@ const initializeRedis = async () => {
     setupRedisEventListeners(publisher, 'publisher');
     setupRedisEventListeners(subscriber, 'subscriber');
 
-    // Connect and test
-    await redis.connect();
-    await publisher.connect();
-    await subscriber.connect();
+    // Connect and test (skip if already connected)
+    if (redis.status !== 'ready') {
+      await redis.connect();
+    }
+    if (publisher.status !== 'ready') {
+      await publisher.connect();
+    }
+    if (subscriber.status !== 'ready') {
+      await subscriber.connect();
+    }
 
     // Test connection
     const pong = await redis.ping();

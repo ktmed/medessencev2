@@ -243,12 +243,17 @@ export default function ReportViewer({
     
     // Format ICD codes for export
     const formatICDCodes = (icdPredictions: any): string => {
-      if (!icdPredictions?.codes?.length) return '';
+      // Use selectedCodes if available, otherwise use all codes
+      const codesToExport = icdPredictions?.selectedCodes?.length > 0 
+        ? icdPredictions.selectedCodes 
+        : icdPredictions?.codes;
+      
+      if (!codesToExport?.length) return '';
       
       const priorityGroups = {
-        primary: icdPredictions.codes.filter((code: any) => code.priority === 'primary'),
-        secondary: icdPredictions.codes.filter((code: any) => code.priority === 'secondary'),
-        differential: icdPredictions.codes.filter((code: any) => code.priority === 'differential')
+        primary: codesToExport.filter((code: any) => code.priority === 'primary'),
+        secondary: codesToExport.filter((code: any) => code.priority === 'secondary'),
+        differential: codesToExport.filter((code: any) => code.priority === 'differential')
       };
       
       const sections: string[] = [];
@@ -305,16 +310,21 @@ export default function ReportViewer({
       }
       
       if (sections.length > 0) {
-        const totalCodes = icdPredictions.summary?.totalCodes || icdPredictions.codes.length;
-        const avgConfidence = Math.round((icdPredictions.summary?.averageConfidence ?? 
-          (icdPredictions.codes.length > 0 ? 
-            icdPredictions.codes.reduce((sum: number, code: any) => sum + (code.confidence || 0.8), 0) / icdPredictions.codes.length :
-            0.6)) * 100);
+        // Update summary to reflect selected codes
+        const totalCodes = codesToExport.length;
+        const avgConfidence = Math.round(
+          (codesToExport.length > 0 ? 
+            codesToExport.reduce((sum: number, code: any) => sum + (code.confidence || 0.8), 0) / codesToExport.length :
+            0.6) * 100
+        );
         const provider = icdPredictions.provider || 'AI';
         const timestamp = icdPredictions.timestamp ? new Date(icdPredictions.timestamp).toLocaleString() : new Date().toLocaleString();
+        const selectionNote = icdPredictions?.selectedCodes?.length > 0 
+          ? ` | ${isGerman ? 'Ausgewählt' : 'Selected'}: ${totalCodes}/${icdPredictions.codes.length}` 
+          : '';
         
         return sections.join('\n') + 
-               `\n${isGerman ? 'Zusammenfassung' : 'Summary'}: ${totalCodes} ${isGerman ? 'Codes' : 'codes'} | ${isGerman ? 'Durchschnittliche Konfidenz' : 'Average Confidence'}: ${avgConfidence}% | ${isGerman ? 'Anbieter' : 'Provider'}: ${provider} | ${isGerman ? 'Generiert' : 'Generated'}: ${timestamp}`;
+               `\n${isGerman ? 'Zusammenfassung' : 'Summary'}: ${totalCodes} ${isGerman ? 'Codes' : 'codes'}${selectionNote} | ${isGerman ? 'Durchschnittliche Konfidenz' : 'Average Confidence'}: ${avgConfidence}% | ${isGerman ? 'Anbieter' : 'Provider'}: ${provider} | ${isGerman ? 'Generiert' : 'Generated'}: ${timestamp}`;
       }
       
       return '';
@@ -353,8 +363,8 @@ ${formatContentValue(report.technicalDetails)}${enhancedFindingsSection ? `
 ${isGerman ? 'STRUKTURIERTE BEFUNDE (KI-ANALYSIERT)' : 'STRUCTURED FINDINGS (AI-ANALYZED)'}
 ${'-'.repeat(isGerman ? 'STRUKTURIERTE BEFUNDE (KI-ANALYSIERT)'.length : 'STRUCTURED FINDINGS (AI-ANALYZED)'.length)}${enhancedFindingsSection}` : ''}${icdCodesSection ? `
 
-${isGerman ? 'ICD-10-GM KODIERUNG' : 'ICD-10-GM CODING'}
-${'-'.repeat(isGerman ? 'ICD-10-GM KODIERUNG'.length : 'ICD-10-GM CODING'.length)}${icdCodesSection}` : ''}
+${isGerman ? 'ICD-10-GM KODIERUNG' : 'ICD-10-GM CODING'}${report.icdPredictions?.selectedCodes && report.icdPredictions.selectedCodes.length > 0 ? (isGerman ? ' (AUSGEWÄHLT)' : ' (SELECTED)') : ''}
+${'-'.repeat((isGerman ? 'ICD-10-GM KODIERUNG' : 'ICD-10-GM CODING').length + (report.icdPredictions?.selectedCodes && report.icdPredictions.selectedCodes.length > 0 ? (isGerman ? ' (AUSGEWÄHLT)' : ' (SELECTED)').length : 0))}${icdCodesSection}` : ''}
 `.trim();
   };
 

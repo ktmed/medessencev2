@@ -11,8 +11,7 @@ const PORT = process.env.PORT || 3000;
 // CORS configuration
 const corsOptions = {
   origin: [
-    'https://fresh-deploy-murex.vercel.app',
-    'https://medessencev3-r80x0mzn3-kerem-tomaks-projects.vercel.app',
+    'https://medessencev3-test-kerem-tomaks-projects.vercel.app',
     'http://localhost:3000',
     'http://localhost:3010'
   ],

@@ -410,3 +410,105 @@ enum CircuitState {
   
   @@map("circuit_states")
 }
+
+// ICD-10-GM Database
+model ICDCode {
+  id                String   @id @default(cuid())
+  year              Int
+  level             Int
+  terminal          String   // T=Terminal, N=Non-terminal
+  icdCode           String   @unique
+  icdNormCode       String
+  label             String   // German description
+  chapterNr         Int
+  icdBlockFirst     String
+  genderSpecific    String?  // M, F, or 9
+  ageMin            Int?
+  ageMax            Int?
+  rareInCentralEurope String @default("N")
+  notifiable        String   @default("N")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([icdCode])
+  @@index([chapterNr])
+  @@index([terminal])
+  @@index([label])
+  @@map("icd_codes")
+}
+
+// Medical Cases from Excel (189,461 records)
+model MedicalCase {
+  id               String   @id @default(cuid())
+  patientSex       String?
+  caseAgeClass     String?
+  examServiceId    String?
+  order            String?
+  examDescription  String?
+  examDescriptionDE String?
+  caseOrderDE      String?
+  icdCode          String?
+  reportText       String   @db.Text
+  examDate         DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([icdCode])
+  @@index([examDate])
+  @@index([examServiceId])
+  @@map("medical_cases")
+}
+
+// German Medical Terms Dictionary
+model MedicalTerm {
+  id          String   @id @default(cuid())
+  german      String   @unique
+  english     String?
+  category    String?  // anatomy, symptom, diagnosis, procedure, finding
+  modality    String?  // mammographie, ct, mri, etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([german])
+  @@index([category])
+  @@index([modality])
+  @@map("medical_terms")
+}
+
+// Ontology Entities
+model OntologyEntity {
+  id          String   @id @default(cuid())
+  entityType  String   // Patient, Diagnosis, Procedure, Finding, Anatomy
+  name        String
+  description String?
+  attributes  Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  fromRelationships OntologyRelationship[] @relation("FromEntity")
+  toRelationships   OntologyRelationship[] @relation("ToEntity")
+
+  @@index([entityType])
+  @@index([name])
+  @@map("ontology_entities")
+}
+
+// Ontology Relationships
+model OntologyRelationship {
+  id               String   @id @default(cuid())
+  relationshipType String   // HAS_DIAGNOSIS, HAS_PROCEDURE, LOCATED_IN, etc.
+  fromEntityId     String
+  toEntityId       String
+  confidence       Float?
+  metadata         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  fromEntity OntologyEntity @relation("FromEntity", fields: [fromEntityId], references: [id])
+  toEntity   OntologyEntity @relation("ToEntity", fields: [toEntityId], references: [id])
+
+  @@index([relationshipType])
+  @@index([fromEntityId])
+  @@index([toEntityId])
+  @@map("ontology_relationships")
+}

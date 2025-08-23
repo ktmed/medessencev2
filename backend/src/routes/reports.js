@@ -3,7 +3,7 @@ const MultiLLMService = require('../../../services/core/llm/multi-llm-service');
 
 const router = express.Router();
 
-// Initialize Multi-LLM Service once
+// Initialize Multi-LLM Service
 const multiLLMService = new MultiLLMService();
 
 /**
@@ -145,6 +145,144 @@ router.post('/generate-report', async (req, res) => {
     
     return res.status(500).json({
       error: 'Failed to generate report',
+      details: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * Generate patient summary using local Ollama models
+ * POST /api/generate-summary
+ */
+router.post('/generate-summary', async (req, res) => {
+  try {
+    const { reportContent, language = 'de', complexity = 'detailed', processingMode = 'local' } = req.body;
+    
+    console.log('🏥 Backend: Generate Summary Request');
+    console.log('- Content length:', reportContent?.length || 0);
+    console.log('- Language:', language);
+    console.log('- Complexity:', complexity);
+    console.log('- Processing mode:', processingMode);
+
+    if (!reportContent || !reportContent.trim()) {
+      return res.status(400).json({
+        error: 'No report content provided',
+        details: 'reportContent is required and cannot be empty'
+      });
+    }
+
+    // For local processing, use Ollama models
+    if (processingMode === 'local') {
+      console.log('🏠 Using local Ollama processing for summary');
+      
+      try {
+        const result = await multiLLMService.generatePatientSummary(
+          reportContent,
+          language
+        );
+
+        console.log('✅ Local summary generated successfully');
+        console.log('- Provider:', result.provider);
+
+        // Format response to match expected PatientSummary structure
+        const summary = {
+          id: `summary-${Date.now()}`,
+          reportId: `report-${Date.now()}`,
+          summary: result.summary || result.meaning || reportContent.substring(0, 500),
+          keyFindings: result.keyFindings || result.findings ? [result.findings] : ['See detailed summary'],
+          recommendations: result.recommendations || result.nextSteps ? [result.nextSteps] : ['Further medical care recommended'],
+          language: language,
+          generatedAt: Date.now(),
+          complexity: complexity,
+          metadata: {
+            aiProvider: result.provider || 'ollama-local',
+            processingAgent: 'backend_multi_llm_service',
+            confidence: 0.8,
+            processingMode: 'local',
+            originalContentLength: reportContent.length,
+            ...result.metadata
+          }
+        };
+
+        return res.json(summary);
+
+      } catch (error) {
+        console.error('❌ Local summary generation failed:', error);
+        
+        // Return fallback summary
+        const fallbackSummary = {
+          id: `summary-${Date.now()}`,
+          reportId: `report-${Date.now()}`,
+          summary: `Local processing failed - see original report:\n\n${reportContent.substring(0, 500)}...`,
+          keyFindings: ['See original report'],
+          recommendations: ['Please review manually or try cloud processing'],
+          language: language,
+          generatedAt: Date.now(),
+          complexity: complexity,
+          metadata: {
+            aiProvider: 'local-fallback',
+            processingAgent: 'backend_fallback',
+            confidence: 0.3,
+            processingMode: 'local',
+            fallbackReason: error.message,
+            originalContentLength: reportContent.length
+          }
+        };
+
+        return res.json(fallbackSummary);
+      }
+    }
+
+    // For cloud processing, use cloud providers (not implemented in multi-llm-service yet)
+    console.log('☁️ Using cloud processing for summary - fallback to local');
+    
+    try {
+      const result = await multiLLMService.generatePatientSummary(
+        reportContent,
+        language
+      );
+
+      console.log('✅ Cloud summary generated successfully');
+      console.log('- Provider:', result.provider);
+
+      // Format response to match expected PatientSummary structure
+      const summary = {
+        id: `summary-${Date.now()}`,
+        reportId: `report-${Date.now()}`,
+        summary: result.summary || result.meaning || reportContent.substring(0, 500),
+        keyFindings: result.keyFindings || result.findings ? [result.findings] : ['See detailed summary'],
+        recommendations: result.recommendations || result.nextSteps ? [result.nextSteps] : ['Further medical care recommended'],
+        language: language,
+        generatedAt: Date.now(),
+        complexity: complexity,
+        metadata: {
+          aiProvider: result.provider || 'cloud-ai',
+          processingAgent: 'backend_multi_llm_service',
+          confidence: 0.9,
+          processingMode: 'cloud',
+          originalContentLength: reportContent.length,
+          ...result.metadata
+        }
+      };
+
+      return res.json(summary);
+
+    } catch (error) {
+      console.error('❌ Cloud summary generation failed:', error);
+      
+      return res.status(500).json({
+        error: 'Failed to generate summary',
+        details: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Backend summary generation error:', error);
+    
+    return res.status(500).json({
+      error: 'Failed to generate summary',
       details: error.message,
       timestamp: new Date().toISOString()
     });

@@ -2,7 +2,7 @@
 **Version**: 1.0  
 **Date**: August 18, 2025  
 **Status**: Current State Documentation  
-**Live Deployment**: https://fresh-deploy-murex.vercel.app/
+**Live Deployment**: https://medessencev3-test-kerem-tomaks-projects.vercel.app/
 
 ---
 
@@ -29,7 +29,7 @@ MedEssenceAI is an AI-powered medical transcription and report generation system
 ## 2. Current System Status
 
 ### 2.1 Deployment Status
-- **Production Environment**: Vercel (https://fresh-deploy-murex.vercel.app/)
+- **Production Environment**: Vercel (https://medessencev3-test-kerem-tomaks-projects.vercel.app/)
 - **Development Environment**: Local Docker Compose setup
 - **System Health**: Operational with WebSocket connectivity issues on live deployment
 - **Last Major Update**: August 18, 2025
@@ -355,7 +355,7 @@ GET /api/users/profile
 ### 10.1 Current Deployment Architecture
 
 #### 10.1.1 Vercel Production Deployment
-- **URL**: https://fresh-deploy-murex.vercel.app/
+- **URL**: https://medessencev3-test-kerem-tomaks-projects.vercel.app/
 - **Frontend**: Next.js application auto-deployed from main branch
 - **Build Configuration**: Optimized production build with edge functions
 - **CDN**: Global content delivery with edge caching

@@ -45,7 +45,7 @@ heroku config:set JWT_SECRET=$(openssl rand -base64 64) -a medessence-backend
 heroku config:set JWT_REFRESH_SECRET=$(openssl rand -base64 64) -a medessence-backend
 
 # CORS Configuration
-heroku config:set CORS_ORIGIN=https://fresh-deploy-murex.vercel.app -a medessence-backend
+heroku config:set CORS_ORIGIN=https://medessencev3-test-kerem-tomaks-projects.vercel.app -a medessence-backend
 
 # Node.js Configuration
 heroku config:set NODE_ENV=production -a medessence-backend
@@ -101,7 +101,7 @@ heroku info -a medessence-backend | grep "Web URL"
 
 2. **Update Vercel Dashboard**:
    - Go to: https://vercel.com/dashboard
-   - Select your project: fresh-deploy-murex
+   - Select your project: medessencev3-test
    - Go to Settings → Environment Variables
    - Add/Update these variables:
 
@@ -127,7 +127,7 @@ curl https://medessence-backend.herokuapp.com/api/health
 ```
 
 ### 2. Test Frontend Connection
-- Open: https://fresh-deploy-murex.vercel.app/
+- Open: https://medessencev3-test-kerem-tomaks-projects.vercel.app/
 - Should show "Connected" status (green)
 - Test voice recording and report generation
 

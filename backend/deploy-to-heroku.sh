@@ -71,7 +71,7 @@ heroku config:set JWT_SECRET=$(openssl rand -base64 64) --app $APP_NAME
 heroku config:set JWT_REFRESH_SECRET=$(openssl rand -base64 64) --app $APP_NAME
 
 # CORS Configuration (for Vercel frontend)
-heroku config:set CORS_ORIGINS=https://fresh-deploy-murex.vercel.app,https://fresh-deploy-murex.vercel.app/ --app $APP_NAME
+heroku config:set CORS_ORIGINS=https://medessencev3-test-kerem-tomaks-projects.vercel.app --app $APP_NAME
 
 # Node.js Configuration
 heroku config:set NODE_ENV=production --app $APP_NAME
@@ -161,6 +161,8 @@ echo "📝 Next Steps:"
 echo "1. Update Vercel environment variables:"
 echo "   NEXT_PUBLIC_BACKEND_URL=$APP_URL"
 echo "   NEXT_PUBLIC_WEBSOCKET_URL=wss://${APP_NAME}.herokuapp.com"
+echo ""
+echo "2. Frontend URL configured for: https://medessencev3-test-kerem-tomaks-projects.vercel.app"
 echo ""
 echo "2. Test your deployment:"
 echo "   curl $APP_URL/api/health"
