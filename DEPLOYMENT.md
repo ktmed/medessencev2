@@ -6,7 +6,7 @@ This guide provides step-by-step instructions for deploying MedEssenceAI in a pr
 
 ```
 Internet → Nginx (SSL/Proxy) → Frontend (Next.js) → WebSocket Proxy → Core Services
-                             → API Routes                            → Vosk ASR
+                             → API Routes                            → WebSpeech API
                                                                      → Multi-LLM Services
                                                                      → PostgreSQL
                                                                      → Redis
@@ -180,8 +180,8 @@ docker-compose -f docker-compose.production.yml down -v
 # Scale WebSocket proxy for high load
 docker-compose -f docker-compose.production.yml up -d --scale websocket-proxy=3
 
-# Scale Vosk service for concurrent transcriptions
-docker-compose -f docker-compose.production.yml up -d --scale vosk-service=2
+# Scale backend service for concurrent API requests
+docker-compose -f docker-compose.production.yml up -d --scale backend=2
 ```
 
 ### Viewing Logs

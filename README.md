@@ -74,7 +74,7 @@ curl -f http://localhost:8080/api/health/database
 ```
 Frontend (React/Next.js) → Nginx → WebSocket Proxy → Core Services → Database
                                                   ↓
-                                            Vosk ASR + Multi-LLM
+                                            WebSpeech API + Multi-LLM
 ```
 
 ### Production Components
@@ -82,7 +82,7 @@ Frontend (React/Next.js) → Nginx → WebSocket Proxy → Core Services → Dat
 - **Frontend**: Next.js application with medical UI
 - **WebSocket Proxy**: Real-time communication handler
 - **Core Services**: Medical agents and LLM orchestration
-- **Transcription Service**: Vosk-based German medical speech recognition
+- **Transcription Service**: WebSpeech API-based German medical speech recognition
 - **Database**: PostgreSQL for reports, Redis for caching
 - **Monitoring**: Prometheus, Grafana, Loki for observability
 - **Security**: Nginx with SSL termination, rate limiting
@@ -115,7 +115,7 @@ Frontend (React/Next.js) → Nginx → WebSocket Proxy → Core Services → Dat
 ```bash
 # Scale specific services
 docker-compose -f docker-compose.production.yml up -d --scale websocket-proxy=3
-docker-compose -f docker-compose.production.yml up -d --scale vosk-service=2
+docker-compose -f docker-compose.production.yml up -d --scale backend=2
 ```
 
 ### Backup

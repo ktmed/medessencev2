@@ -18,7 +18,7 @@ MedEssenceAI-Production/
 ├── .gitignore                        # Production-optimized gitignore
 ├── docker-compose.production.yml     # Production Docker Compose
 ├── docker-compose.yml                # Standard Docker Compose
-├── Dockerfile.vosk                   # Vosk transcription service
+├── Dockerfile.backend                # Backend API service
 ├── Dockerfile.websocket-proxy        # WebSocket proxy service
 ├── package.json                      # Root package configuration
 ├── requirements.txt                  # Python dependencies
@@ -62,7 +62,7 @@ MedEssenceAI-Production/
 ├── tests/                          # Test suites
 ├── logs/                           # Application logs (empty in production)
 ├── temp/                           # Temporary files (empty in production)
-└── vosk-models/                    # Voice recognition models
+└── ontology-data/                   # Medical ontology database
 ```
 
 ## 🚀 What's Been Optimized for Production
