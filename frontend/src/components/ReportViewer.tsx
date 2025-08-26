@@ -82,16 +82,20 @@ export default function ReportViewer({
   };
 
   const exportReport = () => {
-    if (report && onExport) {
-      onExport(report);
-    } else if (report) {
+    // If we have an editedReport (which includes selected ICD codes), use it
+    // Otherwise use the original report
+    const reportToExport = editedReport || report;
+    
+    if (reportToExport && onExport) {
+      onExport(reportToExport);
+    } else if (reportToExport) {
       // Default export as formatted text
-      const reportText = formatReportForExport(report);
+      const reportText = formatReportForExport(reportToExport);
       const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `medical-report-${report.id}.txt`;
+      a.download = `medical-report-${reportToExport.id}.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
