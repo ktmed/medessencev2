@@ -33,6 +33,12 @@ describe('WebSpeechRecorder', () => {
     error: null,
     validationEnabled: true,
     toggleValidation: mockToggleValidation,
+    quality: {
+      overall: 'good',
+      confidence: 0.95,
+      medicalAccuracy: 0.98,
+      grammarScore: 0.92
+    },
     getQualityAssessment: jest.fn(() => ({ score: 95, issues: [] })),
     confidence: 0.95,
     connectionStatus: 'connected',
@@ -42,7 +48,9 @@ describe('WebSpeechRecorder', () => {
       browserSupport: true,
       apiAvailable: true,
       permissionStatus: 'granted'
-    }
+    },
+    ontologyAvailable: true,
+    ontologyEnhanced: false
   }
 
   beforeEach(() => {
