@@ -137,8 +137,10 @@ export default function Dashboard() {
       console.log('- findings length:', report.findings?.length || 0);
       console.log('- findings content:', report.findings?.substring(0, 100) + '...');
       
-      if (report.metadata?.aiGenerated && report.findings && report.findings.trim().length > 0) {
-        console.log('🏥 Auto-generating ICD codes for AI report...');
+      // Generate ICD codes for all reports with findings (not just AI-generated)
+      if (report.findings && report.findings.trim().length > 0) {
+        console.log('🏥 Auto-generating ICD codes...');
+        console.log('- Report type:', report.metadata?.aiGenerated ? 'AI-generated' : 'Rule-based fallback');
         const reportContent = `${report.findings}\n\n${report.impression}\n\n${report.recommendations}`;
         console.log('📋 ICD generation content length:', reportContent.length);
         
@@ -166,7 +168,10 @@ export default function Dashboard() {
           
           console.log('✅ ICD codes added to report:', icdCodes?.codes?.length, 'codes');
         } catch (error) {
-          console.warn('⚠️ ICD code generation failed:', error);
+          console.error('⚠️ ICD code generation failed:', error);
+          // Show error to user
+          setError('ICD-Code-Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.');
+          setTimeout(() => setError(null), 5000);
         }
 
         // Auto-generate Enhanced Findings only if not already provided by the API
@@ -356,7 +361,9 @@ export default function Dashboard() {
           
           console.log('✅ ICD codes added to pasted text report');
         } catch (error) {
-          console.warn('⚠️ ICD code generation failed for pasted text:', error);
+          console.error('⚠️ ICD code generation failed for pasted text:', error);
+          setError('ICD-Code-Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.');
+          setTimeout(() => setError(null), 5000);
         }
 
         // Auto-generate Enhanced Findings for pasted text only if not already provided by the API
@@ -644,8 +651,8 @@ export default function Dashboard() {
                   success: `Medical report generated successfully using ${report.metadata?.aiProvider || 'AI'}` 
                 }));
                 
-                // Auto-generate ICD codes if AI was used successfully
-                if (report.metadata?.aiGenerated && report.findings && report.findings.trim().length > 0) {
+                // Auto-generate ICD codes for all reports with findings
+                if (report.findings && report.findings.trim().length > 0) {
                   console.log('🏥 Auto-generating ICD codes for edited text report...');
                   const reportContent = `${report.findings}\n\n${report.impression}\n\n${report.recommendations}`;
                   
@@ -664,7 +671,9 @@ export default function Dashboard() {
                     
                     console.log('✅ ICD codes added to edited text report');
                   } catch (error) {
-                    console.warn('⚠️ ICD code generation failed for edited text:', error);
+                    console.error('⚠️ ICD code generation failed for edited text:', error);
+                    setError('ICD-Code-Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.');
+                    setTimeout(() => setError(null), 5000);
                   }
                   
                   // Auto-generate Enhanced Findings (same logic as main report generation)

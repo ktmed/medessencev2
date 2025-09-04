@@ -176,7 +176,12 @@ class ServerICDService {
 
   private async callOntologyService(reportContent: string): Promise<ICDPredictions | null> {
     try {
-      const response = await fetch('http://localhost:8001/api/enhance-transcription', {
+      // Use ONTOLOGY_SERVICE_URL from environment, fallback to localhost for local dev
+      const ontologyUrl = process.env.ONTOLOGY_SERVICE_URL || 'http://localhost:8002';
+      const enhanceUrl = `${ontologyUrl}/api/enhance-transcription`;
+      console.log('🔗 Using ontology service URL:', enhanceUrl);
+      
+      const response = await fetch(enhanceUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
