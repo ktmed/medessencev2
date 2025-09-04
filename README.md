@@ -1,202 +1,92 @@
-# MedEssenceAI - Production Deployment
+# MedEssence AI - Medical Transcription & Report Generation
 
-A cutting-edge AI-powered medical transcription and report generation system specifically designed for radiology practices. Built with advanced speech recognition, Multi-LLM architecture (OpenAI, Claude, Gemini), and specialized medical agents.
-
-## 🚀 Quick Production Deployment
-
-### Prerequisites
-
-1. **API Keys Required**:
-   - OpenAI API key ([Get here](https://platform.openai.com/api-keys))
-   - Claude API key ([Get here](https://console.anthropic.com/))
-   - Gemini API key ([Get here](https://makersuite.google.com/app/apikey))
-
-2. **System Requirements**:
-   - 16GB RAM minimum (32GB recommended for production)
-   - 50GB free disk space
-   - Docker and Docker Compose
-   - SSL certificates for HTTPS
-
-### Quick Start
-
-1. **Clone and Configure**:
-   ```bash
-   git clone <repository-url> medessenceai-production
-   cd medessenceai-production
-   cp .env.production.example .env.production
-   ```
-
-2. **Add API Keys** to `.env.production`:
-   ```env
-   OPENAI_API_KEY=your_openai_key_here
-   ANTHROPIC_API_KEY=your_claude_key_here
-   GOOGLE_API_KEY=your_gemini_key_here
-   
-   # Database (change these!)
-   POSTGRES_PASSWORD=your_secure_password_here
-   REDIS_PASSWORD=your_redis_password_here
-   
-   # SSL Configuration
-   SSL_CERT_PATH=/path/to/your/cert.pem
-   SSL_KEY_PATH=/path/to/your/private.key
-   
-   # Domain Configuration
-   DOMAIN_NAME=your-domain.com
-   ```
-
-3. **Deploy with Docker**:
-   ```bash
-   # Production deployment
-   docker-compose -f docker-compose.production.yml up -d
-   
-   # Monitor logs
-   docker-compose -f docker-compose.production.yml logs -f
-   ```
-
-4. **Access the application**:
-   - HTTPS: https://your-domain.com
-   - HTTP (development): http://localhost:3000
-
-### Health Checks
+## 🚀 Quick Start (The ONLY way to run locally)
 
 ```bash
-# Check all services
-curl -f http://localhost:8080/health || echo "Service unhealthy"
+# From the project root directory, simply run:
+./start.sh
 
-# Check individual components
-curl -f http://localhost:8080/api/health/transcription
-curl -f http://localhost:8080/api/health/llm
-curl -f http://localhost:8080/api/health/database
+# Or manually:
+cd frontend && npm run dev
 ```
 
-## 🏗️ Architecture
+The application will start on **http://localhost:3010**
+
+## ✅ What Works
+
+- **Medical Transcription**: Using WebSpeech API (browser-native, no Vosk needed)
+- **AI Report Generation**: Multi-provider support (Claude, Gemini, OpenAI)
+- **ICD Code Generation**: Automatic medical coding
+- **Enhanced Findings**: AI-powered finding extraction
+- **Multi-language Support**: German and Arabic support
+
+## 🌐 Production Deployment
+
+The application is deployed at: **https://medessencev3.vercel.app**
+
+## 📁 Project Structure
 
 ```
-Frontend (React/Next.js) → Nginx → WebSocket Proxy → Core Services → Database
-                                                  ↓
-                                            WebSpeech API + Multi-LLM
+.
+├── frontend/           # Next.js application (THE ONLY ACTIVE PART)
+│   ├── app/           # App router pages and API routes
+│   ├── components/    # React components
+│   └── .env.local     # API keys configuration
+├── _archive_unused/   # Archived unnecessary services (ignore this)
+└── start.sh          # Quick start script
 ```
 
-### Production Components
+## ⚠️ Important Notes
 
-- **Frontend**: Next.js application with medical UI
-- **WebSocket Proxy**: Real-time communication handler
-- **Core Services**: Medical agents and LLM orchestration
-- **Transcription Service**: WebSpeech API-based German medical speech recognition
-- **Database**: PostgreSQL for reports, Redis for caching
-- **Monitoring**: Prometheus, Grafana, Loki for observability
-- **Security**: Nginx with SSL termination, rate limiting
+1. **DO NOT** try to use Docker - it's not needed and will cause issues
+2. **DO NOT** look for backend services - everything is integrated in Next.js
+3. **DO NOT** try to run on any port other than 3010
+4. The frontend folder contains EVERYTHING needed including API routes
 
-## 🌟 Key Features
+## 🔑 Environment Variables
 
-- **Real-time German medical transcription** with 99%+ accuracy
-- **AI-powered report generation** using multiple LLMs with automatic fallback
-- **8 specialized medical agents** for different imaging modalities
-- **Sub-2 second latency** for real-time feedback
-- **HIPAA/GDPR compliant** architecture with data encryption
-- **High availability** with automatic failover and health checks
-- **Scalable microservices** architecture with container orchestration
+The `.env.local` file in the frontend folder should contain:
 
-## 🩺 Specialized Medical Agents
+```env
+ANTHROPIC_API_KEY=your_key_here
+OPENAI_API_KEY=your_key_here
+GOOGLE_API_KEY=your_key_here
+```
 
-- **Mammography**: BI-RADS classification, breast density assessment
-- **Spine MRI**: Disc pathology, stenosis grading, vertebral analysis
-- **CT Scan**: Contrast protocols, density measurements, organ assessment
-- **Ultrasound**: Doppler analysis, organ evaluation, flow patterns
-- **Oncology**: Staging, treatment tracking, radiation planning
-- **Cardiac**: Ejection fraction, valve assessment, cardiac function
-- **Pathology**: Histological analysis, grading, immunohistochemistry
-- **General**: Adaptive handler for miscellaneous reports
+## 🛠 Tech Stack
 
-## 🔧 Operations
+- **Frontend**: Next.js 14 with App Router
+- **Speech Recognition**: WebSpeech API (browser-native)
+- **AI Providers**: Claude, Gemini, OpenAI
+- **Deployment**: Vercel
 
-### Scaling
+## 📝 Development
 
 ```bash
-# Scale specific services
-docker-compose -f docker-compose.production.yml up -d --scale websocket-proxy=3
-docker-compose -f docker-compose.production.yml up -d --scale backend=2
+# Install dependencies (if needed)
+cd frontend && npm install
+
+# Start development server
+npm run dev
+
+# The app runs on http://localhost:3010
 ```
 
-### Backup
+## 🚫 What NOT to Do
 
-```bash
-# Database backup
-./scripts/backup-database.sh
+- Don't run `docker-compose` commands
+- Don't look for separate backend services
+- Don't try to change the port from 3010
+- Don't run multiple services - just the frontend
 
-# Full system backup
-./scripts/backup-complete.sh
-```
+## ✨ Features
 
-### Updates
-
-```bash
-# Rolling update
-./scripts/rolling-update.sh
-
-# Rollback
-./scripts/rollback.sh
-```
-
-### Monitoring
-
-Access monitoring dashboards:
-- Grafana: http://your-domain.com:3001
-- Prometheus: http://your-domain.com:9090
-- Application logs: `docker-compose logs -f`
-
-## 🔒 Security Features
-
-- **SSL/TLS encryption** for all connections
-- **API rate limiting** to prevent abuse
-- **Authentication middleware** with JWT tokens
-- **Data encryption at rest** for sensitive medical data
-- **Audit logging** for compliance requirements
-- **Network isolation** using Docker networks
-- **Secrets management** with Docker secrets
-
-## 📊 Performance
-
-- **Latency**: <2 seconds for transcription + report generation
-- **Throughput**: 100+ concurrent sessions supported
-- **Accuracy**: 99%+ for German medical terminology
-- **Uptime**: 99.9% with proper infrastructure
-- **Resource usage**: ~8GB RAM, 4 CPU cores per instance
-
-## 🆘 Troubleshooting
-
-### Common Issues
-
-1. **Service won't start**:
-   ```bash
-   docker-compose -f docker-compose.production.yml logs service-name
-   ```
-
-2. **Database connection issues**:
-   ```bash
-   ./scripts/test-database-connection.sh
-   ```
-
-3. **SSL certificate issues**:
-   ```bash
-   ./scripts/test-ssl-setup.sh
-   ```
-
-4. **Performance issues**:
-   ```bash
-   ./scripts/performance-diagnostics.sh
-   ```
-
-### Support Channels
-
-- Technical Issues: Create GitHub issue
-- Production Support: support@medessenceai.com
-- Documentation: [docs.medessenceai.com](https://docs.medessenceai.com)
-
-## 📄 License
-
-Proprietary software - All rights reserved by MedEssenceAI GmbH
+1. Click microphone to start recording
+2. Speech is transcribed in real-time using WebSpeech API
+3. Generate medical report with AI
+4. Extract ICD codes automatically
+5. Export reports in various formats
 
 ---
 
-**Built for Healthcare Excellence** 🏥 by MedEssenceAI GmbH
+**Remember**: Just run `./start.sh` and go to http://localhost:3010 - that's it!

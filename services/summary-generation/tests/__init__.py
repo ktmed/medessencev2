@@ -1,1 +1,0 @@
-"""Test suite for Patient-Friendly Summary Generation Service."""

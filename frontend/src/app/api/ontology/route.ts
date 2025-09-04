@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandling, createApiResponse, logApiMetrics } from '@/lib/api-middleware';
 
 // Ontology service URL - can be configured via environment variable
-const ONTOLOGY_SERVICE_URL = process.env.ONTOLOGY_SERVICE_URL || 'http://localhost:8001';
+const ONTOLOGY_SERVICE_URL = process.env.ONTOLOGY_SERVICE_URL || 'http://localhost:8002';
 
 interface OntologyRequest {
   action: 'enhance' | 'suggest-icd' | 'search-cases' | 'statistics';

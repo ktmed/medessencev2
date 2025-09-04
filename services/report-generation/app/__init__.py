@@ -1,1 +1,0 @@
-# Medical Report Generation Service

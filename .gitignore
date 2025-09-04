@@ -2,6 +2,17 @@
 # MedEssenceAI Production .gitignore
 # =============================================================================
 
+# PREVENT DOCKER FILES FROM BEING ADDED
+docker-compose*.yml
+Dockerfile*
+*/Dockerfile*
+*/docker-compose*
+
+# Archived/unused folders
+_archive_unused/
+backend/
+services/
+
 # Environment files
 .env
 .env.local

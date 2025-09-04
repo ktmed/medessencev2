@@ -1,1 +1,0 @@
-"""Patient-Friendly Summary Generation Service."""

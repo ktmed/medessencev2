@@ -37,7 +37,7 @@ interface OntologyValidationRequest {
 }
 
 class OntologyService {
-  private baseUrl: string = process.env.NEXT_PUBLIC_ONTOLOGY_URL || 'http://localhost:8001';
+  private baseUrl: string = process.env.NEXT_PUBLIC_ONTOLOGY_URL || 'http://localhost:8002';
   private cache: Map<string, { data: OntologyValidationResponse; timestamp: number }> = new Map();
   private cacheTimeout: number = 30000; // 30 seconds cache for real-time
   private requestQueue: Map<string, Promise<OntologyValidationResponse>> = new Map();
@@ -95,17 +95,16 @@ class OntologyService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-      const response = await fetch(`${this.baseUrl}/api/enhance-transcription`, {
+      const response = await fetch(`${this.baseUrl}/correct`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
           'Accept': 'application/json; charset=utf-8',
         },
         body: JSON.stringify({
-          transcription_text: request.text,
-          modality: this.detectModality(request.text),
-          real_time_mode: request.real_time,
-          language: request.language
+          text: request.text,
+          context: this.detectModality(request.text),
+          confidence_threshold: 0.7
         }),
         signal: controller.signal
       });
@@ -140,11 +139,44 @@ class OntologyService {
    * Transform ontology service response to our format
    */
   private transformResponse(data: any, originalText: string): OntologyValidationResponse {
-    if (!data.success) {
+    // Handle direct array response from /correct endpoint
+    if (Array.isArray(data)) {
+      const corrections = data.map((item: any) => ({
+        original: item.original,
+        corrected: item.suggested,
+        confidence: item.confidence || 0.85,
+        type: 'medical_term' as const
+      }));
+
+      // Build enhanced text by applying corrections
+      let enhancedText = originalText;
+      corrections.forEach(correction => {
+        enhancedText = enhancedText.replace(correction.original, correction.corrected);
+      });
+
+      return {
+        success: true,
+        data: {
+          enhanced_text: enhancedText,
+          corrections,
+          medical_terms_detected: data.filter((item: any) => item.category).map((item: any, index: number) => ({
+            term: item.suggested,
+            category: item.category || 'medical',
+            confidence: item.confidence || 0.8,
+            position: item.position || index
+          })),
+          quality_score: corrections.length > 0 ? 0.9 : 0.8,
+          suggestions: []
+        }
+      };
+    }
+
+    // Handle object response format (legacy)
+    if (!data.success && !data.data) {
       return { success: false, error: data.error || 'Unknown error' };
     }
 
-    const responseData = data.data || {};
+    const responseData = data.data || data || {};
     
     // Extract corrections from ontology response
     const corrections: Array<{
@@ -224,7 +256,7 @@ class OntologyService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 1000);
 
-      const response = await fetch(`${this.baseUrl}/api/statistics`, {
+      const response = await fetch(`${this.baseUrl}/health`, {
         method: 'GET',
         signal: controller.signal
       });
@@ -241,7 +273,7 @@ class OntologyService {
    */
   async getStatistics(): Promise<any> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/statistics`);
+      const response = await fetch(`${this.baseUrl}/health`);
       if (response.ok) {
         return await response.json();
       }

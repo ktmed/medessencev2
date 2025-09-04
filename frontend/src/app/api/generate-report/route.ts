@@ -27,101 +27,123 @@ class SimpleMultiLLMService {
   private classifyMedicalContent(text: string): { type: string; agent: string; specialty: string; confidence: number } {
     const lowerText = text.toLowerCase();
     
-    // Define medical specialty patterns
+    // Enhanced medical specialty patterns with ontology terms
     const specialtyPatterns = {
       'mammography': {
-        keywords: ['mammo', 'breast', 'brust', 'mammographie', 'birads', 'microcalcification', 'architectural distortion', 'masse', 'density'],
+        keywords: ['mammo', 'mammographie', 'mammografie', 'breast', 'brust', 'brustdrüse', 'birads', 'bi-rads', 
+                  'axilla', 'achselhöhle', 'lymphknoten axillär', 'sono mammae', 'mikrokalk', 'mikrokalifikation',
+                  'mastopathie', 'fibroadenom', 'raumforderung mamma', 'architectural distortion', 'masse', 'density'],
         agent: 'mammography_specialist',
         type: 'Mammography'
       },
       'spine_mri': {
-        keywords: ['wirbelsäule', 'spine', 'lumbar', 'cervical', 'thoracic', 'lws', 'hws', 'bws', 'bandscheibe', 'disc', 'spondylose', 'spinal', 'vertebral', 'facet'],
-        agent: 'spine_mri_specialist', 
+        keywords: ['wirbelsäule', 'columna vertebralis', 'spine', 'lumbar', 'cervical', 'thoracic', 
+                  'lws', 'hws', 'bws', 'lendenwirbelsäule', 'halswirbelsäule', 'brustwirbelsäule',
+                  'bandscheibe', 'diskus', 'disc', 'spinalkanal', 'neuroforamen', 'wirbelkörper', 'facettengelenk',
+                  'spondylose', 'spondylolisthesis', 'protrusion', 'prolaps', 'sequester', 'vertebral', 'facet'],
+        agent: 'spine_mri_specialist',
         type: 'Spine MRI'
       },
-      'cardiac': {
-        keywords: ['herz', 'heart', 'cardiac', 'coronary', 'aorta', 'ventricle', 'atrium', 'myocardium', 'pericardium', 'ecg', 'ekg', 'echo'],
-        agent: 'cardiac_imaging_specialist',
-        type: 'Cardiac Imaging'
-      },
-      'chest_xray': {
-        keywords: ['thorax', 'chest', 'lung', 'lunge', 'pneumo', 'pleura', 'bronch', 'mediastinum', 'rib', 'rippe'],
-        agent: 'chest_xray_specialist',
-        type: 'Chest X-Ray'
-      },
-      'ct_scan': {
-        keywords: ['computertomographie', 'ct scan', 'computed tomography', 'contrast', 'hounsfield', 'axial', 'coronal', 'sagittal'],
-        agent: 'ct_scan_specialist',
-        type: 'CT Scan'
-      },
-      'mri': {
-        keywords: ['mri', 'mrt', 'magnetic resonance', 'magnetresonanz', 't1', 't2', 'flair', 'dwi', 'adc', 'contrast enhancement'],
-        agent: 'mri_specialist',
-        type: 'MRI'
-      },
-      'ultrasound': {
-        keywords: ['ultraschall', 'ultrasound', 'sonography', 'doppler', 'echogenic', 'hypoechoic', 'hyperechoic', 'anechoic'],
-        agent: 'ultrasound_specialist',
-        type: 'Ultrasound'
+      'chest_ct': {
+        keywords: ['thorax', 'chest', 'lung', 'lunge', 'pulmonary', 'pulmonal', 'mediastinum', 'pleura',
+                  'bronchien', 'bronchus', 'pneumonie', 'pneumothorax', 'hämatothorax', 'thoraxwand',
+                  'rippenfraktur', 'lungenembolie', 'emphysem', 'atelektase', 'pneumo', 'bronch', 'rib', 'rippe'],
+        agent: 'chest_ct_specialist',
+        type: 'Chest CT'
       },
       'abdominal': {
-        keywords: ['abdomen', 'liver', 'leber', 'kidney', 'niere', 'spleen', 'milz', 'pancreas', 'pankreas', 'gallbladder', 'gallenblase'],
-        agent: 'abdominal_imaging_specialist',
+        keywords: ['abdomen', 'bauch', 'bauchraum', 'liver', 'leber', 'hepatisch', 'kidney', 'niere', 'renal',
+                  'pancreas', 'pankreas', 'spleen', 'milz', 'gallenblase', 'gallbladder', 'darm', 'intestinal',
+                  'magen', 'gastric', 'colon', 'kolon', 'appendix', 'appendizitis', 'peritoneum'],
+        agent: 'abdominal_specialist',
         type: 'Abdominal Imaging'
       },
-      'neurological': {
-        keywords: ['brain', 'gehirn', 'skull', 'schädel', 'neurological', 'cerebral', 'zerebral', 'cranial', 'stroke', 'schlaganfall'],
-        agent: 'neurological_specialist',
-        type: 'Neurological Imaging'
+      'cardiac': {
+        keywords: ['cardiac', 'kardial', 'heart', 'herz', 'coronary', 'koronar', 'myocardial', 'myokard',
+                  'perikard', 'pericardium', 'ventrikel', 'ventricle', 'atrium', 'vorhof', 'klappe', 'valve',
+                  'aorta', 'echokardiographie', 'angiographie', 'koronarangiographie', 'ecg', 'ekg', 'echo'],
+        agent: 'cardiac_specialist',
+        type: 'Cardiac Imaging'
       },
-      'oncology': {
-        keywords: ['tumor', 'cancer', 'neoplasm', 'malignant', 'metastasis', 'oncology', 'chemotherapy', 'radiation', 'staging'],
-        agent: 'oncology_specialist',
-        type: 'Oncology'
+      'neuro': {
+        keywords: ['brain', 'gehirn', 'cerebral', 'zerebral', 'cranial', 'kranial', 'schädel', 'skull',
+                  'neurological', 'neurologisch', 'zns', 'hirnnerv', 'liquor', 'ventrikelsystem',
+                  'hypophyse', 'pituitary', 'meningeom', 'gliom', 'aneurysma', 'infarkt', 'schlaganfall', 'stroke'],
+        agent: 'neuro_specialist',
+        type: 'Neuroimaging'
       },
-      'pathology': {
-        keywords: ['biopsy', 'histology', 'pathology', 'cytology', 'tissue', 'specimen', 'microscopic', 'cellular'],
-        agent: 'pathology_specialist',
-        type: 'Pathology'
+      'musculoskeletal': {
+        keywords: ['joint', 'gelenk', 'bone', 'knochen', 'ossär', 'muscle', 'muskel', 'muskulatur',
+                  'tendon', 'sehne', 'ligament', 'band', 'meniskus', 'meniscus', 'arthrose', 'arthritis',
+                  'fraktur', 'fracture', 'luxation', 'ruptur', 'bursitis', 'synovitis', 'osteophyt'],
+        agent: 'musculoskeletal_specialist',
+        type: 'Musculoskeletal'
+      },
+      'vascular': {
+        keywords: ['gefäß', 'vascular', 'arterie', 'artery', 'vene', 'vein', 'angiographie', 'angiography',
+                  'stenose', 'stenosis', 'aneurysma', 'thrombose', 'embolie', 'doppler', 'farbdoppler',
+                  'verschluss', 'occlusion', 'karotis', 'carotid'],
+        agent: 'vascular_specialist',
+        type: 'Vascular Imaging'
+      },
+      'ultrasound': {
+        keywords: ['sonographie', 'sonografie', 'ultraschall', 'ultrasound', 'doppler', 'farbdoppler',
+                  'schallkopf', 'echogenität', 'echoarm', 'echoreich', 'schallschatten', 'schallverstärkung',
+                  'echogenic', 'hypoechoic', 'hyperechoic', 'anechoic'],
+        agent: 'ultrasound_specialist',
+        type: 'Ultrasound'
       }
     };
 
+    // Count weighted keyword matches
     let bestMatch = {
       type: 'General Radiology',
       agent: 'general_radiology_specialist',
       specialty: 'general',
-      confidence: 0
+      confidence: 0.5
     };
+    let maxScore = 0;
 
-    // Score each specialty based on keyword matches
     for (const [specialtyKey, data] of Object.entries(specialtyPatterns)) {
       let score = 0;
       let matchedKeywords: string[] = [];
 
       for (const keyword of data.keywords) {
         if (lowerText.includes(keyword)) {
-          score += 1;
+          // Weight scoring based on keyword specificity
+          if (keyword.length > 10) {
+            score += 3; // Very specific medical terms
+          } else if (keyword.length > 6) {
+            score += 2; // Moderately specific terms
+          } else {
+            score += 1; // Common abbreviations
+          }
           matchedKeywords.push(keyword);
         }
       }
 
-      const confidence = score / data.keywords.length;
-      
-      if (confidence > bestMatch.confidence) {
+      // Bonus for multiple matches
+      if (matchedKeywords.length > 2) {
+        score *= 1.5;
+      }
+
+      if (score > maxScore) {
+        maxScore = score;
+        const confidence = Math.min((score / 15) + (matchedKeywords.length * 0.1), 1);
         bestMatch = {
           type: data.type,
           agent: data.agent,
           specialty: specialtyKey,
-          confidence: confidence
+          confidence: confidence < 0.6 && score > 0 ? 0.6 : confidence
         };
       }
 
       if (matchedKeywords.length > 0) {
-        console.log(`🔍 ${specialtyKey} match: ${score}/${data.keywords.length} keywords (${Math.round(confidence * 100)}%) - ${matchedKeywords.join(', ')}`);
+        console.log(`🔍 ${specialtyKey}: score=${score.toFixed(1)}, matches=[${matchedKeywords.join(', ')}]`);
       }
     }
 
-    console.log(`🎯 Best classification: ${bestMatch.type} (${Math.round(bestMatch.confidence * 100)}% confidence)`);
+    console.log(`🎯 Classification: ${bestMatch.type} (${Math.round(bestMatch.confidence * 100)}% confidence, score=${maxScore})`);
     return bestMatch;
   }
 
