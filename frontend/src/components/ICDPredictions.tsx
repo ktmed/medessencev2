@@ -44,8 +44,25 @@ const ICDPredictionsComponent: React.FC<ICDPredictionsProps> = ({
     }
   }, [predictions]);
 
+  // Instead of returning null, show a placeholder when no predictions are available
   if (!predictions || !predictions.codes || predictions.codes.length === 0) {
-    return null;
+    return (
+      <div className={`bg-white rounded-lg shadow-md border border-gray-200 p-6 ${className}`}>
+        <div className="flex items-center gap-2 mb-4">
+          <ClipboardList className="h-5 w-5 text-blue-600" />
+          <h3 className="text-lg font-semibold text-gray-800">ICD-10-GM Kodierungen</h3>
+        </div>
+        <div className="text-center py-8">
+          <HelpCircle className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">
+            ICD-Codes werden generiert...
+          </p>
+          <p className="text-gray-400 text-xs mt-1">
+            Bitte warten Sie, während die Codes verarbeitet werden.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   const handleCodeToggle = (code: string) => {

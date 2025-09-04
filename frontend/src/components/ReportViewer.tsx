@@ -821,11 +821,11 @@ ${'-'.repeat((isGerman ? 'ICD-10-GM KODIERUNG' : 'ICD-10-GM CODING').length + (r
       {/* Close medical-card div */}
       </div>
 
-      {/* ICD-10-GM Predictions Section - Completely separate card outside main report */}
-      {currentReport && currentReport.icdPredictions && (
+      {/* ICD-10-GM Predictions Section - Always show to prevent flashing */}
+      {currentReport && (
         <div className="mt-6">
           <ICDPredictionsComponent 
-            predictions={currentReport.icdPredictions}
+            predictions={currentReport.icdPredictions || { codes: [], summary: { totalCodes: 0, primaryDiagnoses: 0, secondaryDiagnoses: 0 } }}
             onCodesSelected={(codes) => {
               console.log('ICD codes selected for report:', codes);
               // Update the report with selected codes
