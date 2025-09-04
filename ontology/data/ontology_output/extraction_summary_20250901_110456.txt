@@ -1,0 +1,62 @@
+================================================================================
+MEDICAL ONTOLOGY EXTRACTION SUMMARY
+================================================================================
+
+Extraction Date: 20250901_110456
+
+Total Categories: 13
+
+Total Unique Entities: 6367534
+
+================================================================================
+
+ENTITY COUNTS BY CATEGORY:
+----------------------------------------
+Anatomy Terms: 7,224
+Pathology Terms: 2,741
+Procedures: 1,915
+Measurements: 2,911
+Icd Codes: 0
+Exam Types: 10,590
+Medical Phrases: 6,339,656
+
+================================================================================
+
+TOP 10 MOST FREQUENT TERMS:
+----------------------------------------
+
+ANATOMY:
+  Lymphknoten: 452,308
+  Thorax: 65,915
+  lymphknoten: 61,629
+  LWS: 44,858
+  Thoraxwand: 34,917
+  Lymphabflusswege: 28,071
+  HWS: 21,972
+  Lymphome: 18,393
+  Wirbelsäule: 15,264
+  Leber: 14,889
+
+PATHOLOGY:
+  Tumoren: 93,075
+  Zysten: 53,869
+  Zyste: 51,749
+  Metastasen: 36,788
+  tumorsuspekten: 25,799
+  Tumor: 25,466
+  tumorsuspekter: 20,271
+  Tumorstadium: 16,757
+  zyste: 14,597
+  Metastase: 14,294
+
+PROCEDURES:
+  Untersuchung: 440,249
+  MRT: 375,825
+  Sonographie: 295,929
+  CT: 272,992
+  Diagnostik: 199,241
+  Bestrahlung: 179,245
+  Untersuchungsmethoden: 99,906
+  Röntgenaufnahme: 89,837
+  Untersuchungen: 78,523
+  Röntgenaufnahmen: 78,278

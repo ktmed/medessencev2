@@ -35,16 +35,7 @@ fi
 echo ""
 echo "🧬 Starting Medical Ontology Service..."
 echo "----------------------------------------"
-cd /Users/keremtomak/Documents/work/development/REPOS/med-essence/llmtraining
-
-# Check if ontology files exist
-if [ ! -f "ontology_output/medical_ontology.json" ]; then
-    echo "⚠️  Ontology files not found, creating symlinks..."
-    cd ontology_output
-    ln -sf medical_ontology_20250901_110456.json medical_ontology.json 2>/dev/null
-    ln -sf medical_ontology_20250901_110456.js medical_ontology.js 2>/dev/null
-    cd ..
-fi
+cd ontology/service
 
 # Start ontology service in background
 python3 realtime_ontology_service.py &
@@ -66,7 +57,7 @@ fi
 echo ""
 echo "🎨 Starting MedEssence Frontend..."
 echo "----------------------------------------"
-cd /Users/keremtomak/Documents/work/development/REPOS/med-essence/development/active/frontend
+cd frontend
 
 # Install dependencies if needed
 if [ ! -d "node_modules" ]; then

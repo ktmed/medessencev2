@@ -1,0 +1,177 @@
+{
+  "total_anatomy_terms": 7224,
+  "total_pathology_terms": 2741,
+  "total_procedures": 1915,
+  "total_measurements": 2911,
+  "total_icd_codes": 0,
+  "total_exam_types": 10590,
+  "total_medical_phrases": 6339656,
+  "top_anatomy": [
+    [
+      "Lymphknoten",
+      452308
+    ],
+    [
+      "Thorax",
+      65915
+    ],
+    [
+      "lymphknoten",
+      61629
+    ],
+    [
+      "LWS",
+      44858
+    ],
+    [
+      "Thoraxwand",
+      34917
+    ],
+    [
+      "Lymphabflusswege",
+      28071
+    ],
+    [
+      "HWS",
+      21972
+    ],
+    [
+      "Lymphome",
+      18393
+    ],
+    [
+      "Wirbelsäule",
+      15264
+    ],
+    [
+      "Leber",
+      14889
+    ]
+  ],
+  "top_pathology": [
+    [
+      "Tumoren",
+      93075
+    ],
+    [
+      "Zysten",
+      53869
+    ],
+    [
+      "Zyste",
+      51749
+    ],
+    [
+      "Metastasen",
+      36788
+    ],
+    [
+      "tumorsuspekten",
+      25799
+    ],
+    [
+      "Tumor",
+      25466
+    ],
+    [
+      "tumorsuspekter",
+      20271
+    ],
+    [
+      "Tumorstadium",
+      16757
+    ],
+    [
+      "zyste",
+      14597
+    ],
+    [
+      "Metastase",
+      14294
+    ]
+  ],
+  "top_procedures": [
+    [
+      "Untersuchung",
+      440249
+    ],
+    [
+      "MRT",
+      375825
+    ],
+    [
+      "Sonographie",
+      295929
+    ],
+    [
+      "CT",
+      272992
+    ],
+    [
+      "Diagnostik",
+      199241
+    ],
+    [
+      "Bestrahlung",
+      179245
+    ],
+    [
+      "Untersuchungsmethoden",
+      99906
+    ],
+    [
+      "Röntgenaufnahme",
+      89837
+    ],
+    [
+      "Untersuchungen",
+      78523
+    ],
+    [
+      "Röntgenaufnahmen",
+      78278
+    ]
+  ],
+  "top_exam_types": [
+    [
+      "Sono Mammae u.Ax",
+      56022
+    ],
+    [
+      "'Sono Mammae u.Ax.' ist eine Abkürzung und steht für: Sono = Sonographie/Ultraschalluntersuchung Mammae = Brüste/Mammae sind die lateinischen Begriff für die weiblichen Brüste u.Ax. = und Axillae/Achselhöhlen Es handelt sich also um eine Ultraschalluntersuchung der Brüste und der Achselhöhlen/Lymphknoten. Diese Untersuchung wird typischerweise zur Abklärung von Auffälligkeiten in den Brüsten und zur Suche nach eventuell vergrößerten Lymphknoten in der Achselhöhle durchgeführt. Sie ist ein wichtiger ergänzender Bestandteil der Brustuntersuchung, insbesondere bei der Erkennung und Überwachung von Brustkrebs.",
+      56022
+    ],
+    [
+      "Sono Mammae u.Ax 'Sono Mammae u.Ax.' ist eine Abkürzung und steht für: Sono = Sonographie/Ultraschalluntersuchung Mammae = Brüste/Mammae sind die lateinischen Begriff für die weiblichen Brüste u.Ax. = und Axillae/Achselhöhlen Es handelt sich also um eine Ultraschalluntersuchung der Brüste und der Achselhöhlen/Lymphknoten. Diese Untersuchung wird typischerweise zur Abklärung von Auffälligkeiten in den Brüsten und zur Suche nach eventuell vergrößerten Lymphknoten in der Achselhöhle durchgeführt. Sie ist ein wichtiger ergänzender Bestandteil der Brustuntersuchung, insbesondere bei der Erkennung und Überwachung von Brustkrebs. Die Mammadiagnostik ist ein Teilgebiet der Radiologie, das sich auf die bildgebende Untersuchung und Diagnostik der weiblichen Brust (Mamma) konzentriert. Die Hauptaufgaben der Mammadiagnostik sind: 1. Früherkennung von Brustkrebs durch Screening-Untersuchungen bei asymptomatischen Frauen. 2. Diagnostik bei Vorliegen von Symptomen wie Knoten, Sekretion, Hautveränderungen etc. 3. Überwachung und Verlaufskontrolle nach einer Brustkrebsbehandlung. Die wichtigsten bildgebenden Verfahren in der Mammadiagnostik sind: - Mammographie: Röntgenaufnahme der Brust zur Erkennung vonVerkalkungen und Herdbefunden - Sonographie: Ultraschalluntersuchung zur Differenzierung fester und zystischer Läsionen - MRT (Magnet-Resonanz-Tomographie): Zur genaueren Beurteilung von unklaren Befunden In spezialisierten Brustzentren arbeiten Radiologen eng",
+      24135
+    ],
+    [
+      "Sono Mammae u.Ax 'Sono Mammae u.Ax.' ist eine Abkürzung und steht für: Sono = Sonographie/Ultraschalluntersuchung Mammae = Brüste/Mammae sind die lateinischen Begriff für die weiblichen Brüste u.Ax. = und Axillae/Achselhöhlen Es handelt sich also um eine Ultraschalluntersuchung der Brüste und der Achselhöhlen/Lymphknoten. Diese Untersuchung wird typischerweise zur Abklärung von Auffälligkeiten in den Brüsten und zur Suche nach eventuell vergrößerten Lymphknoten in der Achselhöhle durchgeführt. Sie ist ein wichtiger ergänzender Bestandteil der Brustuntersuchung, insbesondere bei der Erkennung und Überwachung von Brustkrebs. Mammadiagnostik ist ein medizinischer Fachbegriff, der sich auf die Untersuchungsmethoden zur Diagnostik von Brusterkrankungen, insbesondere von Brustkrebs, bezieht. Genauer bedeutet Mammadiagnostik: - Die bildgebenden Verfahren zur Untersuchung der weiblichen Brust (Mamma) - Dazu gehören Röntgenaufnahmen (Mammographie), Ultraschalluntersuchungen (Sonographie) und gegebenenfalls weitere Verfahren wie MRT oder Biopsien - Ziel ist es, Veränderungen, Knoten oder Tumoren in der Brust frühzeitig zu erkennen und zu beurteilen, ob es sich um gutartige oder bösartige (krebsverdächtige) Veränderungen handelt - Die Mammadiagnostik ist ein wichtiger Bestandteil der Brustkrebsvorsorge und -früherkennung Zusammengefasst umfasst der Begriff alle bildgebenden und minimal-invasiven Untersuchungsmethoden zur Abklärung von Brusterkrankungen",
+      17848
+    ],
+    [
+      "Bestrahlung",
+      6898
+    ],
+    [
+      "Der Begriff \"Bestrahlung\" bezieht sich in der Radiologie auf die Exposition von Gewebe oder Objekten gegenüber ionisierender Strahlung wie Röntgenstrahlen, Gammastrahlen oder Teilchenstrahlung. Einige wichtige Punkte zur Bestrahlung: 1. Diagnostische Bestrahlung: Hierbei werden niedrige Dosen ionisierender Strahlung eingesetzt, um Bilder des Körperinneren für diagnostische Zwecke zu erzeugen, z.B. bei Röntgenaufnahmen, Computertomographien (CT) oder Mammographien. 2. Therapeutische Bestrahlung: Diese Form der Bestrahlung nutzt höhere, gezielt dosierte Strahlungsmengen, um Krebszellen oder andere erkrankte Zellen im Körper zu zerstören oder ihr Wachstum zu hemmen. Dies geschieht z.B. bei der Strahlentherapie. 3. Strahlenexposition: Eine unbeabsichtigte Bestrahlung von Personen oder der Umwelt durch ionisierende Strahlung, z.B. bei Unfällen in Kern",
+      6898
+    ],
+    [
+      "Planungs CT nat.",
+      5923
+    ],
+    [
+      "Der Begriff \"Planungs CT nat.\" steht für ein spezielles CT (Computertomographie) zur Planungsvorbereitung für eine Strahlentherapie bei Krebspatienten. Hier die genaue Bedeutung: Planungs CT = Computertomographie, die zur genauen Planungsgrundlage für die anschließende Bestrahlungsplanung (Strahlentherapie) dient. nat. = Abkürzung für \"nativ\", das heißt ohne Kontrastmittelgabe. Es wird ein CT ohne Kontrastmittel gemacht, um die natürlichen Dichteverhältnisse im Körper darzustellen. Dieses native Planungs-CT dient also dazu, ein präzises 3D-Abbild des Tumorgebietes und der umgebenden Strukturen des Patienten zu erhalten. Anhand dieser Aufnahmen können die Strahlentherapeuten dann die optimale Bestrahlungsplanung festlegen, um den Tumor zu behandeln und gleichzeitig das umliegende gesunde Gewebe bestmöglich zu schonen.",
+      5923
+    ],
+    [
+      "Planungs CT nat. Der Begriff \"Planungs CT nat.\" steht für ein spezielles CT (Computertomographie) zur Planungsvorbereitung für eine Strahlentherapie bei Krebspatienten. Hier die genaue Bedeutung: Planungs CT = Computertomographie, die zur genauen Planungsgrundlage für die anschließende Bestrahlungsplanung (Strahlentherapie) dient. nat. = Abkürzung für \"nativ\", das heißt ohne Kontrastmittelgabe. Es wird ein CT ohne Kontrastmittel gemacht, um die natürlichen Dichteverhältnisse im Körper darzustellen. Dieses native Planungs-CT dient also dazu, ein präzises 3D-Abbild des Tumorgebietes und der umgebenden Strukturen des Patienten zu erhalten. Anhand dieser Aufnahmen können die Strahlentherapeuten dann die optimale Bestrahlungsplanung festlegen, um den Tumor zu behandeln und gleichzeitig das umliegende gesunde Gewebe bestmöglich zu schonen. Die Strahlentherapie, auch als Radiotherapie bezeichnet, ist ein Behandlungsverfahren in der Medizin, bei dem ionisierende Strahlung gezielt eingesetzt wird, um Krebszellen zu zerstören oder ihr Wachstum zu verlangsamen. Hier die wichtigsten Punkte zur Strahlentherapie: 1. Einsatzgebiet: Sie wird vor allem zur Behandlung von bösartigen Tumoren (Krebserkrankungen) eingesetzt, kann aber auch bei bestimmten gutartigen Erkrankungen angewendet werden. 2. Strahlenarten: Es werden in der Regel hochenergetische Röntgenstrahlen oder Teilchenstrahlen wie Protonen- oder Kohlenstoffionen verwendet. 3. Ziele: Durch die gezielte Bestrahlung sollen die Krebszellen so weit wie möglich zerstört oder ihr Wachstum gehemmt werden, während das umliegende gesunde Gewebe möglichst geschont wird. 4. Behandlungsplanung: Vor der Bestrahlung wird eine aufwändige Bestrahlungsplanung durchgeführt, um",
+      5048
+    ],
+    [
+      "Bestrahlung Der Begriff \"Bestrahlung\" bezieht sich in der Radiologie auf die Exposition von Gewebe oder Objekten gegenüber ionisierender Strahlung wie Röntgenstrahlen, Gammastrahlen oder Teilchenstrahlung. Einige wichtige Punkte zur Bestrahlung: 1. Diagnostische Bestrahlung: Hierbei werden niedrige Dosen ionisierender Strahlung eingesetzt, um Bilder des Körperinneren für diagnostische Zwecke zu erzeugen, z.B. bei Röntgenaufnahmen, Computertomographien (CT) oder Mammographien. 2. Therapeutische Bestrahlung: Diese Form der Bestrahlung nutzt höhere, gezielt dosierte Strahlungsmengen, um Krebszellen oder andere erkrankte Zellen im Körper zu zerstören oder ihr Wachstum zu hemmen. Dies geschieht z.B. bei der Strahlentherapie. 3. Strahlenexposition: Eine unbeabsichtigte Bestrahlung von Personen oder der Umwelt durch ionisierende Strahlung, z.B. bei Unfällen in Kern Die Strahlentherapie, auch als Radiotherapie bezeichnet, ist ein Behandlungsverfahren in der Medizin, bei dem ionisierende Strahlung gezielt eingesetzt wird, um Krebszellen zu zerstören oder ihr Wachstum zu verlangsamen. Hier die wichtigsten Punkte zur Strahlentherapie: 1. Einsatzgebiet: Sie wird vor allem zur Behandlung von bösartigen Tumoren (Krebserkrankungen) eingesetzt, kann aber auch bei bestimmten gutartigen Erkrankungen angewendet werden. 2. Strahlenarten: Es werden in der Regel hochenergetische Röntgenstrahlen oder Teilchenstrahlen wie Protonen- oder Kohlenstoffionen verwendet. 3. Ziele: Durch die gezielte Bestrahlung sollen die Krebszellen so weit wie möglich zerstört oder ihr Wachstum gehemmt werden, während das umliegende gesunde Gewebe möglichst geschont wird. 4. Behandlungsplanung: Vor der Bestrahlung wird eine aufwändige Bestrahlungsplanung durchgeführt, um",
+      3702
+    ]
+  ]
+}
