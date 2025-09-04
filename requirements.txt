@@ -39,3 +39,6 @@ flake8==6.1.0
 
 # Performance monitoring (optional)
 psutil==5.9.6
+
+# Database
+psycopg2-binary==2.9.9

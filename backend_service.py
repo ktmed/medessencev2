@@ -14,8 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 
-# Import ontology service
-from realtime_ontology_service import app as ontology_app
+# Import database-backed ontology service
+from db_ontology_service import app as ontology_app
 
 # Create main app
 app = FastAPI(title="MedEssence Backend", version="1.0.0")
