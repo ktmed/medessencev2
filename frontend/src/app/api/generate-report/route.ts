@@ -24,6 +24,107 @@ class SimpleMultiLLMService {
     this.initializeProviders();
   }
 
+  private classifyMedicalContent(text: string): { type: string; agent: string; specialty: string; confidence: number } {
+    const lowerText = text.toLowerCase();
+    
+    // Define medical specialty patterns
+    const specialtyPatterns = {
+      'mammography': {
+        keywords: ['mammo', 'breast', 'brust', 'mammographie', 'birads', 'microcalcification', 'architectural distortion', 'masse', 'density'],
+        agent: 'mammography_specialist',
+        type: 'Mammography'
+      },
+      'spine_mri': {
+        keywords: ['wirbelsäule', 'spine', 'lumbar', 'cervical', 'thoracic', 'lws', 'hws', 'bws', 'bandscheibe', 'disc', 'spondylose', 'spinal', 'vertebral', 'facet'],
+        agent: 'spine_mri_specialist', 
+        type: 'Spine MRI'
+      },
+      'cardiac': {
+        keywords: ['herz', 'heart', 'cardiac', 'coronary', 'aorta', 'ventricle', 'atrium', 'myocardium', 'pericardium', 'ecg', 'ekg', 'echo'],
+        agent: 'cardiac_imaging_specialist',
+        type: 'Cardiac Imaging'
+      },
+      'chest_xray': {
+        keywords: ['thorax', 'chest', 'lung', 'lunge', 'pneumo', 'pleura', 'bronch', 'mediastinum', 'rib', 'rippe'],
+        agent: 'chest_xray_specialist',
+        type: 'Chest X-Ray'
+      },
+      'ct_scan': {
+        keywords: ['computertomographie', 'ct scan', 'computed tomography', 'contrast', 'hounsfield', 'axial', 'coronal', 'sagittal'],
+        agent: 'ct_scan_specialist',
+        type: 'CT Scan'
+      },
+      'mri': {
+        keywords: ['mri', 'mrt', 'magnetic resonance', 'magnetresonanz', 't1', 't2', 'flair', 'dwi', 'adc', 'contrast enhancement'],
+        agent: 'mri_specialist',
+        type: 'MRI'
+      },
+      'ultrasound': {
+        keywords: ['ultraschall', 'ultrasound', 'sonography', 'doppler', 'echogenic', 'hypoechoic', 'hyperechoic', 'anechoic'],
+        agent: 'ultrasound_specialist',
+        type: 'Ultrasound'
+      },
+      'abdominal': {
+        keywords: ['abdomen', 'liver', 'leber', 'kidney', 'niere', 'spleen', 'milz', 'pancreas', 'pankreas', 'gallbladder', 'gallenblase'],
+        agent: 'abdominal_imaging_specialist',
+        type: 'Abdominal Imaging'
+      },
+      'neurological': {
+        keywords: ['brain', 'gehirn', 'skull', 'schädel', 'neurological', 'cerebral', 'zerebral', 'cranial', 'stroke', 'schlaganfall'],
+        agent: 'neurological_specialist',
+        type: 'Neurological Imaging'
+      },
+      'oncology': {
+        keywords: ['tumor', 'cancer', 'neoplasm', 'malignant', 'metastasis', 'oncology', 'chemotherapy', 'radiation', 'staging'],
+        agent: 'oncology_specialist',
+        type: 'Oncology'
+      },
+      'pathology': {
+        keywords: ['biopsy', 'histology', 'pathology', 'cytology', 'tissue', 'specimen', 'microscopic', 'cellular'],
+        agent: 'pathology_specialist',
+        type: 'Pathology'
+      }
+    };
+
+    let bestMatch = {
+      type: 'General Radiology',
+      agent: 'general_radiology_specialist',
+      specialty: 'general',
+      confidence: 0
+    };
+
+    // Score each specialty based on keyword matches
+    for (const [specialtyKey, data] of Object.entries(specialtyPatterns)) {
+      let score = 0;
+      let matchedKeywords: string[] = [];
+
+      for (const keyword of data.keywords) {
+        if (lowerText.includes(keyword)) {
+          score += 1;
+          matchedKeywords.push(keyword);
+        }
+      }
+
+      const confidence = score / data.keywords.length;
+      
+      if (confidence > bestMatch.confidence) {
+        bestMatch = {
+          type: data.type,
+          agent: data.agent,
+          specialty: specialtyKey,
+          confidence: confidence
+        };
+      }
+
+      if (matchedKeywords.length > 0) {
+        console.log(`🔍 ${specialtyKey} match: ${score}/${data.keywords.length} keywords (${Math.round(confidence * 100)}%) - ${matchedKeywords.join(', ')}`);
+      }
+    }
+
+    console.log(`🎯 Best classification: ${bestMatch.type} (${Math.round(bestMatch.confidence * 100)}% confidence)`);
+    return bestMatch;
+  }
+
   private initializeProviders() {
     const providerPriority = (process.env.AI_PROVIDER_PRIORITY || 'gemini,openai,claude')
       .split(',')
@@ -60,9 +161,13 @@ class SimpleMultiLLMService {
   async generateReport(transcriptionText: string, language: string): Promise<any> {
     console.log('📝 Generating medical report...');
     
+    // Classify the medical content first
+    const classification = this.classifyMedicalContent(transcriptionText);
+    console.log(`📋 Report Type: ${classification.type} | Agent: ${classification.agent}`);
+    
     if (this.providers.length === 0) {
       console.error('❌ No AI providers available');
-      return this.generateFallbackReport(transcriptionText, language);
+      return this.generateFallbackReport(transcriptionText, language, classification);
     }
 
     const prompt = this.createCleanPrompt(transcriptionText, language);
@@ -75,7 +180,7 @@ class SimpleMultiLLMService {
         const aiResponse = await provider.handler(prompt);
         console.log(`✅ ${provider.name} succeeded!`);
         
-        const parsedReport = this.parseCleanResponse(aiResponse, transcriptionText, language, provider.name);
+        const parsedReport = this.parseCleanResponse(aiResponse, transcriptionText, language, provider.name, classification);
         return parsedReport;
         
       } catch (error) {
@@ -85,7 +190,7 @@ class SimpleMultiLLMService {
     }
 
     console.error('❌ All AI providers failed');
-    return this.generateFallbackReport(transcriptionText, language);
+    return this.generateFallbackReport(transcriptionText, language, classification);
   }
 
   private createCleanPrompt(text: string, language: string): string {
@@ -203,7 +308,7 @@ Write professionally but without markdown formatting.`;
     return data.candidates[0].content.parts[0].text;
   }
 
-  private parseCleanResponse(aiResponse: string, originalText: string, language: string, provider: string) {
+  private parseCleanResponse(aiResponse: string, originalText: string, language: string, provider: string, classification: { type: string; agent: string; specialty: string; confidence: number }) {
     console.log('🔍 Parsing clean AI response');
     
     // Clean up any markdown artifacts
@@ -259,9 +364,10 @@ Write professionally but without markdown formatting.`;
       language: language,
       type: this.classifyReportType(originalText),
       metadata: {
-        agent: 'mammography_specialist',
-        specialty: 'mammography',
-        confidence: 0.44,
+        agent: classification.agent,
+        specialty: classification.specialty,
+        confidence: classification.confidence,
+        reportType: classification.type,
         aiProvider: provider,
         aiGenerated: true,
         originalTextLength: originalText.length
@@ -402,7 +508,7 @@ Write professionally but without markdown formatting.`;
     return 'transcription';
   }
 
-  private generateFallbackReport(text: string, language: string) {
+  private generateFallbackReport(text: string, language: string, classification?: { type: string; agent: string; specialty: string; confidence: number }) {
     const isGerman = language === 'de';
     
     // Generate minimal enhanced findings
@@ -410,6 +516,13 @@ Write professionally but without markdown formatting.`;
     
     // Generate basic ICD predictions
     const icdPredictions = this.generateBasicICD(text, isGerman);
+    
+    const fallbackClassification = classification || {
+      type: 'General Radiology',
+      agent: 'general_radiology_specialist',
+      specialty: 'general',
+      confidence: 0
+    };
     
     return {
       id: `report-${Date.now()}`,
@@ -424,7 +537,10 @@ Write professionally but without markdown formatting.`;
       language: language,
       type: 'transcription' as const,
       metadata: {
-        agent: 'fallback_processor',
+        agent: fallbackClassification.agent,
+        specialty: fallbackClassification.specialty,
+        confidence: fallbackClassification.confidence,
+        reportType: fallbackClassification.type,
         aiProvider: 'rule-based',
         aiGenerated: false
       }
