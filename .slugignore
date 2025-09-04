@@ -1,0 +1,12 @@
+# Ignore frontend for Heroku deployment
+frontend/
+_archive_unused/
+DOCS/
+*.md
+.git/
+.gitignore
+.vscode/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env*
