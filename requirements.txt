@@ -1,15 +1,33 @@
-# Python Requirements for MedEssenceAI System (Backend Services Only)
-# Note: Transcription is now handled by Web Speech API in frontend
+# Python Requirements for MedEssenceAI Backend Service
+# Includes ontology service and core backend functionality
+
+# Web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+aiofiles==23.2.1
 
 # Environment management
 python-dotenv==1.0.0
 
 # Data processing
 pandas==2.0.3
+numpy==1.24.3
 openpyxl==3.1.2  # For Excel file reading
+
+# NLP and Text Processing
+nltk==3.8.1
+spacy==3.7.2
+scikit-learn==1.3.2
+networkx==3.2.1
+
+# Fuzzy matching for ontology
+fuzzywuzzy==0.18.0
+python-levenshtein==0.23.0
 
 # JSON handling
 orjson==3.9.10  # Fast JSON library
+pydantic==2.5.2
 
 # Logging
 colorlog==6.8.0
