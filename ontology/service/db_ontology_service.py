@@ -118,6 +118,8 @@ class DatabaseOntologyService:
                         continue  # Word is correct
                     
                     # Try fuzzy matching for potential corrections
+                    # Use a lower threshold for SQL query to get more candidates
+                    sql_threshold = max(0.2, confidence_threshold - 0.3)
                     cursor.execute("""
                         SELECT term, category, frequency,
                                similarity(LOWER(%s), term_lower) as sim
@@ -125,22 +127,28 @@ class DatabaseOntologyService:
                         WHERE LENGTH(term) BETWEEN %s AND %s
                         AND similarity(LOWER(%s), term_lower) > %s
                         ORDER BY sim DESC, frequency DESC
-                        LIMIT 3
-                    """, (word, len(word) - 2, len(word) + 2, word, confidence_threshold))
+                        LIMIT 5
+                    """, (word, len(word) - 3, len(word) + 3, word, sql_threshold))
                     
                     matches = cursor.fetchall()
                     if matches:
-                        best_match = matches[0]
-                        # Additional confidence check using fuzzywuzzy
-                        ratio = fuzz.ratio(word.lower(), best_match['term'].lower()) / 100.0
-                        if ratio >= confidence_threshold:
-                            corrections.append(CorrectionSuggestion(
-                                original=word,
-                                suggested=best_match['term'],
-                                confidence=ratio,
-                                category=best_match['category'],
-                                position=i
-                            ))
+                        # Try multiple fuzzy matching methods and use the best one
+                        for match in matches[:3]:  # Check top 3 matches
+                            # Try different fuzzy matching algorithms
+                            ratio1 = fuzz.ratio(word.lower(), match['term'].lower()) / 100.0
+                            ratio2 = fuzz.partial_ratio(word.lower(), match['term'].lower()) / 100.0
+                            # Use the better score
+                            ratio = max(ratio1, ratio2)
+                            
+                            if ratio >= confidence_threshold:
+                                corrections.append(CorrectionSuggestion(
+                                    original=word,
+                                    suggested=match['term'],
+                                    confidence=ratio,
+                                    category=match['category'],
+                                    position=i
+                                ))
+                                break  # Only add the first good match
                             
         except Exception as e:
             logger.error(f"Error in correct_text: {e}")

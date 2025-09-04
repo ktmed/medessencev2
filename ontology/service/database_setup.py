@@ -70,16 +70,27 @@ def populate_database(conn, ontology_data):
     
     # Prepare data for batch insert
     records = []
+    # Include ALL categories from the JSON file
     categories = ['anatomy', 'pathology', 'procedures', 'measurements', 
-                  'modifiers', 'medications', 'symptoms']
+                  'modifiers', 'medications', 'symptoms', 'abbreviations',
+                  'exam_types', 'medical_phrases']
     
     for category in categories:
         if category in ontology_data:
             category_data = ontology_data[category]
             if isinstance(category_data, dict):
-                for term, frequency in category_data.items():
-                    # Skip very short terms or numbers
-                    if len(term) > 1 and not term.isdigit():
+                for term, value in category_data.items():
+                    # Skip very short terms, numbers, or terms that are too long
+                    if len(term) > 1 and len(term) <= 500 and not term.isdigit():
+                        # Handle different data structures
+                        if isinstance(value, int):
+                            frequency = value
+                        elif isinstance(value, list):
+                            # For abbreviations with list values, use a default frequency
+                            frequency = 1
+                        else:
+                            # Skip entries with unexpected value types
+                            continue
                         records.append((term, category, frequency))
     
     # Batch insert for performance
