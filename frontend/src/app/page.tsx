@@ -170,8 +170,11 @@ export default function Dashboard() {
         } catch (error) {
           console.error('⚠️ ICD code generation failed:', error);
           // Show error to user
-          setError('ICD-Code-Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.');
-          setTimeout(() => setError(null), 5000);
+          setUIState(prev => ({ 
+            ...prev, 
+            error: 'ICD-Code-Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.' 
+          }));
+          setTimeout(() => setUIState(prev => ({ ...prev, error: null })), 5000);
         }
 
         // Auto-generate Enhanced Findings only if not already provided by the API
@@ -362,8 +365,11 @@ export default function Dashboard() {
           console.log('✅ ICD codes added to pasted text report');
         } catch (error) {
           console.error('⚠️ ICD code generation failed for pasted text:', error);
-          setError('ICD-Code-Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.');
-          setTimeout(() => setError(null), 5000);
+          setUIState(prev => ({ 
+            ...prev, 
+            error: 'ICD-Code-Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.' 
+          }));
+          setTimeout(() => setUIState(prev => ({ ...prev, error: null })), 5000);
         }
 
         // Auto-generate Enhanced Findings for pasted text only if not already provided by the API
@@ -672,8 +678,11 @@ export default function Dashboard() {
                     console.log('✅ ICD codes added to edited text report');
                   } catch (error) {
                     console.error('⚠️ ICD code generation failed for edited text:', error);
-                    setError('ICD-Code-Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.');
-                    setTimeout(() => setError(null), 5000);
+                    setUIState(prev => ({ 
+                      ...prev, 
+                      error: 'ICD-Code-Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.' 
+                    }));
+                    setTimeout(() => setUIState(prev => ({ ...prev, error: null })), 5000);
                   }
                   
                   // Auto-generate Enhanced Findings (same logic as main report generation)

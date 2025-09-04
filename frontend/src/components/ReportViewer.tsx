@@ -825,7 +825,18 @@ ${'-'.repeat((isGerman ? 'ICD-10-GM KODIERUNG' : 'ICD-10-GM CODING').length + (r
       {currentReport && (
         <div className="mt-6">
           <ICDPredictionsComponent 
-            predictions={currentReport.icdPredictions || { codes: [], summary: { totalCodes: 0, primaryDiagnoses: 0, secondaryDiagnoses: 0 } }}
+            predictions={currentReport.icdPredictions || { 
+              codes: [], 
+              summary: { 
+                totalCodes: 0, 
+                primaryDiagnoses: 0, 
+                secondaryConditions: 0 
+              },
+              confidence: 0,
+              provider: 'pending',
+              generatedAt: Date.now(),
+              language: 'de' as const
+            }}
             onCodesSelected={(codes) => {
               console.log('ICD codes selected for report:', codes);
               // Update the report with selected codes
