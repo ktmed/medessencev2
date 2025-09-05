@@ -82,17 +82,18 @@ class SimpleMultiLLMService {
             agent: 'oncology_specialist',
             priority: 8
           },
+          'ultrasound': {
+            keywords: ['ultraschall', 'sonograph', 'doppler', 'echo', 'schallkopf', 'transducer', 'b-mode', 'color flow', 'sono', 'us'],
+            type: 'Ultrasound',
+            agent: 'ultrasound_specialist',
+            priority: 10 // High priority - ultrasound should override mammography if both keywords present
+          },
           'mammography': {
             keywords: ['mammograph', 'mammografie', 'birads', 'bi-rads', 'breast screening', 'mamma-screening', 'mikrokalk', 'architectural distortion', 'mamma', 'breast', 'brust', 'axilla', 'lymphknoten axillär', 'mastopathie', 'fibroadenom'],
+            excludeKeywords: ['ultraschall', 'sonograph', 'sono', 'doppler'], // Don't classify as mammography if ultrasound terms present
             type: 'Mammography',
             agent: 'mammography_specialist',
             priority: 9
-          },
-          'ultrasound': {
-            keywords: ['ultraschall', 'sonograph', 'doppler', 'echo', 'schallkopf', 'transducer', 'b-mode', 'color flow'],
-            type: 'Ultrasound',
-            agent: 'ultrasound_specialist',
-            priority: 6
           },
           'ct_chest': {
             keywords: ['chest ct', 'thorax ct', 'hrct', 'pulmonary ct', 'lung ct', 'mediastinum', 'pleura', 'bronchi'],
@@ -232,8 +233,8 @@ class SimpleMultiLLMService {
 IMPORTANT DISTINCTIONS:
 - pathology: histology, biopsy, tissue samples, microscopy, staining, cytology (WITHOUT cancer/tumor focus)
 - oncology: cancer, tumor, metastasis, carcinoma, malignancy, lymphoma, chemotherapy, radiation
-- mammography: breast imaging, mammogram, BI-RADS, breast screening
-- ultrasound: sonography, ultrasound, doppler imaging
+- mammography: ONLY mammogram X-ray imaging, BI-RADS classification (NOT ultrasound or MRI of breast)
+- ultrasound: ALL ultrasound/sonography including breast ultrasound, doppler, echo (prioritize over mammography if ultrasound is mentioned)
 - ct_chest: chest CT scan, thorax CT, lung CT
 - ct_abdomen: abdominal CT, pelvis CT, liver/kidney/intestinal CT
 - mri_spine: spine MRI, vertebral MRI, disc imaging
@@ -242,6 +243,8 @@ IMPORTANT DISTINCTIONS:
 - vascular: blood vessel, artery, vein imaging
 - musculoskeletal: bone, joint, muscle, ligament imaging
 - general: general radiology or unclear specialty
+
+RULE: If "ultrasound", "sonography", "sonographie", or "ultraschall" appears ANYWHERE in the text, classify as ultrasound, even if breast/mammary is mentioned.
 
 Medical text: ${text.substring(0, 1500)}
 
