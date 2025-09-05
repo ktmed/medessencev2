@@ -24,6 +24,147 @@ class SimpleMultiLLMService {
     this.initializeProviders();
   }
 
+  private async classifyWithOntology(text: string): Promise<{ type: string; agent: string; specialty: string; confidence: number } | null> {
+    try {
+      const ontologyUrl = process.env.ONTOLOGY_SERVICE_URL || 'http://localhost:8002';
+      const extractUrl = `${ontologyUrl}/extract`;
+      
+      console.log('🧬 Attempting ontology-based classification...');
+      console.log(`  Using ontology service at: ${ontologyUrl}`);
+      
+      // Use the extract endpoint to get medical entities
+      const response = await fetch(extractUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Accept': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify({
+          text: text.substring(0, 1500), // Send first 1500 chars for classification
+          extract_relationships: false,
+          extract_measurements: false
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Ontology service response:', JSON.stringify(result, null, 2));
+        
+        // Extract entities from the response
+        const entities = result.entities || [];
+        let detectedModality = 'general';
+        let detectedType = 'General Radiology';
+        let confidence = 0.7;
+        
+        // Build a text representation from extracted entities for classification
+        const entityTexts = entities.map((e: any) => e.text?.toLowerCase() || '').join(' ');
+        const entityCategories = entities.map((e: any) => e.category?.toLowerCase() || '').join(' ');
+        const lowerText = (text.substring(0, 1500) + ' ' + entityTexts + ' ' + entityCategories).toLowerCase();
+        
+        console.log(`  📊 Found ${entities.length} medical entities`);
+        if (entities.length > 0) {
+          console.log(`  Entity categories: ${[...new Set(entities.map((e: any) => e.category))].join(', ')}`);
+        }
+        
+        // Enhanced modality detection patterns based on medical terminology
+        const modalityPatterns: Record<string, { keywords: string[], type: string, agent: string }> = {
+          'oncology': {
+            keywords: ['tumor', 'tumour', 'metastase', 'metastasis', 'karzinom', 'carcinoma', 'malign', 'neoplasm', 'lymphom', 'sarkom', 'chemotherap', 'radiotherap', 'pet-ct', 'pet/ct', 'staging', 'onkolog'],
+            type: 'Oncology',
+            agent: 'oncology_specialist'
+          },
+          'mammography': {
+            keywords: ['mammograph', 'mammografie', 'birads', 'bi-rads', 'breast screening', 'mamma-screening', 'mikrokalk', 'architectural distortion'],
+            type: 'Mammography',
+            agent: 'mammography_specialist'
+          },
+          'ultrasound': {
+            keywords: ['ultraschall', 'sonograph', 'doppler', 'echo', 'schallkopf', 'transducer', 'b-mode', 'color flow'],
+            type: 'Ultrasound',
+            agent: 'ultrasound_specialist'
+          },
+          'ct_chest': {
+            keywords: ['chest ct', 'thorax ct', 'hrct', 'pulmonary ct', 'lung ct', 'mediastinum', 'pleura', 'bronchi'],
+            type: 'Chest CT',
+            agent: 'chest_ct_specialist'
+          },
+          'ct_abdomen': {
+            keywords: ['abdomen ct', 'abdominal ct', 'pelvis ct', 'liver ct', 'pancreas ct', 'kidney ct', 'intestin'],
+            type: 'Abdominal CT',
+            agent: 'abdominal_specialist'
+          },
+          'mri_spine': {
+            keywords: ['spine mri', 'wirbelsäule mrt', 'lumbar mri', 'cervical mri', 'thoracic mri', 'vertebra', 'disc', 'spinal'],
+            type: 'Spine MRI',
+            agent: 'spine_mri_specialist'
+          },
+          'mri_brain': {
+            keywords: ['brain mri', 'cerebral mri', 'kopf mrt', 'schädel mrt', 'neuroimaging', 'cranial', 'cerebr'],
+            type: 'Brain MRI',
+            agent: 'neuro_specialist'
+          },
+          'cardiac': {
+            keywords: ['cardiac', 'herz', 'coronary', 'myocardi', 'ventricle', 'atrium', 'ecg', 'angiograph'],
+            type: 'Cardiac',
+            agent: 'cardiac_specialist'
+          },
+          'vascular': {
+            keywords: ['vascular', 'vessel', 'artery', 'vein', 'angiograph', 'stenosis', 'aneurysm', 'thromb'],
+            type: 'Vascular',
+            agent: 'vascular_specialist'
+          },
+          'musculoskeletal': {
+            keywords: ['musculoskeletal', 'joint', 'bone', 'ligament', 'tendon', 'fracture', 'arthro', 'osteo'],
+            type: 'Musculoskeletal',
+            agent: 'musculoskeletal_specialist'
+          }
+        };
+        
+        // Score each modality based on keyword matches
+        let bestMatch = { modality: 'general', type: 'General Radiology', agent: 'general_radiology_specialist', score: 0 };
+        
+        for (const [modality, config] of Object.entries(modalityPatterns)) {
+          let score = 0;
+          const matchedKeywords: string[] = [];
+          
+          for (const keyword of config.keywords) {
+            if (lowerText.includes(keyword)) {
+              score += keyword.length > 10 ? 3 : keyword.length > 6 ? 2 : 1;
+              matchedKeywords.push(keyword);
+            }
+          }
+          
+          if (score > bestMatch.score) {
+            bestMatch = {
+              modality,
+              type: config.type,
+              agent: config.agent,
+              score
+            };
+            confidence = Math.min(0.95, 0.6 + (score * 0.05)); // Calculate confidence based on score
+          }
+          
+          if (matchedKeywords.length > 0) {
+            console.log(`  📊 ${modality}: score=${score}, matches=[${matchedKeywords.join(', ')}]`);
+          }
+        }
+        
+        console.log(`  🎯 Best match: ${bestMatch.type} (agent: ${bestMatch.agent}, confidence: ${Math.round(confidence * 100)}%)`);
+        
+        return {
+          type: bestMatch.type,
+          agent: bestMatch.agent,
+          specialty: bestMatch.modality,
+          confidence: confidence
+        };
+      }
+    } catch (error) {
+      console.warn('⚠️ Ontology classification failed, falling back to rule-based:', error);
+    }
+    
+    return null;
+  }
+  
   private classifyMedicalContent(text: string): { type: string; agent: string; specialty: string; confidence: number } {
     const lowerText = text.toLowerCase();
     
@@ -226,9 +367,17 @@ class SimpleMultiLLMService {
   async generateReport(transcriptionText: string, language: string): Promise<any> {
     console.log('📝 Generating medical report...');
     
-    // Classify the medical content first
-    const classification = this.classifyMedicalContent(transcriptionText);
-    console.log(`📋 Report Type: ${classification.type} | Agent: ${classification.agent}`);
+    // Try ontology-based classification first
+    let classification = await this.classifyWithOntology(transcriptionText);
+    
+    // Fall back to rule-based classification if ontology fails
+    if (!classification) {
+      console.log('📋 Using rule-based classification fallback');
+      classification = this.classifyMedicalContent(transcriptionText);
+    }
+    
+    console.log(`📋 Report Type: ${classification.type} | Agent: ${classification.agent} | Confidence: ${classification.confidence}`);
+    // Classification already handled above
     
     if (this.providers.length === 0) {
       console.error('❌ No AI providers available');
