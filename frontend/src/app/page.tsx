@@ -30,6 +30,7 @@ export default function Dashboard() {
   const [currentReport, setCurrentReport] = useState<MedicalReport | null>(null);
   const [currentSummary, setCurrentSummary] = useState<PatientSummary | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const icdGenerationInProgressRef = useRef(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [reportProcessingMode, setReportProcessingMode] = useState<'cloud' | 'local'>('cloud');
   
@@ -38,7 +39,22 @@ export default function Dashboard() {
     onStateChange: (state) => {
       setIsGeneratingReport(state.status === 'generating' || state.status === 'enhancing');
       if (state.status === 'complete') {
-        setCurrentReport(state.report);
+        // Don't update if ICD generation is in progress
+        if (icdGenerationInProgressRef.current) {
+          console.log('🚫 Blocking report state update - ICD generation in progress');
+          return;
+        }
+        // Preserve ICD codes if they already exist
+        setCurrentReport(prev => {
+          if (prev && prev.id === state.report.id && prev.icdPredictions) {
+            console.log('⚠️ Preserving existing ICD codes during state change');
+            return {
+              ...state.report,
+              icdPredictions: prev.icdPredictions
+            };
+          }
+          return state.report;
+        });
       } else if (state.status === 'error') {
         setUIState(prev => ({ ...prev, error: state.error }));
       }
@@ -145,6 +161,8 @@ export default function Dashboard() {
         console.log('📋 ICD generation content length:', reportContent.length);
         
         try {
+          icdGenerationInProgressRef.current = true;
+          console.log('🆔 Starting ICD generation, blocking state updates');
           
           const icdCodes = await apiService.generateICDCodes(
             report.id,
@@ -160,15 +178,20 @@ export default function Dashboard() {
               icdPredictions: icdCodes
             } : prev;
             console.log('📊 ICD Codes Update Debug:');
+            console.log('- Timestamp:', new Date().toISOString());
             console.log('- Previous report had ICD:', !!prev?.icdPredictions);
             console.log('- New ICD codes:', icdCodes);
             console.log('- Updated report has ICD:', !!updated?.icdPredictions);
+            console.log('- Report ID being updated:', prev?.id);
             return updated;
           });
           
           console.log('✅ ICD codes added to report:', icdCodes?.codes?.length, 'codes');
+          icdGenerationInProgressRef.current = false;
+          console.log('🆓 ICD generation complete, state updates unblocked');
         } catch (error) {
           console.error('⚠️ ICD code generation failed:', error);
+          icdGenerationInProgressRef.current = false;
           // Show error to user
           setUIState(prev => ({ 
             ...prev, 
@@ -244,6 +267,11 @@ export default function Dashboard() {
             setCurrentReport(prev => {
               if (!prev) return prev;
               
+              // Log the current state of ICD codes before update
+              console.log('🔍 Before enhanced findings update:');
+              console.log('- Has ICD codes:', !!prev.icdPredictions);
+              console.log('- ICD codes count:', prev.icdPredictions?.codes?.length || 0);
+              
               const updated = {
                 ...prev,
                 enhancedFindings: {
@@ -253,7 +281,11 @@ export default function Dashboard() {
                 }
               };
               
+              // Verify ICD codes are preserved after update
               console.log('🔄 Report state updated with secondary enhanced findings');
+              console.log('- ICD codes preserved:', !!updated.icdPredictions);
+              console.log('- ICD codes count after update:', updated.icdPredictions?.codes?.length || 0);
+              
               return updated;
             });
             
@@ -348,6 +380,8 @@ export default function Dashboard() {
         console.log('📋 Pasted text ICD generation content length:', reportContent.length);
         
         try {
+          icdGenerationInProgressRef.current = true;
+          console.log('🆔 Starting pasted text ICD generation, blocking state updates');
           
           const icdCodes = await apiService.generateICDCodes(
             report.id,
@@ -357,14 +391,22 @@ export default function Dashboard() {
           );
           
           // Update the report with ICD codes
-          setCurrentReport(prev => prev ? {
-            ...prev,
-            icdPredictions: icdCodes
-          } : prev);
+          setCurrentReport(prev => {
+            if (!prev) return prev;
+            console.log('📊 Pasted text ICD update at:', new Date().toISOString());
+            console.log('- Adding ICD codes to report ID:', prev.id);
+            return {
+              ...prev,
+              icdPredictions: icdCodes
+            };
+          });
           
           console.log('✅ ICD codes added to pasted text report');
+          icdGenerationInProgressRef.current = false;
+          console.log('🆓 Pasted text ICD generation complete, state updates unblocked');
         } catch (error) {
           console.error('⚠️ ICD code generation failed for pasted text:', error);
+          icdGenerationInProgressRef.current = false;
           setUIState(prev => ({ 
             ...prev, 
             error: 'ICD-Code-Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.' 
@@ -403,10 +445,25 @@ export default function Dashboard() {
             );
             
             // Update the report with enhanced findings
-            setCurrentReport(prev => prev ? {
-              ...prev,
-              enhancedFindings: enhancedFindings
-            } : prev);
+            setCurrentReport(prev => {
+              if (!prev) return prev;
+              
+              // Log the current state of ICD codes before update
+              console.log('🔍 Before pasted text enhanced findings update:');
+              console.log('- Has ICD codes:', !!prev.icdPredictions);
+              console.log('- ICD codes count:', prev.icdPredictions?.codes?.length || 0);
+              
+              const updated = {
+                ...prev,
+                enhancedFindings: enhancedFindings
+              };
+              
+              // Verify ICD codes are preserved after update
+              console.log('- ICD codes preserved after pasted update:', !!updated.icdPredictions);
+              console.log('- ICD codes count after pasted update:', updated.icdPredictions?.codes?.length || 0);
+              
+              return updated;
+            });
             
             console.log('✅ Enhanced findings added to pasted text report via secondary API call');
           } catch (error) {
@@ -663,6 +720,9 @@ export default function Dashboard() {
                   const reportContent = `${report.findings}\n\n${report.impression}\n\n${report.recommendations}`;
                   
                   try {
+                    icdGenerationInProgressRef.current = true;
+                    console.log('🆔 Starting edited text ICD generation, blocking state updates');
+                    
                     const icdCodes = await apiService.generateICDCodes(
                       report.id,
                       reportContent,
@@ -670,14 +730,22 @@ export default function Dashboard() {
                       'ICD-10-GM' as const
                     );
                     
-                    setCurrentReport(prev => prev ? {
-                      ...prev,
-                      icdPredictions: icdCodes
-                    } : prev);
+                    setCurrentReport(prev => {
+                      if (!prev) return prev;
+                      console.log('📊 Edited text ICD update at:', new Date().toISOString());
+                      console.log('- Adding ICD codes to report ID:', prev.id);
+                      return {
+                        ...prev,
+                        icdPredictions: icdCodes
+                      };
+                    });
                     
                     console.log('✅ ICD codes added to edited text report');
+                    icdGenerationInProgressRef.current = false;
+                    console.log('🆓 Edited text ICD generation complete, state updates unblocked');
                   } catch (error) {
                     console.error('⚠️ ICD code generation failed for edited text:', error);
+                    icdGenerationInProgressRef.current = false;
                     setUIState(prev => ({ 
                       ...prev, 
                       error: 'ICD-Code-Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.' 
@@ -708,10 +776,25 @@ export default function Dashboard() {
                         language
                       );
                       
-                      setCurrentReport(prev => prev ? {
-                        ...prev,
-                        enhancedFindings: enhancedFindings
-                      } : prev);
+                      setCurrentReport(prev => {
+                        if (!prev) return prev;
+                        
+                        // Log the current state of ICD codes before update
+                        console.log('🔍 Before edited text enhanced findings update:');
+                        console.log('- Has ICD codes:', !!prev.icdPredictions);
+                        console.log('- ICD codes count:', prev.icdPredictions?.codes?.length || 0);
+                        
+                        const updated = {
+                          ...prev,
+                          enhancedFindings: enhancedFindings
+                        };
+                        
+                        // Verify ICD codes are preserved after update
+                        console.log('- ICD codes preserved after edited update:', !!updated.icdPredictions);
+                        console.log('- ICD codes count after edited update:', updated.icdPredictions?.codes?.length || 0);
+                        
+                        return updated;
+                      });
                       
                       console.log('✅ Enhanced findings added to edited text report via secondary API');
                     } catch (error) {
