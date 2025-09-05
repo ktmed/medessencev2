@@ -68,16 +68,19 @@ class SimpleMultiLLMService {
         }
         
         // Enhanced modality detection patterns based on medical terminology
-        const modalityPatterns: Record<string, { keywords: string[], type: string, agent: string }> = {
+        const modalityPatterns: Record<string, { keywords: string[], excludeKeywords?: string[], type: string, agent: string, priority?: number }> = {
           'pathology': {
             keywords: ['pathologie', 'pathology', 'histologie', 'histology', 'zytologie', 'cytology', 'biopsie', 'biopsy', 'histopatholog', 'immunhistochem', 'mikroskop', 'microscop', 'gewebsprobe', 'tissue', 'zellprobe', 'cell', 'färbung', 'staining'],
+            excludeKeywords: ['tumor', 'karzinom', 'carcinoma', 'metastase', 'malign', 'lymphom', 'sarkom'],
             type: 'Pathology',
-            agent: 'pathology_specialist'
+            agent: 'pathology_specialist',
+            priority: 10
           },
           'oncology': {
             keywords: ['tumor', 'tumour', 'metastase', 'metastasis', 'karzinom', 'carcinoma', 'malign', 'neoplasm', 'lymphom', 'sarkom', 'chemotherap', 'radiotherap', 'pet-ct', 'pet/ct', 'staging', 'onkolog'],
             type: 'Oncology',
-            agent: 'oncology_specialist'
+            agent: 'oncology_specialist',
+            priority: 8
           },
           'mammography': {
             keywords: ['mammograph', 'mammografie', 'birads', 'bi-rads', 'breast screening', 'mamma-screening', 'mikrokalk', 'architectural distortion'],
@@ -139,11 +142,25 @@ class SimpleMultiLLMService {
           let score = 0;
           const matchedKeywords: string[] = [];
           
+          // Check for exclusion keywords first (for pathology)
+          if (config.excludeKeywords) {
+            const hasExcludedTerms = config.excludeKeywords.some(keyword => lowerText.includes(keyword));
+            if (hasExcludedTerms) {
+              console.log(`  ❌ Skipping ${modality} due to exclusion keywords`);
+              continue; // Skip this modality if exclusion keywords are found
+            }
+          }
+          
           for (const keyword of config.keywords) {
             if (lowerText.includes(keyword)) {
               score += keyword.length > 10 ? 3 : keyword.length > 6 ? 2 : 1;
               matchedKeywords.push(keyword);
             }
+          }
+          
+          // Apply priority multiplier if defined
+          if (config.priority) {
+            score = score * (config.priority / 10);
           }
           
           // Boost pathology score if entity category indicates pathology
