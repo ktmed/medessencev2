@@ -83,49 +83,58 @@ class SimpleMultiLLMService {
             priority: 8
           },
           'mammography': {
-            keywords: ['mammograph', 'mammografie', 'birads', 'bi-rads', 'breast screening', 'mamma-screening', 'mikrokalk', 'architectural distortion'],
+            keywords: ['mammograph', 'mammografie', 'birads', 'bi-rads', 'breast screening', 'mamma-screening', 'mikrokalk', 'architectural distortion', 'mamma', 'breast', 'brust', 'axilla', 'lymphknoten axillär', 'mastopathie', 'fibroadenom'],
             type: 'Mammography',
-            agent: 'mammography_specialist'
+            agent: 'mammography_specialist',
+            priority: 9
           },
           'ultrasound': {
             keywords: ['ultraschall', 'sonograph', 'doppler', 'echo', 'schallkopf', 'transducer', 'b-mode', 'color flow'],
             type: 'Ultrasound',
-            agent: 'ultrasound_specialist'
+            agent: 'ultrasound_specialist',
+            priority: 6
           },
           'ct_chest': {
             keywords: ['chest ct', 'thorax ct', 'hrct', 'pulmonary ct', 'lung ct', 'mediastinum', 'pleura', 'bronchi'],
             type: 'Chest CT',
-            agent: 'chest_ct_specialist'
+            agent: 'chest_ct_specialist',
+            priority: 7
           },
           'ct_abdomen': {
             keywords: ['abdomen ct', 'abdominal ct', 'pelvis ct', 'liver ct', 'pancreas ct', 'kidney ct', 'intestin'],
             type: 'Abdominal CT',
-            agent: 'abdominal_specialist'
+            agent: 'abdominal_specialist',
+            priority: 7
           },
           'mri_spine': {
             keywords: ['spine mri', 'wirbelsäule mrt', 'lumbar mri', 'cervical mri', 'thoracic mri', 'vertebra', 'disc', 'spinal'],
             type: 'Spine MRI',
-            agent: 'spine_mri_specialist'
+            agent: 'spine_mri_specialist',
+            priority: 7
           },
           'mri_brain': {
             keywords: ['brain mri', 'cerebral mri', 'kopf mrt', 'schädel mrt', 'neuroimaging', 'cranial', 'cerebr'],
             type: 'Brain MRI',
-            agent: 'neuro_specialist'
+            agent: 'neuro_specialist',
+            priority: 7
           },
           'cardiac': {
             keywords: ['cardiac', 'herz', 'coronary', 'myocardi', 'ventricle', 'atrium', 'ecg', 'angiograph'],
             type: 'Cardiac',
-            agent: 'cardiac_specialist'
+            agent: 'cardiac_specialist',
+            priority: 7
           },
           'vascular': {
             keywords: ['vascular', 'vessel', 'artery', 'vein', 'angiograph', 'stenosis', 'aneurysm', 'thromb'],
             type: 'Vascular',
-            agent: 'vascular_specialist'
+            agent: 'vascular_specialist',
+            priority: 6
           },
           'musculoskeletal': {
             keywords: ['musculoskeletal', 'joint', 'bone', 'ligament', 'tendon', 'fracture', 'arthro', 'osteo'],
             type: 'Musculoskeletal',
-            agent: 'musculoskeletal_specialist'
+            agent: 'musculoskeletal_specialist',
+            priority: 6
           }
         };
         
@@ -232,7 +241,7 @@ class SimpleMultiLLMService {
         excludeKeywords: ['ultraschall', 'sonographie', 'sono', 'mrt'], // Don't match if it's just breast ultrasound or MRI
         agent: 'mammography_specialist',
         type: 'Mammography',
-        priority: 8 // High priority for specific mammography terms
+        priority: 9 // High priority for specific mammography terms
       },
       'spine_mri': {
         keywords: ['wirbelsäule', 'columna vertebralis', 'spine', 'lumbar', 'cervical', 'thoracic', 
