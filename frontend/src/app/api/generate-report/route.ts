@@ -69,6 +69,11 @@ class SimpleMultiLLMService {
         
         // Enhanced modality detection patterns based on medical terminology
         const modalityPatterns: Record<string, { keywords: string[], type: string, agent: string }> = {
+          'pathology': {
+            keywords: ['pathologie', 'pathology', 'histologie', 'histology', 'zytologie', 'cytology', 'biopsie', 'biopsy', 'histopatholog', 'immunhistochem', 'mikroskop', 'microscop', 'gewebsprobe', 'tissue', 'zellprobe', 'cell', 'färbung', 'staining'],
+            type: 'Pathology',
+            agent: 'pathology_specialist'
+          },
           'oncology': {
             keywords: ['tumor', 'tumour', 'metastase', 'metastasis', 'karzinom', 'carcinoma', 'malign', 'neoplasm', 'lymphom', 'sarkom', 'chemotherap', 'radiotherap', 'pet-ct', 'pet/ct', 'staging', 'onkolog'],
             type: 'Oncology',
@@ -121,6 +126,12 @@ class SimpleMultiLLMService {
           }
         };
         
+        // Check if entity categories indicate pathology
+        const hasPathologyCategory = entities.some((e: any) => 
+          e.category?.toLowerCase().includes('pathology') || 
+          e.category?.toLowerCase().includes('histology')
+        );
+        
         // Score each modality based on keyword matches
         let bestMatch = { modality: 'general', type: 'General Radiology', agent: 'general_radiology_specialist', score: 0 };
         
@@ -135,6 +146,12 @@ class SimpleMultiLLMService {
             }
           }
           
+          // Boost pathology score if entity category indicates pathology
+          if (modality === 'pathology' && hasPathologyCategory) {
+            score += 10;
+            console.log(`  🔬 Boosting pathology score due to entity category`);
+          }
+          
           if (score > bestMatch.score) {
             bestMatch = {
               modality,
@@ -145,7 +162,7 @@ class SimpleMultiLLMService {
             confidence = Math.min(0.95, 0.6 + (score * 0.05)); // Calculate confidence based on score
           }
           
-          if (matchedKeywords.length > 0) {
+          if (matchedKeywords.length > 0 || (modality === 'pathology' && hasPathologyCategory)) {
             console.log(`  📊 ${modality}: score=${score}, matches=[${matchedKeywords.join(', ')}]`);
           }
         }
@@ -172,6 +189,16 @@ class SimpleMultiLLMService {
     // Enhanced medical specialty patterns with ontology terms
     // Order matters: more specific patterns should come first
     const specialtyPatterns = {
+      'pathology': {
+        keywords: ['pathologie', 'pathology', 'histologie', 'histology', 'zytologie', 'cytology', 
+                  'biopsie', 'biopsy', 'histopatholog', 'immunhistochem', 'mikroskop', 'microscop',
+                  'gewebsprobe', 'tissue sample', 'zellprobe', 'cell sample', 'färbung', 'staining',
+                  'pathologisch', 'pathological', 'befund pathologie', 'pathology report'],
+        excludeKeywords: ['tumor', 'karzinom', 'carcinoma', 'metastase', 'malign', 'lymphom', 'sarkom'],
+        agent: 'pathology_specialist',
+        type: 'Pathology',
+        priority: 9 // High priority for pathology-specific terms
+      },
       'oncology': {
         keywords: ['tumor', 'tumour', 'metastase', 'metastasis', 'metastasen', 'karzinom', 'carcinoma', 
                   'malign', 'malignant', 'neoplasie', 'neoplasm', 'onkolog', 'oncolog', 'lymphom', 'lymphoma',
@@ -179,7 +206,7 @@ class SimpleMultiLLMService {
                   'radiotherapie', 'radiation', 'bestrahlung', 'remission', 'rezidiv', 'recurrence', 'pet-ct', 'pet/ct'],
         agent: 'oncology_specialist',
         type: 'Oncology',
-        priority: 10 // High priority for cancer-related terms
+        priority: 8 // Reduced priority - only if cancer-specific terms are found
       },
       'mammography': {
         keywords: ['mammo', 'mammographie', 'mammografie', 'breast', 'brust', 'brustdrüse', 'birads', 'bi-rads', 
