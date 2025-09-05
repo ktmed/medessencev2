@@ -63,7 +63,8 @@ class SimpleMultiLLMService {
         
         console.log(`  📊 Found ${entities.length} medical entities`);
         if (entities.length > 0) {
-          console.log(`  Entity categories: ${[...new Set(entities.map((e: any) => e.category))].join(', ')}`);
+          const categories = Array.from(new Set(entities.map((e: any) => e.category)));
+          console.log(`  Entity categories: ${categories.join(', ')}`);
         }
         
         // Enhanced modality detection patterns based on medical terminology
