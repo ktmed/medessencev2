@@ -227,9 +227,21 @@ class SimpleMultiLLMService {
       return null;
     }
 
-    const classificationPrompt = `Classify this medical report into one of the following specialties. Respond only with the specialty name and nothing else.
+    const classificationPrompt = `Classify this medical report into ONE of these specialties. Respond with ONLY the specialty name.
 
-Specialties: pathology, oncology, mammography, ultrasound, ct_chest, ct_abdomen, mri_spine, mri_brain, cardiac, vascular, musculoskeletal, general
+IMPORTANT DISTINCTIONS:
+- pathology: histology, biopsy, tissue samples, microscopy, staining, cytology (WITHOUT cancer/tumor focus)
+- oncology: cancer, tumor, metastasis, carcinoma, malignancy, lymphoma, chemotherapy, radiation
+- mammography: breast imaging, mammogram, BI-RADS, breast screening
+- ultrasound: sonography, ultrasound, doppler imaging
+- ct_chest: chest CT scan, thorax CT, lung CT
+- ct_abdomen: abdominal CT, pelvis CT, liver/kidney/intestinal CT
+- mri_spine: spine MRI, vertebral MRI, disc imaging
+- mri_brain: brain MRI, head MRI, neuroimaging
+- cardiac: heart, coronary, myocardial imaging
+- vascular: blood vessel, artery, vein imaging
+- musculoskeletal: bone, joint, muscle, ligament imaging
+- general: general radiology or unclear specialty
 
 Medical text: ${text.substring(0, 1500)}
 
