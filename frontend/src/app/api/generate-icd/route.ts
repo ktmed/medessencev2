@@ -120,13 +120,23 @@ class ServerICDService {
       }
     }
 
-    // Filter codes to only include those with >90% confidence
-    const highConfidenceCodes = allCodes.filter(code => code.confidence > 0.9);
-    console.log(`📊 Filtered ${allCodes.length} codes to ${highConfidenceCodes.length} high-confidence codes (>90%)`);
+    // Filter codes to only include those with reasonable confidence
+    // Use a lower threshold (>50%) to be more inclusive and show more relevant codes
+    // If no codes meet the threshold, show the top 3 codes regardless of confidence
+    let reasonableConfidenceCodes = allCodes.filter(code => code.confidence > 0.5);
+    
+    if (reasonableConfidenceCodes.length === 0 && allCodes.length > 0) {
+      // If no codes meet the confidence threshold, take the top 3 by confidence
+      console.log('⚠️ No codes meet 50% confidence threshold, using top 3 codes');
+      allCodes.sort((a, b) => b.confidence - a.confidence);
+      reasonableConfidenceCodes = allCodes.slice(0, Math.min(3, allCodes.length));
+    }
+    
+    console.log(`📊 Filtered ${allCodes.length} codes to ${reasonableConfidenceCodes.length} codes`);
 
     // Remove duplicates based on ICD code, keeping the one with higher confidence
     const uniqueCodes = new Map<string, ICDCode>();
-    highConfidenceCodes.forEach(code => {
+    reasonableConfidenceCodes.forEach(code => {
       const existing = uniqueCodes.get(code.code);
       if (!existing || code.confidence > existing.confidence) {
         // Ensure provider is preserved
