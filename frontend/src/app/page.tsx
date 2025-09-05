@@ -37,7 +37,8 @@ export default function Dashboard() {
   // Initialize ReportService with state management callbacks
   const [reportService] = useState(() => new ReportService({
     onStateChange: (state) => {
-      console.log(`📡 [${new Date().toISOString()}] onStateChange called with status:`, state.status, 'report ID:', state.report?.id);
+      const reportId = state.status === 'complete' ? state.report?.id : undefined;
+      console.log(`📡 [${new Date().toISOString()}] onStateChange called with status:`, state.status, 'report ID:', reportId);
       setIsGeneratingReport(state.status === 'generating' || state.status === 'enhancing');
       if (state.status === 'complete') {
         // Don't update if ICD generation is in progress
