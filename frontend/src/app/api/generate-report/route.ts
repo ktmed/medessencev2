@@ -138,10 +138,16 @@ class SimpleMultiLLMService {
           }
         };
         
-        // Check if entity categories indicate pathology
+        // Check if entity categories indicate specific specialties
         const hasPathologyCategory = entities.some((e: any) => 
           e.category?.toLowerCase().includes('pathology') || 
           e.category?.toLowerCase().includes('histology')
+        );
+        
+        const hasMammographyCategory = entities.some((e: any) => 
+          e.category?.toLowerCase().includes('mammography') || 
+          e.category?.toLowerCase().includes('breast') ||
+          e.category?.toLowerCase().includes('mamma')
         );
         
         // Score each modality based on keyword matches
@@ -167,15 +173,21 @@ class SimpleMultiLLMService {
             }
           }
           
-          // Apply priority multiplier if defined
-          if (config.priority) {
-            score = score * (config.priority / 10);
+          // Apply priority boost if defined and keywords were matched
+          if (config.priority && matchedKeywords.length > 0) {
+            score += config.priority * 2; // Add priority as a boost, not a multiplier
           }
           
           // Boost pathology score if entity category indicates pathology
           if (modality === 'pathology' && hasPathologyCategory) {
             score += 10;
             console.log(`  🔬 Boosting pathology score due to entity category`);
+          }
+          
+          // Boost mammography score if entity category indicates mammography
+          if (modality === 'mammography' && hasMammographyCategory) {
+            score += 10;
+            console.log(`  🔬 Boosting mammography score due to entity category`);
           }
           
           if (score > bestMatch.score) {
@@ -189,7 +201,7 @@ class SimpleMultiLLMService {
           }
           
           if (matchedKeywords.length > 0 || (modality === 'pathology' && hasPathologyCategory)) {
-            console.log(`  📊 ${modality}: score=${score}, matches=[${matchedKeywords.join(', ')}]`);
+            console.log(`  📊 ${modality}: score=${score}, priority=${config.priority || 0}, matches=[${matchedKeywords.join(', ')}]`);
           }
         }
         
@@ -207,6 +219,79 @@ class SimpleMultiLLMService {
     }
     
     return null;
+  }
+  
+  private async classifyWithLLM(text: string): Promise<{ type: string; agent: string; specialty: string; confidence: number } | null> {
+    if (this.providers.length === 0) {
+      console.warn('⚠️ No AI providers available for LLM classification');
+      return null;
+    }
+
+    const classificationPrompt = `Classify this medical report into one of the following specialties. Respond only with the specialty name and nothing else.
+
+Specialties: pathology, oncology, mammography, ultrasound, ct_chest, ct_abdomen, mri_spine, mri_brain, cardiac, vascular, musculoskeletal, general
+
+Medical text: ${text.substring(0, 1500)}
+
+Specialty:`;
+
+    try {
+      console.log('🤖 Attempting LLM-based classification...');
+      
+      // Try the first available provider for classification
+      const provider = this.providers[0];
+      const response = await provider.handler(classificationPrompt);
+      
+      // Parse the response to extract specialty
+      const specialty = response.trim().toLowerCase();
+      console.log(`📋 LLM raw response: "${response}"`);
+      
+      // Validate and map the response to known specialties
+      const specialtyMappings: Record<string, { type: string; agent: string; specialty: string }> = {
+        'pathology': { type: 'Pathology', agent: 'pathology_specialist', specialty: 'pathology' },
+        'oncology': { type: 'Oncology', agent: 'oncology_specialist', specialty: 'oncology' },
+        'mammography': { type: 'Mammography', agent: 'mammography_specialist', specialty: 'mammography' },
+        'ultrasound': { type: 'Ultrasound', agent: 'ultrasound_specialist', specialty: 'ultrasound' },
+        'ct_chest': { type: 'Chest CT', agent: 'chest_ct_specialist', specialty: 'ct_chest' },
+        'ct_abdomen': { type: 'Abdominal CT', agent: 'abdominal_specialist', specialty: 'ct_abdomen' },
+        'mri_spine': { type: 'Spine MRI', agent: 'spine_mri_specialist', specialty: 'mri_spine' },
+        'mri_brain': { type: 'Brain MRI', agent: 'neuro_specialist', specialty: 'mri_brain' },
+        'cardiac': { type: 'Cardiac', agent: 'cardiac_specialist', specialty: 'cardiac' },
+        'vascular': { type: 'Vascular', agent: 'vascular_specialist', specialty: 'vascular' },
+        'musculoskeletal': { type: 'Musculoskeletal', agent: 'musculoskeletal_specialist', specialty: 'musculoskeletal' },
+        'general': { type: 'General Radiology', agent: 'general_radiology_specialist', specialty: 'general' }
+      };
+      
+      // Find matching specialty (allow for partial matches)
+      let matchedSpecialty = null;
+      for (const [key, value] of Object.entries(specialtyMappings)) {
+        if (specialty.includes(key) || key.includes(specialty)) {
+          matchedSpecialty = value;
+          break;
+        }
+      }
+      
+      if (matchedSpecialty) {
+        console.log(`✅ LLM classification successful: ${matchedSpecialty.type} (confidence: 85%)`);
+        return {
+          type: matchedSpecialty.type,
+          agent: matchedSpecialty.agent,
+          specialty: matchedSpecialty.specialty,
+          confidence: 0.85 // High confidence for successful LLM classification
+        };
+      } else {
+        console.warn(`⚠️ LLM returned unrecognized specialty: "${specialty}", falling back to general`);
+        return {
+          type: 'General Radiology',
+          agent: 'general_radiology_specialist',
+          specialty: 'general',
+          confidence: 0.5
+        };
+      }
+    } catch (error) {
+      console.warn('⚠️ LLM classification failed:', error instanceof Error ? error.message : 'Unknown error');
+      return null;
+    }
   }
   
   private classifyMedicalContent(text: string): { type: string; agent: string; specialty: string; confidence: number } {
@@ -421,10 +506,16 @@ class SimpleMultiLLMService {
   async generateReport(transcriptionText: string, language: string): Promise<any> {
     console.log('📝 Generating medical report...');
     
-    // Try ontology-based classification first
-    let classification = await this.classifyWithOntology(transcriptionText);
+    // Try LLM-based classification first (primary method)
+    let classification = await this.classifyWithLLM(transcriptionText);
     
-    // Fall back to rule-based classification if ontology fails
+    // Fall back to ontology-based classification if LLM fails
+    if (!classification) {
+      console.log('📋 LLM classification failed, trying ontology-based classification...');
+      classification = await this.classifyWithOntology(transcriptionText);
+    }
+    
+    // Final fallback to rule-based classification
     if (!classification) {
       console.log('📋 Using rule-based classification fallback');
       classification = this.classifyMedicalContent(transcriptionText);
