@@ -37,6 +37,7 @@ export default function Dashboard() {
   // Initialize ReportService with state management callbacks
   const [reportService] = useState(() => new ReportService({
     onStateChange: (state) => {
+      console.log(`📡 [${new Date().toISOString()}] onStateChange called with status:`, state.status, 'report ID:', state.report?.id);
       setIsGeneratingReport(state.status === 'generating' || state.status === 'enhancing');
       if (state.status === 'complete') {
         // Don't update if ICD generation is in progress
@@ -187,11 +188,17 @@ export default function Dashboard() {
           });
           
           console.log('✅ ICD codes added to report:', icdCodes?.codes?.length, 'codes');
-          icdGenerationInProgressRef.current = false;
-          console.log('🆓 ICD generation complete, state updates unblocked');
+          // Delay clearing the flag to prevent race conditions
+          setTimeout(() => {
+            icdGenerationInProgressRef.current = false;
+            console.log('🆓 ICD generation complete, state updates unblocked after delay');
+          }, 1000);
         } catch (error) {
           console.error('⚠️ ICD code generation failed:', error);
-          icdGenerationInProgressRef.current = false;
+          // Clear flag even on error, but with delay
+          setTimeout(() => {
+            icdGenerationInProgressRef.current = false;
+          }, 1000);
           // Show error to user
           setUIState(prev => ({ 
             ...prev, 
@@ -402,11 +409,17 @@ export default function Dashboard() {
           });
           
           console.log('✅ ICD codes added to pasted text report');
-          icdGenerationInProgressRef.current = false;
-          console.log('🆓 Pasted text ICD generation complete, state updates unblocked');
+          // Delay clearing the flag to prevent race conditions
+          setTimeout(() => {
+            icdGenerationInProgressRef.current = false;
+            console.log('🆓 Pasted text ICD generation complete, state updates unblocked after delay');
+          }, 1000);
         } catch (error) {
           console.error('⚠️ ICD code generation failed for pasted text:', error);
-          icdGenerationInProgressRef.current = false;
+          // Clear flag even on error, but with delay
+          setTimeout(() => {
+            icdGenerationInProgressRef.current = false;
+          }, 1000);
           setUIState(prev => ({ 
             ...prev, 
             error: 'ICD-Code-Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.' 
@@ -741,11 +754,17 @@ export default function Dashboard() {
                     });
                     
                     console.log('✅ ICD codes added to edited text report');
-                    icdGenerationInProgressRef.current = false;
-                    console.log('🆓 Edited text ICD generation complete, state updates unblocked');
+                    // Delay clearing the flag to prevent race conditions
+                    setTimeout(() => {
+                      icdGenerationInProgressRef.current = false;
+                      console.log('🆓 Edited text ICD generation complete, state updates unblocked after delay');
+                    }, 1000);
                   } catch (error) {
                     console.error('⚠️ ICD code generation failed for edited text:', error);
-                    icdGenerationInProgressRef.current = false;
+                    // Clear flag even on error, but with delay
+                    setTimeout(() => {
+                      icdGenerationInProgressRef.current = false;
+                    }, 1000);
                     setUIState(prev => ({ 
                       ...prev, 
                       error: 'ICD-Code-Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.' 

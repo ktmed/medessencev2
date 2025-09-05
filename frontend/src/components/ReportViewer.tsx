@@ -386,7 +386,9 @@ ${'-'.repeat((isGerman ? 'ICD-10-GM KODIERUNG' : 'ICD-10-GM CODING').length + (r
   // Debug logging for ICD predictions and metadata
   React.useEffect(() => {
     if (currentReport) {
-      console.log('🔍 ReportViewer Debug:');
+      const timestamp = new Date().toISOString();
+      console.log(`🔍 [${timestamp}] ReportViewer Debug:`);
+      console.log('  Report ID:', currentReport.id);
       console.log('  Has icdPredictions:', !!currentReport.icdPredictions);
       console.log('  Has sections:', !!currentReport.sections);
       console.log('  Sections length:', currentReport.sections?.length || 0);
@@ -398,8 +400,10 @@ ${'-'.repeat((isGerman ? 'ICD-10-GM KODIERUNG' : 'ICD-10-GM CODING').length + (r
       console.log('  Full metadata:', currentReport.metadata);
       console.log('  Available keys:', Object.keys(currentReport));
       if (currentReport.icdPredictions) {
-        console.log('  ICD Structure:', currentReport.icdPredictions);
+        console.log('  ✅ ICD PRESENT - Structure:', currentReport.icdPredictions);
         console.log('  ICD Codes Count:', currentReport.icdPredictions.codes?.length || 0);
+      } else {
+        console.log('  ❌ ICD MISSING at', timestamp);
       }
     }
   }, [currentReport]);
