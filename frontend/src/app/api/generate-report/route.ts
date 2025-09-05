@@ -28,28 +28,44 @@ class SimpleMultiLLMService {
     const lowerText = text.toLowerCase();
     
     // Enhanced medical specialty patterns with ontology terms
+    // Order matters: more specific patterns should come first
     const specialtyPatterns = {
+      'oncology': {
+        keywords: ['tumor', 'tumour', 'metastase', 'metastasis', 'metastasen', 'karzinom', 'carcinoma', 
+                  'malign', 'malignant', 'neoplasie', 'neoplasm', 'onkolog', 'oncolog', 'lymphom', 'lymphoma',
+                  'leukämie', 'leukemia', 'sarkom', 'sarcoma', 'staging', 'chemotherapie', 'chemotherapy',
+                  'radiotherapie', 'radiation', 'bestrahlung', 'remission', 'rezidiv', 'recurrence', 'pet-ct', 'pet/ct'],
+        agent: 'oncology_specialist',
+        type: 'Oncology',
+        priority: 10 // High priority for cancer-related terms
+      },
       'mammography': {
         keywords: ['mammo', 'mammographie', 'mammografie', 'breast', 'brust', 'brustdrüse', 'birads', 'bi-rads', 
-                  'axilla', 'achselhöhle', 'lymphknoten axillär', 'sono mammae', 'mikrokalk', 'mikrokalifikation',
-                  'mastopathie', 'fibroadenom', 'raumforderung mamma', 'architectural distortion', 'masse', 'density'],
+                  'axilla', 'achselhöhle', 'lymphknoten axillär', 'mikrokalk', 'mikrokalifikation',
+                  'mastopathie', 'fibroadenom', 'architectural distortion', 'mamma-screening', 'mammascreening'],
+        excludeKeywords: ['ultraschall', 'sonographie', 'sono', 'mrt'], // Don't match if it's just breast ultrasound or MRI
         agent: 'mammography_specialist',
-        type: 'Mammography'
+        type: 'Mammography',
+        priority: 8 // High priority for specific mammography terms
       },
       'spine_mri': {
         keywords: ['wirbelsäule', 'columna vertebralis', 'spine', 'lumbar', 'cervical', 'thoracic', 
                   'lws', 'hws', 'bws', 'lendenwirbelsäule', 'halswirbelsäule', 'brustwirbelsäule',
                   'bandscheibe', 'diskus', 'disc', 'spinalkanal', 'neuroforamen', 'wirbelkörper', 'facettengelenk',
-                  'spondylose', 'spondylolisthesis', 'protrusion', 'prolaps', 'sequester', 'vertebral', 'facet'],
+                  'spondylose', 'spondylolisthesis', 'protrusion', 'prolaps', 'sequester', 'vertebral', 'facet',
+                  'mrt lws', 'mrt hws', 'mrt bws', 'wirbelsäulen-mrt'],
         agent: 'spine_mri_specialist',
-        type: 'Spine MRI'
+        type: 'Spine MRI',
+        priority: 7 // Specific MRI type
       },
       'chest_ct': {
         keywords: ['thorax', 'chest', 'lung', 'lunge', 'pulmonary', 'pulmonal', 'mediastinum', 'pleura',
                   'bronchien', 'bronchus', 'pneumonie', 'pneumothorax', 'hämatothorax', 'thoraxwand',
-                  'rippenfraktur', 'lungenembolie', 'emphysem', 'atelektase', 'pneumo', 'bronch', 'rib', 'rippe'],
+                  'rippenfraktur', 'lungenembolie', 'emphysem', 'atelektase', 'pneumo', 'bronch', 'rib', 'rippe',
+                  'ct thorax', 'thorax-ct', 'lungen-ct', 'hrct'],
         agent: 'chest_ct_specialist',
-        type: 'Chest CT'
+        type: 'Chest CT',
+        priority: 6 // Higher than general CT
       },
       'abdominal': {
         keywords: ['abdomen', 'bauch', 'bauchraum', 'liver', 'leber', 'hepatisch', 'kidney', 'niere', 'renal',
@@ -89,9 +105,11 @@ class SimpleMultiLLMService {
       'ultrasound': {
         keywords: ['sonographie', 'sonografie', 'ultraschall', 'ultrasound', 'doppler', 'farbdoppler',
                   'schallkopf', 'echogenität', 'echoarm', 'echoreich', 'schallschatten', 'schallverstärkung',
-                  'echogenic', 'hypoechoic', 'hyperechoic', 'anechoic'],
+                  'echogenic', 'hypoechoic', 'hyperechoic', 'anechoic', 'sono'],
+        excludeKeywords: ['mammographie', 'mammografie', 'birads'], // Don't override mammography
         agent: 'ultrasound_specialist',
-        type: 'Ultrasound'
+        type: 'Ultrasound',
+        priority: 2 // Lower priority than specific modalities
       }
     };
 
@@ -107,12 +125,28 @@ class SimpleMultiLLMService {
     for (const [specialtyKey, data] of Object.entries(specialtyPatterns)) {
       let score = 0;
       let matchedKeywords: string[] = [];
+      
+      // Check for exclusion keywords first
+      if ((data as any).excludeKeywords) {
+        let hasExcludedTerm = false;
+        for (const excludeKeyword of (data as any).excludeKeywords) {
+          if (lowerText.includes(excludeKeyword)) {
+            hasExcludedTerm = true;
+            break;
+          }
+        }
+        // Skip this specialty if it has excluded terms
+        if (hasExcludedTerm) {
+          console.log(`Skipping ${specialtyKey} due to exclusion keywords`);
+          continue;
+        }
+      }
 
       for (const keyword of data.keywords) {
         if (lowerText.includes(keyword)) {
           // Weight scoring based on keyword specificity
           if (keyword.length > 10) {
-            score += 3; // Very specific medical terms
+            score += 4; // Very specific medical terms (increased weight)
           } else if (keyword.length > 6) {
             score += 2; // Moderately specific terms
           } else {
@@ -122,9 +156,18 @@ class SimpleMultiLLMService {
         }
       }
 
+      // Apply priority multiplier if set
+      const priority = (data as any).priority || 5;
+      score = score * (priority / 5); // Normalize around priority 5
+      
       // Bonus for multiple matches
       if (matchedKeywords.length > 2) {
         score *= 1.5;
+      }
+      
+      // Log scoring for debugging
+      if (score > 0) {
+        console.log(`Specialty: ${specialtyKey}, Score: ${score}, Matched: [${matchedKeywords.join(', ')}]`);
       }
 
       if (score > maxScore) {
